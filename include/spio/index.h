@@ -3,6 +3,7 @@
 
 namespace spio
 {
+    /// A base class for a 2-dimensional index.
     template <int _D1>
     class Index2D
     {
@@ -19,6 +20,34 @@ namespace spio
 
         constexpr int _d0() { return _offset / D0_Stride; }
         constexpr int _d1() { return _offset % D1; }
+
+    private:
+        const int _offset;
+    };
+
+
+    /// A base class for a 3-dimensional index.    
+    template <int _D1, int _D2>
+    class Index3D
+    {
+    public:
+        constexpr static int D1 = _D1;
+        constexpr static int D2 = _D2;
+
+        constexpr static int D1_Stride = D2;
+        constexpr static int D0_Stride = D1 * D2;
+
+        constexpr Index3D(int offset = 0) : _offset(offset) {}
+
+        constexpr operator int() const { return _offset; }
+
+        constexpr Index3D _d2(int d2) { return Index3D(_offset + d2); }
+        constexpr Index3D _d1(int d1) { return Index3D(_offset + d1 * D1_Stride); }
+        constexpr Index3D _d0(int d0) { return Index3D(_offset + d0 * D0_Stride); }
+
+        constexpr int _d2() { return _offset % D2; }
+        constexpr int _d1() { return (_offset / D1_Stride) %D1; }
+        constexpr int _d0() { return _offset / D0_Stride;}
 
     private:
         const int _offset;

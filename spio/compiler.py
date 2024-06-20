@@ -44,3 +44,4 @@ def compile(sources=[], includes=[], run=False, cubin=False, arch=None):
     args += sources
     r = subprocess.run(args)
     r.check_returncode()
+    return r
