@@ -9,8 +9,8 @@ namespace spio
     public:
         constexpr IndexBase(int offset = 0) : _offset(offset) {}
         constexpr operator int() const { return _offset; }
-
-    protected:
+        constexpr int offset() const { return _offset; }
+    private:
         const int _offset;
     };
 
@@ -24,11 +24,11 @@ namespace spio
 
         using IndexBase::IndexBase;
 
-        constexpr Index2D _d1(int d1) const { return Index2D(_offset + d1 * _D1_Stride); }
-        constexpr Index2D _d0(int d0) const { return Index2D(_offset + d0 * _D0_Stride); }
+        constexpr Index2D _d1(int d1) const { return Index2D(offset() + d1 * _D1_Stride); }
+        constexpr Index2D _d0(int d0) const { return Index2D(offset() + d0 * _D0_Stride); }
 
-        constexpr int _d0() const { return _offset / _D0_Stride; }
-        constexpr int _d1() const { return (_offset / _D1_Stride) % _D1; }
+        constexpr int _d0() const { return offset() / _D0_Stride; }
+        constexpr int _d1() const { return (offset() / _D1_Stride) % _D1; }
     };
 
     /// A base class for a 3-dimensional index.
@@ -42,13 +42,13 @@ namespace spio
 
         using IndexBase::IndexBase;
 
-        constexpr Index3D _d2(int d2) const { return Index3D(_offset + d2 * _D2_Stride); }
-        constexpr Index3D _d1(int d1) const { return Index3D(_offset + d1 * _D1_Stride); }
-        constexpr Index3D _d0(int d0) const { return Index3D(_offset + d0 * _D0_Stride); }
+        constexpr Index3D _d2(int d2) const { return Index3D(offset() + d2 * _D2_Stride); }
+        constexpr Index3D _d1(int d1) const { return Index3D(offset() + d1 * _D1_Stride); }
+        constexpr Index3D _d0(int d0) const { return Index3D(offset() + d0 * _D0_Stride); }
 
-        constexpr int _d2() const { return (_offset / _D2_Stride) % _D2; }
-        constexpr int _d1() const { return (_offset / _D1_Stride) % _D1; }
-        constexpr int _d0() const { return _offset / _D0_Stride; }
+        constexpr int _d2() const { return (offset() / _D2_Stride) % _D2; }
+        constexpr int _d1() const { return (offset() / _D1_Stride) % _D1; }
+        constexpr int _d0() const { return offset() / _D0_Stride; }
     };
 
     /// A base class for a 4-dimensional index.
@@ -63,15 +63,15 @@ namespace spio
 
         using IndexBase::IndexBase;
 
-        constexpr Index4D _d3(int d3) const { return Index4D(_offset + d3 * _D3_Stride); }
-        constexpr Index4D _d2(int d2) const { return Index4D(_offset + d2 * _D2_Stride); }
-        constexpr Index4D _d1(int d1) const { return Index4D(_offset + d1 * _D1_Stride); }
-        constexpr Index4D _d0(int d0) const { return Index4D(_offset + d0 * _D0_Stride); }
+        constexpr Index4D _d3(int d3) const { return Index4D(offset() + d3 * _D3_Stride); }
+        constexpr Index4D _d2(int d2) const { return Index4D(offset() + d2 * _D2_Stride); }
+        constexpr Index4D _d1(int d1) const { return Index4D(offset() + d1 * _D1_Stride); }
+        constexpr Index4D _d0(int d0) const { return Index4D(offset() + d0 * _D0_Stride); }
 
-        constexpr int _d3() const { return (_offset / _D3_Stride) % _D3; }
-        constexpr int _d2() const { return (_offset / _D2_Stride) % _D2; }
-        constexpr int _d1() const { return (_offset / _D1_Stride) % _D1; }
-        constexpr int _d0() const { return _offset / _D0_Stride; }
+        constexpr int _d3() const { return (offset() / _D3_Stride) % _D3; }
+        constexpr int _d2() const { return (offset() / _D2_Stride) % _D2; }
+        constexpr int _d1() const { return (offset() / _D1_Stride) % _D1; }
+        constexpr int _d0() const { return offset() / _D0_Stride; }
     };
 }
 #endif
