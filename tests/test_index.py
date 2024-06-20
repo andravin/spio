@@ -8,6 +8,7 @@ from subprocess import CalledProcessError
 
 import spio
 
+CPP_SOURCES = ["test_index.cpp"]
 
 def spio_path():
     """Return the filesystem path of the spio installation."""
@@ -29,15 +30,14 @@ def spio_cpp_tests_src_path():
 def compile_cpp_tests():
     src_dir = spio_cpp_tests_src_path()
     includes = [spio_include_path()]
-    sources = ["test_index.cpp"]
-
-    sources = [str(src_dir / src) for src in sources]
+    sources = [str(src_dir / src) for src in CPP_SOURCES]
     includes = [str(include) for include in includes]
 
     spio.compile(sources=sources, includes=includes, run=True)
 
 
 def test_cpp_tests():
+    """Run all C++ unit tests."""
     try:
         compile_cpp_tests()
     except CalledProcessError as e:
