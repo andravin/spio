@@ -40,4 +40,28 @@ UTEST(Index3D, index_from_offset)
     EXPECT_EQ(idx._d0(), Offset / (D1 * D2));
 }
 
+UTEST(Index4D, offset_from_index)
+{
+    constexpr int D1 = 77;
+    constexpr int D2 = 88;
+    constexpr int D3 = 99;
+    using Idx = spio::Index4D<D1, D2, D3>;
+    EXPECT_EQ(static_cast<int>(Idx()._d3(4)), 4);
+    EXPECT_EQ(static_cast<int>(Idx()._d0(7)._d1(8)._d2(9)._d3(10)), 7 * (D1 * D2 * D3) + 8 * (D2 * D3) + 9 * D3 + 10);
+}
+
+UTEST(Index4D, index_from_offset)
+{
+    constexpr int D1 = 45;
+    constexpr int D2 = 56;
+    constexpr int D3 = 67;
+    using Idx = spio::Index4D<D1, D2, D3>;
+    constexpr int Offset = 867539;
+    Idx idx(Offset);
+    EXPECT_EQ(idx._d3(), Offset % D3);
+    EXPECT_EQ(idx._d2(), (Offset / D3) % D2);
+    EXPECT_EQ(idx._d1(), (Offset / (D2 * D3)) % D1);
+    EXPECT_EQ(idx._d0(), Offset / (D1 * D2 * D3));
+}
+
 UTEST_MAIN()
