@@ -3,6 +3,7 @@ import shutil
 from pathlib import Path
 import subprocess
 
+
 def nvcc_full_path():
     """Return the path to nvcc or raise FileNotFoundError if not found.
 
@@ -31,16 +32,22 @@ def nvcc_full_path():
     raise FileNotFoundError("Could not find nvcc.")
 
 
-def compile(sources=[], includes=[], run=False, cubin=False, arch=None):
+def compile(
+    sources=[], includes=[], run=False, cubin=False, compile=False, arch=None, output_file=None
+):
     nvcc = nvcc_full_path()
-    includes = [f"-I{path}" for path in includes]   
+    includes = [f"-I{path}" for path in includes]
     args = [nvcc] + includes
     if run:
         args.append("--run")
+    if compile:
+        args.append("--compile")
     if cubin:
         args.append("--cubin")
     if arch is not None:
         args += ["-arch", arch]
+    if output_file is not None:
+        args += ["--output-file", output_file]
     args += sources
     r = subprocess.run(args)
     r.check_returncode()

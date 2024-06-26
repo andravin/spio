@@ -4,7 +4,6 @@ Run all C++ unit tests as a single pytest test.
 The C++ tests
 """
 
-from pathlib import Path
 from subprocess import CalledProcessError
 from tempfile import NamedTemporaryFile
 
@@ -13,26 +12,9 @@ import spio
 CPP_SOURCES = ["test_index.cpp"]
 
 
-def spio_path():
-    """Return the filesystem path of the spio installation."""
-    return Path(spio.__file__).parent.parent
-
-
-def spio_src_path():
-    return spio_path() / "src"
-
-
-def spio_include_path():
-    return spio_path() / "include"
-
-
-def spio_cpp_tests_src_path():
-    return spio_src_path() / "tests"
-
-
 def compile_cpp_tests(extra_cpp_test_files=[]):
-    src_dir = spio_cpp_tests_src_path()
-    includes = [spio_include_path(), spio_cpp_tests_src_path()]
+    src_dir = spio.spio_cpp_tests_src_path()
+    includes = [spio.spio_include_path(), spio.spio_cpp_tests_src_path()]
     sources = [str(src_dir / src) for src in CPP_SOURCES] + extra_cpp_test_files
     includes = [str(include) for include in includes]
     return spio.compile(sources=sources, includes=includes, run=True)
@@ -43,7 +25,7 @@ def test_cpp_tests():
 
     test_generate_index_code = _test_generate_index()
     test_source_file = NamedTemporaryFile(prefix="spio_", suffix=".cpp")
-    with open(test_source_file.name, 'w') as f:
+    with open(test_source_file.name, "w") as f:
         f.write(test_generate_index_code)
 
     try:

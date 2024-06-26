@@ -1,6 +1,8 @@
 .vscode
+
 *.out
 *.pyc
+*.cubin
 
 # PyTorch profiler results.
 trace.json
