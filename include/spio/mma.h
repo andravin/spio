@@ -45,10 +45,6 @@ namespace spio
         DEVICE __half2 &operator()(int idx) { return _data[idx]; }
         DEVICE __half2 operator()(int idx) const { return _data[idx]; }
 
-        uint4 &vector() { return *reinterpret_cast<uint4 *>(_data); }
-
-        uint4 const &vector() const { return *reinterpret_cast<const uint4 *>(_data); }
-
     private:
         __half2 _data[NumFragments];
     };
@@ -75,10 +71,6 @@ namespace spio
         DEVICE __half2 &operator()(int idx) { return _data[idx]; }
         DEVICE __half2 operator()(int idx) const { return _data[idx]; }
 
-        DEVICE uint2 &vector() { return *reinterpret_cast<uint2 *>(_data); }
-
-        DEVICE const uint2 &vector() const { return *reinterpret_cast<const uint2 *>(_data); }
-
     private:
         __half2 _data[NumFragments];
     };
@@ -102,8 +94,13 @@ namespace spio
         DEVICE float &operator()(int idx) { return reinterpret_cast<float *>(_data)[idx]; }
         DEVICE float operator()(int idx) const { return reinterpret_cast<const float *>(_data)[idx]; }
 
-        DEVICE float4 &vector() { return *reinterpret_cast<float4 *>(_data); }
-        DEVICE const float4 &vector() const { return *reinterpret_cast<const float4 *>(_data); }
+        DEVICE void zero()
+        {
+            for (int idx = 0; idx < NumFragments; ++idx)
+            {
+                _data[idx] = make_float2(0, 0);
+            }
+        }
 
     private:
         float2 _data[NumFragments];

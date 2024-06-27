@@ -24,13 +24,14 @@ def test_add_kernel():
     x2 = cp.arange(25, dtype=cp.float32).reshape(5, 5)
     y = cp.zeros((5, 5), dtype=cp.float32)
     add_kernel((5,), (5,), (x1, x2, y))  # grid, block and arguments
-    assert cp.testing.numpy_cupy_allclose(x1 + x2, y)
+    cp.testing.assert_array_equal(x1 + x2, y)
 
 
 def test_mma_kernel():
     cuda_source_file = spio_kernels_path() / "mma.cu"
     cubin_file = spio_cubins_path() / "mma.cubin"
     include_path = spio_include_path()
+
     compile(
         [cuda_source_file],
         includes=[include_path],
@@ -42,5 +43,42 @@ def test_mma_kernel():
 
     module = cp.RawModule(path=str(cubin_file))
     mma_kernel = module.get_function("mma_test")
-    assert True
 
+    A = cp.zeros((16, 16), dtype=cp.float16)
+
+    for i in range(16):
+        for k in range(16):
+            A[i, k] = (i * 16 + k) % 17
+
+    B = cp.zeros((16, 8), dtype=cp.float16)
+    for k in range(16):
+        for j in range(8):
+            B[k, j] = (k * 8 + j) % 19
+
+    C = cp.zeros((16, 8), dtype=cp.float32)
+
+    B_trans = cp.ascontiguousarray(cp.transpose(B))
+    mma_kernel((1, ), (32,), (C, A, B_trans))
+
+    C_ref = cp.matmul(A.astype(cp.float32), B.astype(cp.float32))
+
+    cp.testing.assert_array_equal(C_ref, C)
+
+   # import sys
+    # cp.set_printoptions(linewidth=200, threshold=sys.maxsize)
+
+    # print("A:")
+    # print(A)
+    # print()
+
+    # print("B:")
+    # print(B)
+    # print()
+
+    # print("My kernel:")
+    # print(C)
+    # print()
+    # print("cupy:")
+    # print(C_ref)
+
+ 
