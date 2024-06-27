@@ -131,6 +131,18 @@ namespace spio
               "f"(c(0)), "f"(c(1)), "f"(c(2)), "f"(c(3)));
     }
 
+    DEVICE unsigned ldmatrix_x1(const void * p) {
+        size_t s = __cvta_generic_to_shared(p);
+        unsigned x;
+        asm volatile(
+            "ldmatrix.sync.aligned.m8n8.x1.shared.b16"
+            " {%0}, [%1];"
+            : "=r"(x)
+            : "l"(s)
+        );
+        return x;
+    }
+
 }
 
 #endif

@@ -5,31 +5,23 @@ from spio import spio_kernels_path, spio_cubins_path, compile, spio_include_path
 ADA_ARCH = "sm_89"
 
 
-def test_add_kernel():
-    """Compile and run a simple CUDA kernel."""
-    cuda_source_file = spio_kernels_path() / "add.cu"
-    cubin_file = spio_cubins_path() / "add.cubin"
-    compile(
-        [cuda_source_file],
-        compile=True,
-        cubin=True,
-        arch=ADA_ARCH,
-        output_file=cubin_file,
-    )
-
-    module = cp.RawModule(path=str(cubin_file))
-    add_kernel = module.get_function("my_add")
-
-    x1 = cp.arange(25, dtype=cp.float32).reshape(5, 5)
-    x2 = cp.arange(25, dtype=cp.float32).reshape(5, 5)
-    y = cp.zeros((5, 5), dtype=cp.float32)
-    add_kernel((5,), (5,), (x1, x2, y))  # grid, block and arguments
-    cp.testing.assert_array_equal(x1 + x2, y)
+def _set_printoptions():
+    """Set the CuPy printoptions to show full matrices."""
+    cp.set_printoptions(linewidth=200, threshold=sys.maxsize)
 
 
-def test_mma_kernel():
-    cuda_source_file = spio_kernels_path() / "mma.cu"
-    cubin_file = spio_cubins_path() / "mma.cubin"
+def _compile_test_kernel(kernel_name=None):
+    """Compile the kernel for the test with the given name.
+
+    The kernel must be in a file called {kernel_name}.cu
+    located in the spio_kernels_path() folder.
+
+    The kernel function must be called {kernel_name}_test
+
+    Returns the module and RawKernel (both CuPy objects).
+    """
+    cuda_source_file = spio_kernels_path() / f"{kernel_name}.cu"
+    cubin_file = spio_cubins_path() / f"{kernel_name}.cubin"
     include_path = spio_include_path()
 
     compile(
@@ -42,7 +34,23 @@ def test_mma_kernel():
     )
 
     module = cp.RawModule(path=str(cubin_file))
-    mma_kernel = module.get_function("mma_test")
+    mma_kernel = module.get_function(f"{kernel_name}_test")
+    return (module, mma_kernel)
+
+
+def test_add_kernel():
+    """Compile and run a simple CUDA kernel."""
+    module, add_kernel = _compile_test_kernel(kernel_name="add")
+
+    x1 = cp.arange(25, dtype=cp.float32).reshape(5, 5)
+    x2 = cp.arange(25, dtype=cp.float32).reshape(5, 5)
+    y = cp.zeros((5, 5), dtype=cp.float32)
+    add_kernel((5,), (5,), (x1, x2, y))  # grid, block and arguments
+    cp.testing.assert_array_equal(x1 + x2, y)
+
+
+def test_mma_kernel():
+    module, mma_kernel = _compile_test_kernel(kernel_name="mma")
 
     A = cp.zeros((16, 16), dtype=cp.float16)
 
@@ -58,27 +66,24 @@ def test_mma_kernel():
     C = cp.zeros((16, 8), dtype=cp.float32)
 
     B_trans = cp.ascontiguousarray(cp.transpose(B))
-    mma_kernel((1, ), (32,), (C, A, B_trans))
+    mma_kernel((1,), (32,), (C, A, B_trans))
 
     C_ref = cp.matmul(A.astype(cp.float32), B.astype(cp.float32))
 
     cp.testing.assert_array_equal(C_ref, C)
 
-   # import sys
-    # cp.set_printoptions(linewidth=200, threshold=sys.maxsize)
 
-    # print("A:")
-    # print(A)
-    # print()
+def test_ldmatrix_kernel():
+    module, ldmatrix_kernel = _compile_test_kernel(kernel_name="ldmatrix")
 
-    # print("B:")
-    # print(B)
-    # print()
+    a = cp.arange(8 * 8, dtype=cp.float16).reshape(8, 8)
+    b = cp.zeros((64,), dtype=cp.float16)
 
-    # print("My kernel:")
-    # print(C)
-    # print()
-    # print("cupy:")
-    # print(C_ref)
+    ldmatrix_kernel((1,), (32,), (b, a))
 
- 
+    for lane in range(32):
+        row = lane / 4
+        col = (lane % 4) * 2
+        idx = lane * 2
+        assert b[idx + 0] == a[row, col]
+        assert b[idx + 1] == a[row, col + 1]

@@ -12,8 +12,7 @@ extern "C"
         float2 *__restrict__ C,
         const __half2 *__restrict__ A,
         const __half2 *__restrict__ B_trans)
-    {
-
+    {      
         int lane = threadIdx.x % 32;
 
         MMA_M16_N8_K16_F16_A a;
