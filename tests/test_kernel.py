@@ -3,6 +3,7 @@
 These tests exercise the spio CUDA device functions, such as tensor
 core and ldmatrix intrinsics.
 """
+
 import cupy as cp
 
 from spio import spio_kernels_path, spio_cubins_path, compile, spio_include_path
@@ -15,7 +16,7 @@ def _set_printoptions():
     cp.set_printoptions(linewidth=200, threshold=sys.maxsize)
 
 
-def _compile_test_kernel(kernel_name=None):
+def _compile_test_kernel(kernel_name=None, source_file_name=None):
     """Compile the kernel for the test with the given name.
 
     The kernel must be in a file called {kernel_name}.cu
@@ -25,7 +26,10 @@ def _compile_test_kernel(kernel_name=None):
 
     Returns the module and RawKernel (both CuPy objects).
     """
-    cuda_source_file = spio_kernels_path() / f"{kernel_name}.cu"
+    if source_file_name is None:
+        cuda_source_file = spio_kernels_path() / f"{kernel_name}.cu"
+    else:
+        cuda_source_file = spio_kernels_path() / f"{source_file_name}.cu"
     cubin_file = spio_cubins_path() / f"{kernel_name}.cubin"
     include_path = spio_include_path()
 
@@ -94,3 +98,43 @@ def test_ldmatrix_kernel():
         idx = lane * 2
         assert b[idx + 0] == a[row, col]
         assert b[idx + 1] == a[row, col + 1]
+
+
+def test_ldmatrix_x2_kernel():
+    """Compile and run an ldmatrix_x2 test kernel."""
+    module, ldmatrix_x2_kernel = _compile_test_kernel(
+        kernel_name="ldmatrix_x2", source_file_name="ldmatrix"
+    )
+
+    a = cp.arange(16 * 8, dtype=cp.float16).reshape(16, 8)
+    b = cp.zeros((16 * 8,), dtype=cp.float16)
+
+    ldmatrix_x2_kernel((1,), (32,), (b, a))
+
+    for lane in range(32):
+        row = lane / 4
+        col = (lane % 4) * 2
+        for fragment in range(2):
+            idx = lane * 2 + fragment * 64
+            assert b[idx + 0] == a[fragment * 8 + row, col]
+            assert b[idx + 1] == a[fragment * 8 + row, col + 1]
+
+
+def test_ldmatrix_x4_kernel():
+    """Compile and run an ldmatrix_x4 test kernel."""
+    module, ldmatrix_x4_kernel = _compile_test_kernel(
+        kernel_name="ldmatrix_x4", source_file_name="ldmatrix"
+    )
+
+    a = cp.arange(64 * 8, dtype=cp.float16).reshape(64, 8)
+    b = cp.zeros((64 * 8,), dtype=cp.float16)
+
+    ldmatrix_x4_kernel((1,), (32,), (b, a))
+
+    for lane in range(32):
+        row = lane / 4
+        col = (lane % 4) * 2
+        for fragment in range(4):
+            idx = lane * 2 + fragment * 64
+            assert b[idx + 0] == a[fragment * 8 + row, col]
+            assert b[idx + 1] == a[fragment * 8 + row, col + 1]

@@ -143,6 +143,29 @@ namespace spio
         return x;
     }
 
+   DEVICE uint2 ldmatrix_x2(const void * p) {
+        size_t s = __cvta_generic_to_shared(p);
+        uint2 v;
+        asm volatile(
+            "ldmatrix.sync.aligned.m8n8.x2.shared.b16"
+            " {%0, %1}, [%2];"
+            : "=r"(v.x), "=r"(v.y)
+            : "l"(s)
+        );
+        return v;
+    }
+
+   DEVICE uint4 ldmatrix_x4(const void * p) {
+        size_t s = __cvta_generic_to_shared(p);
+        uint4 v;
+        asm volatile(
+            "ldmatrix.sync.aligned.m8n8.x4.shared.b16"
+            " {%0, %1, %2, %3}, [%4];"
+            : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w)
+            : "l"(s)
+        );
+        return v;
+    }
 }
 
 #endif
