@@ -1,3 +1,8 @@
+"""Unit tests that compile and run cuda kernels and check the output.
+
+These tests exercise the spio CUDA device functions, such as tensor
+core and ldmatrix intrinsics.
+"""
 import cupy as cp
 
 from spio import spio_kernels_path, spio_cubins_path, compile, spio_include_path
@@ -50,6 +55,7 @@ def test_add_kernel():
 
 
 def test_mma_kernel():
+    """Compile and run a tensor core test kernel."""
     module, mma_kernel = _compile_test_kernel(kernel_name="mma")
 
     A = cp.zeros((16, 16), dtype=cp.float16)
@@ -74,6 +80,7 @@ def test_mma_kernel():
 
 
 def test_ldmatrix_kernel():
+    """Compile and run an ldmatrix test kernel."""
     module, ldmatrix_kernel = _compile_test_kernel(kernel_name="ldmatrix")
 
     a = cp.arange(8 * 8, dtype=cp.float16).reshape(8, 8)
