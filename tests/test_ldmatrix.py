@@ -1,3 +1,9 @@
+"""Tests that compile and run CUDA kernels that use the ldmatrix instructions.
+
+The ldmatrix instructions load matrix fragments from shared memory into registers.
+The matrix fragments can be used with the tensor core matrix multiply instructions in mma.h.
+"""
+
 import cupy as cp
 
 from spio import compile_test_kernel

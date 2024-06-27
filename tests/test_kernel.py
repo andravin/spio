@@ -1,8 +1,4 @@
-"""Unit tests that compile and run cuda kernels and check the output.
-
-These tests exercise the spio CUDA device functions, such as tensor
-core and ldmatrix intrinsics.
-"""
+"""Unit tests that compile and test CUDA kernels that use tensor cores."""
 
 import cupy as cp
 
