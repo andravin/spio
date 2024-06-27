@@ -9,6 +9,16 @@ import cupy as cp
 from spio import compile_test_kernel
 
 
+def _row(lane: int) -> int:
+    """Return the row loaded by the register in the given lane."""
+    return lane / 4
+
+
+def _col(lane: int) -> int:
+    """Return the (first) column loaded by the register in the given lane."""
+    return (lane % 4) * 2
+
+
 def test_ldmatrix_kernel():
     """Compile and run an ldmatrix test kernel."""
     module, ldmatrix_kernel = compile_test_kernel(kernel_name="ldmatrix")
@@ -19,8 +29,8 @@ def test_ldmatrix_kernel():
     ldmatrix_kernel((1,), (32,), (b, a))
 
     for lane in range(32):
-        row = lane / 4
-        col = (lane % 4) * 2
+        row = _row(lane)
+        col = _col(lane)
         idx = lane * 2
         assert b[idx + 0] == a[row, col]
         assert b[idx + 1] == a[row, col + 1]
@@ -38,8 +48,8 @@ def test_ldmatrix_x2_kernel():
     ldmatrix_x2_kernel((1,), (32,), (b, a))
 
     for lane in range(32):
-        row = lane / 4
-        col = (lane % 4) * 2
+        row = _row(lane)
+        col = _col(lane)
         for fragment in range(2):
             idx = lane * 2 + fragment * 64
             assert b[idx + 0] == a[fragment * 8 + row, col]
@@ -58,8 +68,8 @@ def test_ldmatrix_x4_kernel():
     ldmatrix_x4_kernel((1,), (32,), (b, a))
 
     for lane in range(32):
-        row = lane / 4
-        col = (lane % 4) * 2
+        row = _row(lane)
+        col = _col(lane)
         for fragment in range(4):
             idx = lane * 2 + fragment * 64
             assert b[idx + 0] == a[fragment * 8 + row, col]

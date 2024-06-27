@@ -11,6 +11,10 @@ def compile_test_kernel(kernel_name=None, source_file_name=None):
     The kernel must be in a file called {kernel_name}.cu
     located in the spio_kernels_path() folder.
 
+    If the source_file_name parameter is set, then the
+    kernel is loaded from the file {source_file_name}.cu
+    instead.
+
     The kernel function must be called {kernel_name}_test
 
     Returns the module and RawKernel (both CuPy objects).
