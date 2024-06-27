@@ -112,7 +112,7 @@ namespace spio
     /// @param b Input matrix B in float16.
     /// @param c Accumulate fragment in float32.
     /// https://docs.nvidia.com/cuda/parallel-thread-execution/#multiply-and-accumulate-instruction-mma
-    DEVICE void mma(
+    __device__ void mma(
         MMA_M16_N8_K16_F32_C &d,
         const MMA_M16_N8_K16_F16_A &a,
         const MMA_M16_N8_K16_F16_B &b,
@@ -129,42 +129,6 @@ namespace spio
             : "r"(a.reg(0)), "r"(a.reg(1)), "r"(a.reg(2)), "r"(a.reg(3)),
               "r"(b.reg(0)), "r"(b.reg(1)),
               "f"(c(0)), "f"(c(1)), "f"(c(2)), "f"(c(3)));
-    }
-
-    DEVICE unsigned ldmatrix_x1(const void * p) {
-        size_t s = __cvta_generic_to_shared(p);
-        unsigned x;
-        asm volatile(
-            "ldmatrix.sync.aligned.m8n8.x1.shared.b16"
-            " {%0}, [%1];"
-            : "=r"(x)
-            : "l"(s)
-        );
-        return x;
-    }
-
-   DEVICE uint2 ldmatrix_x2(const void * p) {
-        size_t s = __cvta_generic_to_shared(p);
-        uint2 v;
-        asm volatile(
-            "ldmatrix.sync.aligned.m8n8.x2.shared.b16"
-            " {%0, %1}, [%2];"
-            : "=r"(v.x), "=r"(v.y)
-            : "l"(s)
-        );
-        return v;
-    }
-
-   DEVICE uint4 ldmatrix_x4(const void * p) {
-        size_t s = __cvta_generic_to_shared(p);
-        uint4 v;
-        asm volatile(
-            "ldmatrix.sync.aligned.m8n8.x4.shared.b16"
-            " {%0, %1, %2, %3}, [%4];"
-            : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w)
-            : "l"(s)
-        );
-        return v;
     }
 }
 
