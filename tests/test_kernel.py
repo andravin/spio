@@ -23,9 +23,38 @@ def test_add_kernel():
     cp.testing.assert_array_equal(x1 + x2, y)
 
 
-def test_mma_kernel():
-    """Compile and run a tensor core test kernel."""
-    module, mma_kernel = compile_test_kernel(kernel_name="mma")
+def test_mma_m16_n8_k8_kernel():
+    """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k8."""
+    module, mma_kernel = compile_test_kernel(
+        kernel_name="mma_m16_n8_k8", source_file_name="mma"
+    )
+
+    A = cp.zeros((16, 8), dtype=cp.float16)
+
+    for i in range(16):
+        for k in range(8):
+            A[i, k] = (i * 8 + k) % 17
+
+    B = cp.zeros((8, 8), dtype=cp.float16)
+    for k in range(8):
+        for j in range(8):
+            B[k, j] = (k * 8 + j) % 19
+
+    C = cp.zeros((16, 8), dtype=cp.float32)
+
+    B_trans = cp.ascontiguousarray(cp.transpose(B))
+    mma_kernel((1,), (32,), (C, A, B_trans))
+
+    C_ref = cp.matmul(A.astype(cp.float32), B.astype(cp.float32))
+
+    cp.testing.assert_array_equal(C_ref, C)
+
+
+def test_mma_m16_n8_k16_kernel():
+    """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k16."""
+    module, mma_kernel = compile_test_kernel(
+        kernel_name="mma_m16_n8_k16", source_file_name="mma"
+    )
 
     A = cp.zeros((16, 16), dtype=cp.float16)
 

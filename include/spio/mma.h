@@ -9,16 +9,17 @@
 
 namespace spio
 {
-    /// @brief A matrix with float16 elements for M16_N8_K16 matrix multiplication.
-    /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
-    class MMA_M16_N8_K16_F16_A
+    /// @brief  Template base class for 16-row fp16 matrix fragments for operand A.
+    /// @tparam _NUM_FRAGMENTS_K Number of 8-column fragments (i.e. the K-dimension).
+    template <int _NUM_FRAGMENTS_K>
+    class _MMA_M16_N8_F16_A
     {
     public:
         /// @brief The number of matrix fragments in the M-dimension.
         static const int NumFragmentsM = 2;
 
         /// @brief The number of matrix fragments in the K-dimension.
-        static const int NumFragmentsK = 2;
+        static const int NumFragmentsK = _NUM_FRAGMENTS_K;
 
         static const int NumFragments = NumFragmentsM * NumFragmentsK;
 
@@ -34,7 +35,7 @@ namespace spio
         /// @param lane_id The thread's lane number.
         /// @param k_idx  The fragment index in the K-dimension.
         /// @return
-        DEVICE static constexpr int col(int lane_id, int k_idx) { return (lane_id % 4) * 2 + k_idx * 8; }
+        DEVICE static constexpr int col(int lane_id, int k_idx = 0) { return (lane_id % 4) * 2 + k_idx * 8; }
 
         DEVICE __half2 &fragment(int idx) { return _data[idx]; }
         DEVICE __half2 fragment(int idx) const { return _data[idx]; }
@@ -42,24 +43,29 @@ namespace spio
         DEVICE unsigned &reg(int idx) { return reinterpret_cast<unsigned *>(_data)[idx]; }
         DEVICE unsigned reg(int idx) const { return reinterpret_cast<const unsigned *>(_data)[idx]; }
 
-        DEVICE __half2 &operator()(int idx) { return _data[idx]; }
-        DEVICE __half2 operator()(int idx) const { return _data[idx]; }
+        DEVICE __half2 &operator()(int idx = 0) { return _data[idx]; }
+        DEVICE __half2 operator()(int idx = 0) const { return _data[idx]; }
+
+        void *data() { return _data; }
+
+        const void *data() const { return _data; }
 
     private:
         __half2 _data[NumFragments];
     };
 
-    /// @brief B matrix with float16 elements for M16_N8_K16 matrix multiplication.
-    /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
-    class MMA_M16_N8_K16_F16_B
+    /// @brief  Tempalte base class for 8-column fp16 matrix fragments for operand B.
+    /// @tparam _NUM_FRAGMENTS_K Number of 8-row matrix fragments (i.e. the K-dimension).
+    template <int _NUM_FRAGMENTS_K>
+    class _MMA_M16_N8_F16_B
     {
     public:
-        static const int NumFragmentsK = 2;
+        static const int NumFragmentsK = _NUM_FRAGMENTS_K;
         static const int NumFragmentsN = 1;
         static const int NumFragments = NumFragmentsK * NumFragmentsN;
         static const int NumElements = NumFragments;
 
-        DEVICE static constexpr int row(int lane_id, int k_idx) { return (lane_id % 4) * 2 + k_idx * 8; }
+        DEVICE static constexpr int row(int lane_id, int k_idx = 0) { return (lane_id % 4) * 2 + k_idx * 8; }
         DEVICE static constexpr int col(int lane_id) { return lane_id / 4; }
 
         DEVICE __half2 &fragment(int idx) { return _data[idx]; }
@@ -68,16 +74,20 @@ namespace spio
         DEVICE unsigned &reg(int idx) { return reinterpret_cast<unsigned *>(_data)[idx]; }
         DEVICE unsigned reg(int idx) const { return reinterpret_cast<const unsigned *>(_data)[idx]; }
 
-        DEVICE __half2 &operator()(int idx) { return _data[idx]; }
-        DEVICE __half2 operator()(int idx) const { return _data[idx]; }
+        DEVICE __half2 &operator()(int idx = 0) { return _data[idx]; }
+        DEVICE __half2 operator()(int idx = 0) const { return _data[idx]; }
+
+        DEVICE void *data() { return _data; }
+
+        DEVICE const void *data() const { return _data; }
 
     private:
         __half2 _data[NumFragments];
     };
 
-    /// @brief  C or D matrix with float32 elements for M16_N8_K16 matrix multiplication with float32 accumulation.
+    /// @brief  C or D matrix with float32 elements for M16_N8_K* matrix multiplication with float32 accumulation.
     /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
-    class MMA_M16_N8_K16_F32_C
+    class _MMA_M16_N8_F32_C
     {
     public:
         static const int NumFragmentsM = 2;
@@ -106,6 +116,45 @@ namespace spio
         float2 _data[NumFragments];
     };
 
+    /// @brief A matrix with float16 elements for M16_N8_K8 matrix multiplication.
+    class MMA_M16_N8_K8_F16_A : public _MMA_M16_N8_F16_A<1>
+    {
+    public:
+        using Vector = uint2;
+        DEVICE Vector &vector() { return *static_cast<Vector *>(data()); }
+        DEVICE const Vector &vector() const { return *static_cast<const Vector *>(data()); }
+    };
+
+    /// @brief A matrix with float16 elements for M16_N8_K16 matrix multiplication.
+    class MMA_M16_N8_K16_F16_A : public _MMA_M16_N8_F16_A<2>
+    {
+    public:
+        using Vector = uint4;
+        DEVICE Vector &vector() { return *static_cast<Vector *>(data()); }
+        DEVICE const Vector &vector() const { return *static_cast<const Vector *>(data()); }
+    };
+
+    class MMA_M16_N8_K8_F16_B : public _MMA_M16_N8_F16_B<1>
+    {
+    public:
+        using Vector = unsigned;
+        DEVICE Vector &vector() { return *static_cast<Vector *>(data()); }
+        DEVICE const Vector &vector() const { return *static_cast<const Vector *>(data()); }
+    };
+
+    /// @brief B matrix with float16 elements for M16_N8_K16 matrix multiplication.
+    /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
+    class MMA_M16_N8_K16_F16_B : public _MMA_M16_N8_F16_B<2>
+    {
+    public:
+        using Vector = uint2;
+        DEVICE Vector &vector() { return *static_cast<Vector *>(data()); }
+        DEVICE const Vector &vector() const { return *static_cast<const Vector *>(data()); }
+    };
+
+    using MMA_M16_N8_K8_F32_C = _MMA_M16_N8_F32_C;
+    using MMA_M16_N8_K16_F32_C = _MMA_M16_N8_F32_C;
+
     /// @brief Perform D = A x B + C matrix-multiplication with matrix fragments.
     /// @param d Output matrix in float32
     /// @param a Input matrix A in float16.
@@ -128,6 +177,25 @@ namespace spio
             : "=f"(d(0)), "=f"(d(1)), "=f"(d(2)), "=f"(d(3))
             : "r"(a.reg(0)), "r"(a.reg(1)), "r"(a.reg(2)), "r"(a.reg(3)),
               "r"(b.reg(0)), "r"(b.reg(1)),
+              "f"(c(0)), "f"(c(1)), "f"(c(2)), "f"(c(3)));
+    }
+
+    __device__ void mma_m16_n8_k8(
+        MMA_M16_N8_K8_F32_C &d,
+        const MMA_M16_N8_K8_F16_A &a,
+        const MMA_M16_N8_K8_F16_B &b,
+        const MMA_M16_N8_K8_F32_C &c)
+    {
+        // mma.sync.aligned.m16n8k8.row.col.dtype.f16.f16.ctype d, a, b, c;
+        asm volatile(
+            "mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32"
+            " {%0, %1, %2, %3},"
+            " {%4, %5},"
+            " {%6}, "
+            " {%7, %8, %9, %10};"
+            : "=f"(d(0)), "=f"(d(1)), "=f"(d(2)), "=f"(d(3))
+            : "r"(a.reg(0)), "r"(a.reg(1)),
+              "r"(b.reg(0)),
               "f"(c(0)), "f"(c(1)), "f"(c(2)), "f"(c(3)));
     }
 }
