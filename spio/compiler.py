@@ -33,7 +33,15 @@ def nvcc_full_path():
 
 
 def compile(
-    sources=[], includes=[], run=False, cubin=False, compile=False, arch=None, output_file=None
+    sources=[],
+    includes=[],
+    run=False,
+    cubin=False,
+    compile=False,
+    arch=None,
+    output_file=None,
+    device_debug=False,
+    lineinfo=False,
 ):
     nvcc = nvcc_full_path()
     includes = [f"-I{path}" for path in includes]
@@ -48,6 +56,10 @@ def compile(
         args += ["-arch", arch]
     if output_file is not None:
         args += ["--output-file", output_file]
+    if device_debug:
+        args.append("-G")
+    if lineinfo:
+        args.append("-lineinfo")
     args += sources
     r = subprocess.run(args)
     r.check_returncode()

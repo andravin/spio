@@ -1,6 +1,7 @@
 """Unit tests that compile and test CUDA kernels that use tensor cores."""
 
 import cupy as cp
+import sys
 
 from spio import compile_test_kernel
 
@@ -53,7 +54,7 @@ def test_mma_m16_n8_k8_kernel():
 def test_mma_m16_n8_k16_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k16."""
     module, mma_kernel = compile_test_kernel(
-        kernel_name="mma_m16_n8_k16", source_file_name="mma"
+        kernel_name="mma_m16_n8_k16", source_file_name="mma", debug=True
     )
 
     A = cp.zeros((16, 16), dtype=cp.float16)

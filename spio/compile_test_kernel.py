@@ -5,7 +5,7 @@ from spio import compile, spio_cubins_path, spio_include_path, spio_kernels_path
 ADA_ARCH = "sm_89"
 
 
-def compile_test_kernel(kernel_name=None, source_file_name=None):
+def compile_test_kernel(kernel_name=None, source_file_name=None, debug=False):
     """Compile the kernel for the test with the given name.
 
     The kernel must be in a file called {kernel_name}.cu
@@ -33,6 +33,7 @@ def compile_test_kernel(kernel_name=None, source_file_name=None):
         cubin=True,
         arch=ADA_ARCH,
         output_file=cubin_file,
+        device_debug=debug,
     )
 
     module = cp.RawModule(path=str(cubin_file))
