@@ -2,6 +2,8 @@
 
 import cupy as cp
 import sys
+import torch
+from torch import nn
 
 from spio import compile_test_kernel
 
@@ -76,3 +78,37 @@ def test_mma_m16_n8_k16_kernel():
     C_ref = cp.matmul(A.astype(cp.float32), B.astype(cp.float32))
 
     cp.testing.assert_array_equal(C_ref, C)
+
+
+def test_conv_group_4_32w_4h_64c():
+    N = 1
+    C = 32
+    H = 4
+    W = 32
+    K = C
+    group_width = 4
+
+    groups = C // group_width
+
+    conv = nn.Conv2d(C, K, 3, bias=False, padding=1, groups=groups)
+    conv = conv.cuda()
+    conv = conv.to(memory_format=torch.channels_last)
+
+    inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float16)
+    inputs = inputs.to(memory_format=torch.channels_last)
+
+    with torch.autocast(device_type="cuda", dtype=torch.float16):
+        with torch.inference_mode():
+            ref_outputs = conv(inputs)
+
+    module, mma_kernel = compile_test_kernel(
+        kernel_name="conv_group_4_32w_4h_64c",
+        source_file_name="conv_group_4",
+        debug=True,
+    )
+
+    cp_inputs = cp.asarray(inputs)
+    cp_weights = cp.asarray(conv.weight.detach())
+    cp_outputs = cp.zeros((N, H, W, C))
+
+    print(cp_outputs)
