@@ -85,23 +85,31 @@ def test_conv_group_4_32w_4h_64c():
     C = 32
     H = 4
     W = 32
+    R = 3
+    S = 3
     K = C
     group_width = 4
+    PADDING = 1
 
     groups = C // group_width
 
-    conv = nn.Conv2d(C, K, 3, bias=False, padding=1, groups=groups)
+    conv = nn.Conv2d(C, K, 3, bias=False, padding=PADDING, groups=groups)
+    weights = torch.ones((K, group_width, R, S))
+    with torch.no_grad():
+        conv.weight.copy_(weights)
     conv = conv.cuda()
     conv = conv.to(memory_format=torch.channels_last)
 
-    inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float16)
+    inputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16)  
     inputs = inputs.to(memory_format=torch.channels_last)
+    for w in range(32):
+        inputs[:, :, :, w] = w
 
     with torch.autocast(device_type="cuda", dtype=torch.float16):
         with torch.inference_mode():
             ref_outputs = conv(inputs)
 
-    module, mma_kernel = compile_test_kernel(
+    module, conv_kernel = compile_test_kernel(
         kernel_name="conv_group_4_32w_4h_64c",
         source_file_name="conv_group_4",
         debug=True,
@@ -110,5 +118,7 @@ def test_conv_group_4_32w_4h_64c():
     cp_inputs = cp.asarray(inputs)
     cp_weights = cp.asarray(conv.weight.detach())
     cp_outputs = cp.zeros((N, H, W, C))
+
+    conv_kernel((1,),  (256,), (cp_outputs, cp_inputs, cp_weights))
 
     print(cp_outputs)
