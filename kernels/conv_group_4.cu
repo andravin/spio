@@ -12,12 +12,15 @@ extern "C"
     __global__ void conv_group_4_32w_4h_64c_test(
         // uint4 *__restrict__ out,
         uint4 *__restrict__ padded_in,
+        uint4 *__restrict__ weights_out,
         const uint4 *__restrict__ in,
         const uint4 *__restrict__ weights)
     {
-        constexpr int C = 32;
+        constexpr int C = 64;
+        constexpr int R = 3;
+        constexpr int S = 3;
         constexpr int C8 = C / 8;
-        // constexpr int GROUP_WIDTH = 4;
+        constexpr int GROUP_WIDTH = 8;
 
         constexpr int P = 4;
         constexpr int Q = 32;
@@ -40,10 +43,23 @@ extern "C"
 
         constexpr int NUM_THREAD_LOADS = cdiv(NUM_INPUT_BYTES_PER_ROW, LOAD_VECTOR_SIZE);
 
+        constexpr int NUM_WEIGHTS = C * R * S * GROUP_WIDTH;
+        constexpr int NUM_WEIGHTS_VECTORS = NUM_WEIGHTS * UNIT / LOAD_VECTOR_SIZE;
+
         constexpr int NUM_PADDED_INPUTS = P * BLOCK_W * C8;
 
+        __shared__ uint4 smem_weights[NUM_WEIGHTS_VECTORS];
         __shared__ uint4 smem_in[NUM_PADDED_INPUTS];
-        // __shared__ uint4 smem_weights[9 * C8 * GROUP_WIDTH];
+
+        for (int idx = threadIdx.x; idx < NUM_WEIGHTS_VECTORS; idx += THREADS)
+        {
+            __pipeline_memcpy_async(
+                smem_weights + idx,
+                weights + idx,
+                LOAD_VECTOR_SIZE,
+                0);
+        }
+        __pipeline_commit();
 
         // Load the inputs to shared memory, one row at a time.
         const uint4 *in_load[NUM_BLOCK_LOADS];
@@ -78,13 +94,19 @@ extern "C"
             __pipeline_commit();
         }
 
-    
         __syncthreads();
         __pipeline_wait_prior(0);
 
-        // XXX write inputs to outputs
-        for (int idx = threadIdx.x; idx < NUM_PADDED_INPUTS; idx += THREADS) {
+        // XXX write inputs to output
+        for (int idx = threadIdx.x; idx < NUM_PADDED_INPUTS; idx += THREADS)
+        {
             padded_in[idx] = smem_in[idx];
+        }
+
+        // XXX write weights to weights_output
+        for (int idx = threadIdx.x; idx < NUM_WEIGHTS_VECTORS; idx += THREADS) {
+            weights_out[idx] = smem_weights[idx];
+
         }
 
         // Load weights to shared memory.

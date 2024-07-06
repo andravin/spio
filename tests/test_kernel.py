@@ -82,28 +82,33 @@ def test_mma_m16_n8_k16_kernel():
 
 def test_conv_group_4_32w_4h_64c():
     N = 1
-    C = 32
+    C = 64
     H = 4
     W = 32
     R = 3
     S = 3
     K = C
-    group_width = 4
+    group_width = 8
     PADDING = 1
 
     groups = C // group_width
 
     conv = nn.Conv2d(C, K, 3, bias=False, padding=PADDING, groups=groups)
-    weights = torch.ones((K, group_width, R, S))
+    # weights = torch.zeros((K, group_width, R, S))
+    # for r in range(R):
+    #     for s in range(S):
+    #         weights[:, :, r, s] = r * S + s
+    weights = torch.randn((K, group_width, R, S))
     with torch.no_grad():
         conv.weight.copy_(weights)
     conv = conv.cuda()
     conv = conv.to(memory_format=torch.channels_last)
 
-    inputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16)
+    # inputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16)
+    # for x in range(W):
+    #     inputs[:, :, :, x] = x
+    inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float16)
     inputs = inputs.to(memory_format=torch.channels_last)
-    for w in range(32):
-        inputs[:, :, :, w] = w
 
     with torch.autocast(device_type="cuda", dtype=torch.float16):
         with torch.inference_mode():
@@ -116,11 +121,26 @@ def test_conv_group_4_32w_4h_64c():
     )
 
     cp_inputs = cp.asarray(inputs)
-    cp_weights = cp.asarray(conv.weight.detach())
+    cp_weights = cp.asarray(conv.weight.detach().type(torch.float16))
     cp_outputs = cp.zeros((N, H, W, C))
     cp_loaded_input = cp.zeros((N, H, W + 2, C), dtype=cp.float16)
+    cp_loaded_weights = cp.zeros((K, R, S, group_width), dtype=cp.float16)
 
-    conv_kernel((1,),  (256,), (cp_loaded_input, cp_inputs, cp_weights))
+    conv_kernel((1,),  (256,), (cp_loaded_input, cp_loaded_weights, cp_inputs, cp_weights))
 
-    _set_printoptions()
-    print(cp_loaded_input)
+    for n in range(N):
+        for y in range(H):
+            for x in range(W):
+                for c in range(C):
+                    assert cp_loaded_input[n, y, x + 1, c] == cp_inputs[n, c, y, x]
+    cp.testing.assert_array_equal(cp_loaded_input[:, :, 0, :], 0)
+    cp.testing.assert_array_equal(cp_loaded_input[:, :, -1, :], 0)
+
+    for k in range(K):
+        for c in range(group_width):
+            for r in range(R):
+                for s in range(S):
+                    assert cp_loaded_weights[k, r, s, c] == cp_weights[k, c, r, s]
+
+    # _set_printoptions()
+    # print(cp_loaded_input)
