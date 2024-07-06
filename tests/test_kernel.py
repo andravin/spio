@@ -100,7 +100,7 @@ def test_conv_group_4_32w_4h_64c():
     conv = conv.cuda()
     conv = conv.to(memory_format=torch.channels_last)
 
-    inputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16)  
+    inputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16)
     inputs = inputs.to(memory_format=torch.channels_last)
     for w in range(32):
         inputs[:, :, :, w] = w
@@ -118,7 +118,9 @@ def test_conv_group_4_32w_4h_64c():
     cp_inputs = cp.asarray(inputs)
     cp_weights = cp.asarray(conv.weight.detach())
     cp_outputs = cp.zeros((N, H, W, C))
+    cp_loaded_input = cp.zeros((N, H, W + 2, C), dtype=cp.float16)
 
-    conv_kernel((1,),  (256,), (cp_outputs, cp_inputs, cp_weights))
+    conv_kernel((1,),  (256,), (cp_loaded_input, cp_inputs, cp_weights))
 
-    print(cp_outputs)
+    _set_printoptions()
+    print(cp_loaded_input)

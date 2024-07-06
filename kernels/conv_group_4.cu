@@ -10,13 +10,14 @@ extern "C"
     // Pipeline Primitive Interface:
     // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#pipeline-interface
     __global__ void conv_group_4_32w_4h_64c_test(
-        uint4 *__restrict__ out,
+        // uint4 *__restrict__ out,
+        uint4 *__restrict__ padded_in,
         const uint4 *__restrict__ in,
         const uint4 *__restrict__ weights)
     {
         constexpr int C = 32;
         constexpr int C8 = C / 8;
-        constexpr int GROUP_WIDTH = 4;
+        // constexpr int GROUP_WIDTH = 4;
 
         constexpr int P = 4;
         constexpr int Q = 32;
@@ -26,7 +27,6 @@ extern "C"
         constexpr int WARPS = 8;
         constexpr int THREADS = WARPS * 32;
 
-        constexpr int BLOCK_H = P + 2;
         constexpr int BLOCK_W = Q + 2;
         constexpr int BLOCK_C8 = WARPS;
         constexpr int UNIT = 2;
@@ -40,40 +40,39 @@ extern "C"
 
         constexpr int NUM_THREAD_LOADS = cdiv(NUM_INPUT_BYTES_PER_ROW, LOAD_VECTOR_SIZE);
 
-        __shared__ uint4 smem_in[BLOCK_H * BLOCK_W * C8];
-        __shared__ uint4 smem_weights[9 * C8 * GROUP_WIDTH];
+        constexpr int NUM_PADDED_INPUTS = P * BLOCK_W * C8;
 
-        int tid = threadIdx.x;
+        __shared__ uint4 smem_in[NUM_PADDED_INPUTS];
+        // __shared__ uint4 smem_weights[9 * C8 * GROUP_WIDTH];
 
-        // Load the inputs to shared memory.
-        int thread_load_idx = tid;
+        // Load the inputs to shared memory, one row at a time.
         const uint4 *in_load[NUM_BLOCK_LOADS];
-        int in_load_size[NUM_BLOCK_LOADS];
+        int in_zfill_size[NUM_BLOCK_LOADS];
         bool do_load[NUM_BLOCK_LOADS];
         uint4 *in_smem_store[NUM_BLOCK_LOADS];
         for (int block_load_idx = 0; block_load_idx < NUM_BLOCK_LOADS; ++block_load_idx)
         {
-            int thread_load_idx = block_load_idx * THREADS + tid;
+            int thread_load_idx = block_load_idx * THREADS + threadIdx.x;
             int thread_c8 = thread_load_idx % C8;
             int thread_x = ((thread_load_idx / C8) % BLOCK_W) - PADDING;
             bool x_inbounds = thread_x >= 0 && thread_x < Q;
             do_load[block_load_idx] = thread_load_idx < NUM_THREAD_LOADS;
-            in_load_size[block_load_idx] = x_inbounds ? LOAD_VECTOR_SIZE : 0;
+            in_zfill_size[block_load_idx] = x_inbounds ? 0 : LOAD_VECTOR_SIZE;
             in_load[block_load_idx] = &in[thread_x * C8 + thread_c8];
             in_smem_store[block_load_idx] = &smem_in[(thread_x + PADDING) * C8 + thread_c8];
         }
 
-        for (int y = 0; y < BLOCK_H; ++y)
+        for (int y = 0; y < P; ++y)
         {
             for (int block_load_idx = 0; block_load_idx < NUM_BLOCK_LOADS; ++block_load_idx)
             {
                 if (do_load[block_load_idx])
                 {
                     __pipeline_memcpy_async(
-                        in_smem_store[block_load_idx] + y * BLOCK_W * C8,
-                        in_load[block_load_idx] + y * Q * C8,
+                        in_smem_store[block_load_idx] + y * (BLOCK_W * C8),
+                        in_load[block_load_idx] + y * (Q * C8),
                         LOAD_VECTOR_SIZE,
-                        in_load_size[block_load_idx]);
+                        in_zfill_size[block_load_idx]);
                 }
             }
             __pipeline_commit();
@@ -83,10 +82,10 @@ extern "C"
         __syncthreads();
         __pipeline_wait_prior(0);
 
-        // XXX Use the shared memory to avoid compiler warnings.
-        smem_weights[0] = smem_in[0];
-        out[0] = smem_weights[0];
-        out[1] = smem_in[0];
+        // XXX write inputs to outputs
+        for (int idx = threadIdx.x; idx < NUM_PADDED_INPUTS; idx += THREADS) {
+            padded_in[idx] = smem_in[idx];
+        }
 
         // Load weights to shared memory.
 
