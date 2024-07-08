@@ -94,11 +94,11 @@ def test_conv_group_4_32w_4h_64c():
     groups = C // group_width
 
     conv = nn.Conv2d(C, K, 3, bias=False, padding=PADDING, groups=groups)
-    # weights = torch.zeros((K, group_width, R, S))
-    # for r in range(R):
-    #     for s in range(S):
-    #         weights[:, :, r, s] = r * S + s
-    weights = torch.randn((K, group_width, R, S))
+    weights = torch.zeros((K, group_width, R, S))  
+    for r in range(R):
+        for s in range(S):
+            weights[:, :, r, s] = r * 10 + s
+    # weights = torch.randn((K, group_width, R, S))
     with torch.no_grad():
         conv.weight.copy_(weights)
     conv = conv.cuda()

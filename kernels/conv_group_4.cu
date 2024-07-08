@@ -1,5 +1,10 @@
 #include <cuda_pipeline.h>
 
+#include "spio/mma.h"
+#include "spio/ldmatrix.h"
+
+using namespace spio;
+
 extern "C"
 {
     __device__ constexpr int cdiv(int n, int d)
@@ -51,6 +56,7 @@ extern "C"
         __shared__ uint4 smem_weights[NUM_WEIGHTS_VECTORS];
         __shared__ uint4 smem_in[NUM_PADDED_INPUTS];
 
+        // Load weights to shared memory.
         for (int idx = threadIdx.x; idx < NUM_WEIGHTS_VECTORS; idx += THREADS)
         {
             __pipeline_memcpy_async(
@@ -97,6 +103,22 @@ extern "C"
         __syncthreads();
         __pipeline_wait_prior(0);
 
+        int warp_idx = threadIdx.x / 32;
+        int lane_idx = threadIdx.x % 32;
+        int group_idx = warp_idx;
+
+        using WeightsFrag = MMA_M16_N8_K8_F16_B;
+        WeightsFrag wgts[R * S];
+
+        // Load weights to registers.
+        int warp_k = group_idx * GROUP_WIDTH;
+        int lane_weights_load_k = lane_idx % GROUP_WIDTH;
+        int weights_load_k = warp_k + lane_weights_load_k;
+        for (int rs = 0; rs < R * S; ++rs)
+        {
+            wgts[rs].vector() = ldmatrix_x1(&smem_weights[weights_load_k * (R * S) + rs]);
+        }
+
         // XXX write inputs to output
         for (int idx = threadIdx.x; idx < NUM_PADDED_INPUTS; idx += THREADS)
         {
@@ -104,14 +126,15 @@ extern "C"
         }
 
         // XXX write weights to weights_output
-        for (int idx = threadIdx.x; idx < NUM_WEIGHTS_VECTORS; idx += THREADS) {
-            weights_out[idx] = smem_weights[idx];
-
+        int lane_frag_k = WeightsFrag::col(lane_idx);
+        int lane_frag_c = WeightsFrag::row(lane_idx);
+        int store_k = warp_k + lane_frag_k;
+        for (int rs = 0; rs < R * S; ++rs)
+        {
+            reinterpret_cast<unsigned *>(weights_out)[store_k * (R * S) * 4 + rs * 4 + lane_frag_c / 2] = wgts[rs].vector();
         }
 
-        // Load weights to shared memory.
 
-        // Load weights to registers.
 
         // For each strip of input rows ..
 
