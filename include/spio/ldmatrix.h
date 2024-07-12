@@ -11,7 +11,6 @@ namespace spio
     /// @details https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-ldmatrix
     /// @param p Pointers to the rows of the matrix (in threads 0-7).
     /// @return The matrix fragment as one warp-wide register.
-
     __device__ unsigned ldmatrix_x1(const void *p)
     {
         size_t s = __cvta_generic_to_shared(p);
