@@ -100,6 +100,7 @@ extern "C"
             __pipeline_commit();
         }
 
+        // Weight for all loads to complete.
         __syncthreads();
         __pipeline_wait_prior(0);
 
@@ -134,22 +135,32 @@ extern "C"
             reinterpret_cast<unsigned *>(weights_out)[store_k * (R * S) * 4 + rs * 4 + lane_frag_c / 2] = wgts[rs].vector();
         }
 
+        // Initialize the accumulators.
+        MMA_M16_N8_K8_F32_C acc[P];
+        for (int p = 0; p < P; ++p)
+        {
+            acc[p].zero();
+        }
 
+        // Compute the grouped convolution.
+        int warp_c8 = group_idx;
+        for (int s = 0; s < S; ++s)
+        {
+            int load_j = (lane_idx % 16) + s;
+            for (int i = 0; i < P; ++i)
+            {
+                const uint4 *in_smem_load = smem_in + i * (BLOCK_W * C8) + load_j * C8 + warp_c8;
+                MMA_M16_N8_K8_F16_A in_i;
+                in_i.vector() = ldmatrix_x2(in_smem_load);
+                int p_min = max(i - (R - 1) + (R / 2), 0);
+                int p_max = min(i + (R / 2), P - 1);
+                for (int p = p_min; p < p_max; ++p) {
+                    int r = i - p + (R / 2);
+                    mma_m16_n8_k8(acc[p], in_i, wgts[r*S + s], acc[p]);
+                }
+            }
+        }
 
-        // For each strip of input rows ..
-
-        // .. load the strip of input rows to share memory.
-
-        // .. for each horizontal shift of the input rows
-
-        //     ..  for each input row in the strip
-
-        //          .. load the shift of the input row to registers.
-
-        //          .. multiply the row by the corresponding column of the weights tensor
-
-        //          .. accumulate onto the appropriate outputs.
-
-        //     .. store any completed outputs to global memory.
+        // TODO: store the result.
     }
 }

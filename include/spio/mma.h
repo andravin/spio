@@ -46,9 +46,9 @@ namespace spio
         DEVICE __half2 &operator()(int idx = 0) { return _data[idx]; }
         DEVICE __half2 operator()(int idx = 0) const { return _data[idx]; }
 
-        void *data() { return _data; }
+        DEVICE void *data() { return _data; }
 
-        const void *data() const { return _data; }
+        DEVICE const void *data() const { return _data; }
 
     private:
         __half2 _data[NumFragments];
