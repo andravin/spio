@@ -1,4 +1,5 @@
 #include <cuda_pipeline.h>
+#include <cuda_fp16.h>
 
 #include "spio/mma.h"
 #include "spio/ldmatrix.h"
@@ -14,8 +15,8 @@ extern "C"
 
     // Pipeline Primitive Interface:
     // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#pipeline-interface
-    __global__ void conv_group_4_32w_4h_64c_test(
-        // uint4 *__restrict__ out,
+    __global__ void conv_group_4_16w_4h_64c_test(
+        uint4 *__restrict__ out,
         uint4 *__restrict__ padded_in,
         uint4 *__restrict__ weights_out,
         const uint4 *__restrict__ in,
@@ -25,10 +26,11 @@ extern "C"
         constexpr int R = 3;
         constexpr int S = 3;
         constexpr int C8 = C / 8;
+        constexpr int C2 = C / 2;
         constexpr int GROUP_WIDTH = 8;
 
         constexpr int P = 4;
-        constexpr int Q = 32;
+        constexpr int Q = 16;
 
         constexpr int PADDING = 1;
 
@@ -136,7 +138,8 @@ extern "C"
         }
 
         // Initialize the accumulators.
-        MMA_M16_N8_K8_F32_C acc[P];
+        using Acc = MMA_M16_N8_K8_F32_C;
+        Acc acc[P];
         for (int p = 0; p < P; ++p)
         {
             acc[p].zero();
@@ -153,14 +156,25 @@ extern "C"
                 MMA_M16_N8_K8_F16_A in_i;
                 in_i.vector() = ldmatrix_x2(in_smem_load);
                 int p_min = max(i - (R - 1) + (R / 2), 0);
-                int p_max = min(i + (R / 2), P - 1);
-                for (int p = p_min; p < p_max; ++p) {
+                int p_max = min(i + (R / 2) + 1, P);
+                for (int p = p_min; p < p_max; ++p)
+                {
                     int r = i - p + (R / 2);
-                    mma_m16_n8_k8(acc[p], in_i, wgts[r*S + s], acc[p]);
+                    mma_m16_n8_k8(acc[p], in_i, wgts[r * S + s], acc[p]);
                 }
             }
         }
 
-        // TODO: store the result.
+        // Store the result.
+        for (int p = 0; p < P; ++p) {
+            for(int q8 = 0; q8 < 2; ++q8) {
+                __half2 acc_fp16 = __float22half2_rn(acc[p].fragment(q8));
+                int lane_q = Acc::row(lane_idx, q8);
+                int lane_c2 = Acc::col(lane_idx) / 2;
+                int q = lane_q;
+                int c2 = lane_c2 + warp_c8 * 4;
+                reinterpret_cast<__half2 *>(out)[p * (Q * C2) + q * (C2) + c2] = acc_fp16;
+            }
+        }
     }
 }

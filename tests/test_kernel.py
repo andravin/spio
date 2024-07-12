@@ -80,11 +80,11 @@ def test_mma_m16_n8_k16_kernel():
     cp.testing.assert_array_equal(C_ref, C)
 
 
-def test_conv_group_4_32w_4h_64c():
+def test_conv_group_4_16w_4h_64c():
     N = 1
     C = 64
     H = 4
-    W = 32
+    W = 16
     R = 3
     S = 3
     K = C
@@ -94,20 +94,20 @@ def test_conv_group_4_32w_4h_64c():
     groups = C // group_width
 
     conv = nn.Conv2d(C, K, 3, bias=False, padding=PADDING, groups=groups)
-    weights = torch.zeros((K, group_width, R, S))  
-    for r in range(R):
-        for s in range(S):
-            weights[:, :, r, s] = r * 10 + s
-    # weights = torch.randn((K, group_width, R, S))
+    # weights = torch.ones((K, group_width, R, S))
+    # for r in range(R):
+    #    for s in range(S):
+    #        weights[:, :, r, s] = r * 10 + s
+    weights = torch.randn((K, group_width, R, S))
     with torch.no_grad():
         conv.weight.copy_(weights)
     conv = conv.cuda()
     conv = conv.to(memory_format=torch.channels_last)
 
-    # inputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16)
-    # for x in range(W):
-    #     inputs[:, :, :, x] = x
     inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float16)
+    # inputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16)
+    # for y in range(H):
+    #     inputs[:, :, y, :] = y
     inputs = inputs.to(memory_format=torch.channels_last)
 
     with torch.autocast(device_type="cuda", dtype=torch.float16):
@@ -115,18 +115,26 @@ def test_conv_group_4_32w_4h_64c():
             ref_outputs = conv(inputs)
 
     module, conv_kernel = compile_test_kernel(
-        kernel_name="conv_group_4_32w_4h_64c",
+        kernel_name="conv_group_4_16w_4h_64c",
         source_file_name="conv_group_4",
         debug=True,
     )
 
+    outputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16).to(
+        memory_format=torch.channels_last
+    )
+
+    cp_outputs = cp.asarray(outputs)
     cp_inputs = cp.asarray(inputs)
     cp_weights = cp.asarray(conv.weight.detach().type(torch.float16))
-    cp_outputs = cp.zeros((N, H, W, C))
     cp_loaded_input = cp.zeros((N, H, W + 2, C), dtype=cp.float16)
     cp_loaded_weights = cp.zeros((K, R, S, group_width), dtype=cp.float16)
 
-    conv_kernel((1,),  (256,), (cp_loaded_input, cp_loaded_weights, cp_inputs, cp_weights))
+    conv_kernel(
+        (1,),
+        (256,),
+        (cp_outputs, cp_loaded_input, cp_loaded_weights, cp_inputs, cp_weights),
+    )
 
     for n in range(N):
         for y in range(H):
@@ -141,6 +149,9 @@ def test_conv_group_4_32w_4h_64c():
             for r in range(R):
                 for s in range(S):
                     assert cp_loaded_weights[k, r, s, c] == cp_weights[k, c, r, s]
+
+    diff = ref_outputs - outputs
+    torch.testing.assert_close(ref_outputs, outputs)
 
     # _set_printoptions()
     # print(cp_loaded_input)
