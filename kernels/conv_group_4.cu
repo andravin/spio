@@ -175,7 +175,7 @@ extern "C"
                 int lane_c2 = Acc::col(lane_idx) / 2;
                 int q = lane_q;
                 int c2 = lane_c2 + warp_c8 * 4;
-                reinterpret_cast<__half2 *>(out)[p * (Q * C2) + q * (C2) + c2] = acc_fp16;
+                reinterpret_cast<__half2 *>(out)[OutputIdx().p(p).q(q).c2(c2)] = acc_fp16;
             }
         }
     }

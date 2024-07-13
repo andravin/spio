@@ -97,6 +97,7 @@ def test_conv_group_4_16w_4h_64c():
     groups = C // group_width
 
     C8 = C // 8
+    C2 = C // 2
 
     conv = nn.Conv2d(C, K, 3, bias=False, padding=PADDING, groups=groups)
     # weights = torch.ones((K, group_width, R, S))
@@ -122,7 +123,11 @@ def test_conv_group_4_16w_4h_64c():
     with TemporaryDirectory(prefix="spio_") as include_dir:
         header_file = Path(include_dir) / "my_indices.h"
         generate_indices(
-            [IndexSpec("InputIdx", dict(n=N, h=H, w=W, c8=C8))], header_file
+            [
+                IndexSpec("InputIdx", dict(n=N, h=H, w=W, c8=C8)),
+                IndexSpec("OutputIdx", dict(n=N, p=H, q=W, c2=C2)),
+            ],
+            header_file,
         )
         module, conv_kernel = compile_test_kernel(
             kernel_name="conv_group_4_16w_4h_64c",
