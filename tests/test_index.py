@@ -40,9 +40,8 @@ def _test_generate_index():
     header = spio.index_header()
     test_code = f"""
 #include "utest.h"
-{header}
 
-using namespace spio;
+{header}
 
 {my_index_code}
 

@@ -1,5 +1,5 @@
-from typing import Dict, Tuple
-
+from typing import Dict, Tuple, List
+from dataclasses import dataclass
 
 def index_header():
     """Return the C++ statement that includes the spio index header file.
@@ -9,6 +9,23 @@ def index_header():
     the code returned by the generate_index() function.
     """
     return '#include "spio/index.h"'
+
+
+@dataclass
+class IndexSpec:
+    class_name: str
+    dims: Dict[str, int]
+
+
+def generate_indices(index_specs: List[IndexSpec], header_file_name: str) -> None:
+    code = index_header()
+    code += ""
+    for index_spec in index_specs:
+        code += generate_index(index_spec.class_name, index_spec.dims)
+        code += ""
+    
+    with open(header_file_name, "w") as file:
+        file.write(code)
 
 
 def generate_index(class_name: str, dims: Dict[str, int]) -> str:
@@ -37,13 +54,13 @@ def _class(class_name: str, shape: Tuple[int, ...]) -> str:
     shape_str = ", ".join([str(d) for d in shape[1:]])
     base = f"Index{num_dims}D<{shape_str}>"
     return f"""
-    class {class_name} : public {base} {{
+    class {class_name} : public spio::{base} {{
     public:
         using Base = {base};
 
-        constexpr {class_name}(int offset  = 0) : Base(offset) {{}}
+        DEVICE constexpr {class_name}(int offset  = 0) : Base(offset) {{}}
 
-        constexpr {class_name}(const {base} &other) : Base(other) {{}}
+        DEVICE constexpr {class_name}(const {base} &other) : Base(other) {{}}
 """
 
 
@@ -58,14 +75,14 @@ def _index_to_offset(class_name: str, d: int, name: str) -> str:
     name_in = f"{name}_in"
     dim_d = f"_d{d}"
     return f"""
-        constexpr {class_name} {name}(int {name_in}) const {{ return {dim_d}({name_in}); }}
+        DEVICE constexpr {class_name} {name}(int {name_in}) const {{ return {dim_d}({name_in}); }}
 """
 
 
 def _offset_to_index(d: int, name: str) -> str:
     dim_d = f"_d{d}"
     return f"""
-        constexpr int {name}() const {{ return {dim_d}(); }}
+        DEVICE constexpr int {name}() const {{ return {dim_d}(); }}
 """
 
 

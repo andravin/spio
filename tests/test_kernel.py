@@ -1,11 +1,14 @@
 """Unit tests that compile and test CUDA kernels that use tensor cores."""
 
-import cupy as cp
 import sys
+from tempfile import TemporaryDirectory
+from pathlib import Path
+
+import cupy as cp
 import torch
 from torch import nn
 
-from spio import compile_test_kernel
+from spio import compile_test_kernel, generate_indices, IndexSpec
 
 ADA_ARCH = "sm_89"
 
@@ -93,6 +96,8 @@ def test_conv_group_4_16w_4h_64c():
 
     groups = C // group_width
 
+    C8 = C // 8
+
     conv = nn.Conv2d(C, K, 3, bias=False, padding=PADDING, groups=groups)
     # weights = torch.ones((K, group_width, R, S))
     # for r in range(R):
@@ -114,11 +119,17 @@ def test_conv_group_4_16w_4h_64c():
         with torch.inference_mode():
             ref_outputs = conv(inputs)
 
-    module, conv_kernel = compile_test_kernel(
-        kernel_name="conv_group_4_16w_4h_64c",
-        source_file_name="conv_group_4",
-        debug=True,
-    )
+    with TemporaryDirectory(prefix="spio_") as include_dir:
+        header_file = Path(include_dir) / "my_indices.h"
+        generate_indices(
+            [IndexSpec("InputIdx", dict(n=N, h=H, w=W, c8=C8))], header_file
+        )
+        module, conv_kernel = compile_test_kernel(
+            kernel_name="conv_group_4_16w_4h_64c",
+            source_file_name="conv_group_4",
+            debug=True,
+            includes=[include_dir],
+        )
 
     outputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16).to(
         memory_format=torch.channels_last

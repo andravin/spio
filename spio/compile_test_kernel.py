@@ -5,7 +5,7 @@ from spio import compile, spio_cubins_path, spio_include_path, spio_kernels_path
 ADA_ARCH = "sm_89"
 
 
-def compile_test_kernel(kernel_name=None, source_file_name=None, debug=False):
+def compile_test_kernel(kernel_name=None, source_file_name=None, debug=False, includes=[]):
     """Compile the kernel for the test with the given name.
 
     The kernel must be in a file called {kernel_name}.cu
@@ -24,11 +24,11 @@ def compile_test_kernel(kernel_name=None, source_file_name=None, debug=False):
     else:
         cuda_source_file = spio_kernels_path() / f"{source_file_name}.cu"
     cubin_file = spio_cubins_path() / f"{kernel_name}.cubin"
-    include_path = spio_include_path()
+    includes = includes + [spio_include_path()]
 
     compile(
         [cuda_source_file],
-        includes=[include_path],
+        includes=includes,
         compile=True,
         cubin=True,
         arch=ADA_ARCH,

@@ -4,6 +4,8 @@
 #include "spio/mma.h"
 #include "spio/ldmatrix.h"
 
+#include "my_indices.h"
+
 using namespace spio;
 
 extern "C"
@@ -82,7 +84,7 @@ extern "C"
             bool x_inbounds = thread_x >= 0 && thread_x < Q;
             do_load[block_load_idx] = thread_load_idx < NUM_THREAD_LOADS;
             in_zfill_size[block_load_idx] = x_inbounds ? 0 : LOAD_VECTOR_SIZE;
-            in_load[block_load_idx] = &in[thread_x * C8 + thread_c8];
+            in_load[block_load_idx] = &in[InputIdx().w(thread_x) + thread_c8];
             in_smem_store[block_load_idx] = &smem_in[(thread_x + PADDING) * C8 + thread_c8];
         }
 
@@ -94,7 +96,7 @@ extern "C"
                 {
                     __pipeline_memcpy_async(
                         in_smem_store[block_load_idx] + y * (BLOCK_W * C8),
-                        in_load[block_load_idx] + y * (Q * C8),
+                        in_load[block_load_idx] + InputIdx().h(y),
                         LOAD_VECTOR_SIZE,
                         in_zfill_size[block_load_idx]);
                 }
