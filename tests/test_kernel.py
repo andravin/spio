@@ -8,7 +8,13 @@ import cupy as cp
 import torch
 from torch import nn
 
-from spio import compile_test_kernel, generate_indices, IndexSpec
+from spio import (
+    compile_test_kernel,
+    generate_indices,
+    IndexSpec,
+    generate_tensors,
+    TensorSpec,
+)
 
 ADA_ARCH = "sm_89"
 
@@ -127,7 +133,8 @@ def test_conv_group_4_16w_4h_64c():
             ref_outputs = conv(inputs)
 
     with TemporaryDirectory(prefix="spio_") as include_dir:
-        header_file = Path(include_dir) / "my_indices.h"
+        index_header_file = Path(include_dir) / "my_indices.h"
+        tensor_header_file = Path(include_dir) / "my_tensors.h"
         generate_indices(
             [
                 IndexSpec("ThreadIdx", dict(warp=WARPS, lane=32)),
@@ -137,7 +144,11 @@ def test_conv_group_4_16w_4h_64c():
                 IndexSpec("SmemWeightsIdx", dict(k=K, r=R, s=S)),
                 IndexSpec("WeightsOutIdx", dict(k=K, rs=R * S, c2=4)),
             ],
-            header_file,
+            index_header_file,
+        )
+        generate_tensors(
+            [TensorSpec("Input", "const uint4", dict(n=N, h=H, w=W, c8=C8))],
+            tensor_header_file,
         )
         module, conv_kernel = compile_test_kernel(
             kernel_name="conv_group_4_16w_4h_64c",

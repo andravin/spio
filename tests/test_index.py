@@ -1,7 +1,8 @@
 """
 Run all C++ unit tests as a single pytest test.
 
-The C++ tests
+The C++ tests conver generated index and tensor classes. These classes
+work in both C++ and CUDA programs.
 """
 
 from subprocess import CalledProcessError
@@ -10,7 +11,6 @@ from tempfile import NamedTemporaryFile
 import spio
 
 CPP_SOURCES = ["test_index.cpp"]
-
 
 def compile_cpp_tests(extra_cpp_test_files=[]):
     src_dir = spio.spio_cpp_tests_src_path()
@@ -23,10 +23,12 @@ def compile_cpp_tests(extra_cpp_test_files=[]):
 def test_cpp_tests():
     """Run all C++ unit tests."""
 
-    test_generate_index_code = _test_generate_index()
+    test_source = _test_generate_index()
+    test_source += _test_generate_tensor();
+
     test_source_file = NamedTemporaryFile(prefix="spio_", suffix=".cpp")
     with open(test_source_file.name, "w") as f:
-        f.write(test_generate_index_code)
+        f.write(test_source)
 
     try:
         compile_cpp_tests([test_source_file.name])
@@ -61,6 +63,54 @@ UTEST(MyIndex, index_from_offset)
     EXPECT_EQ(idx.h(), (offset / (64 * 128)) % 32);
     EXPECT_EQ(idx.w(), (offset / 128) % 64);
     EXPECT_EQ(idx.c(), offset % 128);
+}}
+"""
+    return test_code
+
+
+def _test_generate_tensor():
+    """Return the C++ source code that tests a custom tensor class."""
+    N = 7
+    H = 16
+    W = 33
+    C = 42
+
+    my_tensor_code = spio.generate_tensor(
+        "MyTensor", "const float", dict(n=N, h=H, w=W, c=C)
+    )
+    header = spio.tensor_header()
+    test_code = f"""
+
+{header}
+
+{my_tensor_code}
+
+UTEST(MyTensor, offset_from_tensor)
+{{
+    constexpr int N = {N};
+    constexpr int H = {H};
+    constexpr int W = {W};
+    constexpr int C = {C};
+
+    float data[N * H * W * C];
+    for (int n = 0; n < N; ++n) {{
+        for (int h = 0; h < H; ++h) {{
+            for (int w = 0; w < W; ++w) {{
+                for (int c = 0; c < C; ++c) {{
+                    data[n*(H*W*C) + h*(W*C) + w*C +c] = n*(H*W*C) + h*(W*C) + w*C +c;
+                }}
+            }}
+        }}
+    }}
+    for (int n = 0; n < N; ++n) {{
+        for (int h = 0; h < H; ++h) {{
+            for (int w = 0; w < W; ++w) {{
+                for (int c = 0; c < C; ++c) {{
+                    EXPECT_EQ(*MyTensor(data).n(n).h(h).w(w).c(c), n*(H*W*C) + h*(W*C) + w*C +c);
+                }}
+            }}
+        }}
+    }}
 }}
 """
     return test_code

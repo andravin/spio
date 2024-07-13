@@ -5,6 +5,7 @@
 #include "spio/ldmatrix.h"
 
 #include "my_indices.h"
+#include "my_tensors.h"
 
 using namespace spio;
 
