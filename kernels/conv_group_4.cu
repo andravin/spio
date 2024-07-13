@@ -28,7 +28,6 @@ extern "C"
         constexpr int R = 3;
         constexpr int S = 3;
         constexpr int C8 = C / 8;
-        constexpr int C2 = C / 2;
         constexpr int GROUP_WIDTH = 8;
 
         constexpr int P = 4;
@@ -84,8 +83,8 @@ extern "C"
             bool x_inbounds = thread_x >= 0 && thread_x < Q;
             do_load[block_load_idx] = thread_load_idx < NUM_THREAD_LOADS;
             in_zfill_size[block_load_idx] = x_inbounds ? 0 : LOAD_VECTOR_SIZE;
-            in_load[block_load_idx] = &in[InputIdx().w(thread_x) + thread_c8];
-            in_smem_store[block_load_idx] = &smem_in[(thread_x + PADDING) * C8 + thread_c8];
+            in_load[block_load_idx] = &in[InputIdx().w(thread_x).c8(thread_c8)];
+            in_smem_store[block_load_idx] = &smem_in[SmemInputIdx().x(thread_x + PADDING).c8(thread_c8)];
         }
 
         for (int y = 0; y < P; ++y)
@@ -95,7 +94,7 @@ extern "C"
                 if (do_load[block_load_idx])
                 {
                     __pipeline_memcpy_async(
-                        in_smem_store[block_load_idx] + y * (BLOCK_W * C8),
+                        in_smem_store[block_load_idx] + SmemInputIdx().y(y),
                         in_load[block_load_idx] + InputIdx().h(y),
                         LOAD_VECTOR_SIZE,
                         in_zfill_size[block_load_idx]);
@@ -108,8 +107,9 @@ extern "C"
         __syncthreads();
         __pipeline_wait_prior(0);
 
-        int warp_idx = threadIdx.x / 32;
-        int lane_idx = threadIdx.x % 32;
+        ThreadIdx thread_idx(threadIdx.x);
+        int warp_idx = thread_idx.warp();
+        int lane_idx = thread_idx.lane();
         int group_idx = warp_idx;
 
         using WeightsFrag = MMA_M16_N8_K8_F16_B;
@@ -121,7 +121,7 @@ extern "C"
         int weights_load_k = warp_k + lane_weights_load_k;
         for (int rs = 0; rs < R * S; ++rs)
         {
-            wgts[rs].vector() = ldmatrix_x1(&smem_weights[weights_load_k * (R * S) + rs]);
+            wgts[rs].vector() = ldmatrix_x1(&smem_weights[SmemWeightsIdx().k(weights_load_k).s(rs)]);
         }
 
         // XXX write inputs to output
@@ -136,7 +136,7 @@ extern "C"
         int store_k = warp_k + lane_frag_k;
         for (int rs = 0; rs < R * S; ++rs)
         {
-            reinterpret_cast<unsigned *>(weights_out)[store_k * (R * S) * 4 + rs * 4 + lane_frag_c / 2] = wgts[rs].vector();
+            reinterpret_cast<unsigned *>(weights_out)[WeightsOutIdx().k(store_k).rs(rs).c2(lane_frag_c / 2)] = wgts[rs].vector();
         }
 
         // Initialize the accumulators.
@@ -154,7 +154,7 @@ extern "C"
             int load_j = (lane_idx % 16) + s;
             for (int i = 0; i < P; ++i)
             {
-                const uint4 *in_smem_load = smem_in + i * (BLOCK_W * C8) + load_j * C8 + warp_c8;
+                const uint4 *in_smem_load = smem_in + SmemInputIdx().y(i).x(load_j).c8(warp_c8);
                 MMA_M16_N8_K8_F16_A in_i;
                 in_i.vector() = ldmatrix_x2(in_smem_load);
                 int p_min = max(i - (R - 1) + (R / 2), 0);

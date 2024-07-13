@@ -96,8 +96,14 @@ def test_conv_group_4_16w_4h_64c():
 
     groups = C // group_width
 
+    BLOCK_W = W + 2
+    P = W
+    Q = H
+
     C8 = C // 8
     C2 = C // 2
+
+    WARPS = C8
 
     conv = nn.Conv2d(C, K, 3, bias=False, padding=PADDING, groups=groups)
     # weights = torch.ones((K, group_width, R, S))
@@ -124,8 +130,12 @@ def test_conv_group_4_16w_4h_64c():
         header_file = Path(include_dir) / "my_indices.h"
         generate_indices(
             [
+                IndexSpec("ThreadIdx", dict(warp=WARPS, lane=32)),
                 IndexSpec("InputIdx", dict(n=N, h=H, w=W, c8=C8)),
                 IndexSpec("OutputIdx", dict(n=N, p=H, q=W, c2=C2)),
+                IndexSpec("SmemInputIdx", dict(y=H, x=BLOCK_W, c8=C8)),
+                IndexSpec("SmemWeightsIdx", dict(k=K, r=R, s=S)),
+                IndexSpec("WeightsOutIdx", dict(k=K, rs=R * S, c2=4)),
             ],
             header_file,
         )
