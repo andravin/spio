@@ -153,11 +153,11 @@ extern "C"
         for (int s = 0; s < S; ++s)
         {
             int load_j = (lane_idx % 16) + s;
+            auto in_smem_load = ConstSmemInput(smem_in).x(load_j).c8(warp_c8);
             for (int i = 0; i < P; ++i)
             {
-                const uint4 *in_smem_load = smem_in + SmemInputIdx().y(i).x(load_j).c8(warp_c8);
                 MMA_M16_N8_K8_F16_A in_i;
-                in_i.vector() = ldmatrix_x2(in_smem_load);
+                in_i.vector() = ldmatrix_x2(in_smem_load.y(i).get());
                 int p_min = max(i - (R - 1) + (R / 2), 0);
                 int p_max = min(i + (R / 2) + 1, P);
                 for (int p = p_min; p < p_max; ++p)
@@ -169,6 +169,7 @@ extern "C"
         }
 
         // Store the result.
+        Output out_tensor(reinterpret_cast<__half2*>(out));
         for (int p = 0; p < P; ++p) {
             for(int q8 = 0; q8 < 2; ++q8) {
                 __half2 acc_fp16 = __float22half2_rn(acc[p].fragment(q8));
@@ -176,7 +177,7 @@ extern "C"
                 int lane_c2 = Acc::col(lane_idx) / 2;
                 int q = lane_q;
                 int c2 = lane_c2 + warp_c8 * 4;
-                reinterpret_cast<__half2 *>(out)[OutputIdx().p(p).q(q).c2(c2)] = acc_fp16;
+                *out_tensor.p(p).q(q).c2(c2) = acc_fp16;
             }
         }
     }

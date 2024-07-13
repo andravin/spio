@@ -147,7 +147,11 @@ def test_conv_group_4_16w_4h_64c():
             index_header_file,
         )
         generate_tensors(
-            [TensorSpec("Input", "const uint4", dict(n=N, h=H, w=W, c8=C8))],
+            [
+                TensorSpec("Input", "const uint4", dict(n=N, h=H, w=W, c8=C8)),
+                TensorSpec("ConstSmemInput", "const uint4", dict(y=H, x=BLOCK_W, c8=C8)),
+                TensorSpec("Output", "__half2", dict(n=N, p=H, q=W, c2=C2)),
+            ],
             tensor_header_file,
         )
         module, conv_kernel = compile_test_kernel(
