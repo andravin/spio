@@ -16,10 +16,11 @@ namespace spio
     {
     public:
         DEVICE constexpr TensorBase(DataType *data = nullptr) : _data(data) {}
-        DEVICE constexpr DataType *const get() const { return _data; }
+        DEVICE constexpr DataType * get() const { return _data; }
+        DEVICE void reset(DataType *data) { _data = data; }
         DEVICE constexpr DataType & operator*() const { return *_data; }
     private:
-        DataType *const _data;
+        DataType * _data;
     };
 
     /// A base class for a 2-dimensional index.

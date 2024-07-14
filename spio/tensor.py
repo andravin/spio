@@ -64,6 +64,8 @@ def _class(class_name: str, data_type: str, shape: Tuple[int, ...]) -> str:
         DEVICE constexpr {class_name}({data_type} *data  = nullptr) : Base(data) {{}}
 
         DEVICE constexpr {class_name}(const {base} &other) : Base(other) {{}}
+
+        DEVICE const {class_name}& operator=(const {base} &other) {{ this->reset(other.get()); return *this; }}
  """
 
 

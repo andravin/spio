@@ -72,10 +72,10 @@ extern "C"
         __pipeline_commit();
 
         // Load the inputs to shared memory, one row at a time.
-        const uint4 *in_load[NUM_BLOCK_LOADS];
+        Input in_load[NUM_BLOCK_LOADS];
         int in_zfill_size[NUM_BLOCK_LOADS];
         bool do_load[NUM_BLOCK_LOADS];
-        uint4 *in_smem_store[NUM_BLOCK_LOADS];
+        SmemInput in_smem_store[NUM_BLOCK_LOADS];
         for (int block_load_idx = 0; block_load_idx < NUM_BLOCK_LOADS; ++block_load_idx)
         {
             int thread_load_idx = block_load_idx * THREADS + threadIdx.x;
@@ -84,8 +84,8 @@ extern "C"
             bool x_inbounds = thread_x >= 0 && thread_x < Q;
             do_load[block_load_idx] = thread_load_idx < NUM_THREAD_LOADS;
             in_zfill_size[block_load_idx] = x_inbounds ? 0 : LOAD_VECTOR_SIZE;
-            in_load[block_load_idx] = &in[InputIdx().w(thread_x).c8(thread_c8)];
-            in_smem_store[block_load_idx] = &smem_in[SmemInputIdx().x(thread_x + PADDING).c8(thread_c8)];
+            in_load[block_load_idx] = Input(in).w(thread_x).c8(thread_c8);
+            in_smem_store[block_load_idx] = SmemInput(smem_in).x(thread_x + PADDING).c8(thread_c8);
         }
 
         for (int y = 0; y < P; ++y)
@@ -95,8 +95,8 @@ extern "C"
                 if (do_load[block_load_idx])
                 {
                     __pipeline_memcpy_async(
-                        in_smem_store[block_load_idx] + SmemInputIdx().y(y),
-                        in_load[block_load_idx] + InputIdx().h(y),
+                        in_smem_store[block_load_idx].y(y).get(),
+                        in_load[block_load_idx].h(y).get(),
                         LOAD_VECTOR_SIZE,
                         in_zfill_size[block_load_idx]);
                 }
@@ -120,9 +120,10 @@ extern "C"
         int warp_k = group_idx * GROUP_WIDTH;
         int lane_weights_load_k = lane_idx % GROUP_WIDTH;
         int weights_load_k = warp_k + lane_weights_load_k;
+        auto smem_weights_load = ConstSmemWeights(smem_weights).k(weights_load_k);
         for (int rs = 0; rs < R * S; ++rs)
         {
-            wgts[rs].vector() = ldmatrix_x1(&smem_weights[SmemWeightsIdx().k(weights_load_k).s(rs)]);
+            wgts[rs].vector() = ldmatrix_x1(smem_weights_load.s(rs).get());
         }
 
         // XXX write inputs to output
