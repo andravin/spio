@@ -6,8 +6,13 @@
 
 #include "my_indices.h"
 #include "my_tensors.h"
+#include "my_params.h"
+#include "my_tiles.h"
 
 using namespace spio;
+
+using namespace MyParams;
+using namespace MyTiles;
 
 extern "C"
 {
@@ -25,22 +30,6 @@ extern "C"
         const uint4 *__restrict__ in,
         const uint4 *__restrict__ weights)
     {
-        constexpr int C = 64;
-        constexpr int R = 3;
-        constexpr int S = 3;
-        constexpr int C8 = C / 8;
-        constexpr int GROUP_WIDTH = 8;
-
-        constexpr int P = 4;
-        constexpr int Q = 16;
-
-        constexpr int PADDING = 1;
-
-        constexpr int WARPS = 8;
-        constexpr int THREADS = WARPS * 32;
-
-        constexpr int BLOCK_W = Q + 2;
-        constexpr int BLOCK_C8 = WARPS;
         constexpr int UNIT = 2;
 
         constexpr int LOAD_VECTOR_SIZE = 16;

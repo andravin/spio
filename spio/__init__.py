@@ -10,3 +10,4 @@ from .paths import (
     spio_cubins_path,
 )
 from .compile_test_kernel import compile_test_kernel
+from .params import generate_params

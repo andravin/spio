@@ -14,6 +14,7 @@ from spio import (
     IndexSpec,
     generate_tensors,
     TensorSpec,
+    generate_params,
 )
 
 ADA_ARCH = "sm_89"
@@ -103,19 +104,16 @@ def test_conv_group_4_16w_4h_64c():
     groups = C // group_width
 
     BLOCK_W = W + 2
-    P = W
-    Q = H
+    P = H
+    Q = W
 
     C8 = C // 8
     C2 = C // 2
 
     WARPS = C8
+    THREADS = WARPS * 32
 
     conv = nn.Conv2d(C, K, 3, bias=False, padding=PADDING, groups=groups)
-    # weights = torch.ones((K, group_width, R, S))
-    # for r in range(R):
-    #    for s in range(S):
-    #        weights[:, :, r, s] = r * 10 + s
     weights = torch.randn((K, group_width, R, S))
     with torch.no_grad():
         conv.weight.copy_(weights)
@@ -123,9 +121,6 @@ def test_conv_group_4_16w_4h_64c():
     conv = conv.to(memory_format=torch.channels_last)
 
     inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float16)
-    # inputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16)
-    # for y in range(H):
-    #     inputs[:, :, y, :] = y
     inputs = inputs.to(memory_format=torch.channels_last)
 
     with torch.autocast(device_type="cuda", dtype=torch.float16):
@@ -135,6 +130,8 @@ def test_conv_group_4_16w_4h_64c():
     with TemporaryDirectory(prefix="spio_") as include_dir:
         index_header_file = Path(include_dir) / "my_indices.h"
         tensor_header_file = Path(include_dir) / "my_tensors.h"
+        params_file = Path(include_dir) / "my_params.h"
+        tiles_file = Path(include_dir) / "my_tiles.h"
         generate_indices(
             [
                 IndexSpec("ThreadIdx", dict(warp=WARPS, lane=32)),
@@ -158,6 +155,30 @@ def test_conv_group_4_16w_4h_64c():
             ],
             tensor_header_file,
         )
+        generate_params(
+            "MyParams",
+            dict(
+                C=C,
+                R=R,
+                S=S,
+                C8=C8,
+                GROUP_WIDTH=group_width,
+                P=P,
+                Q=Q,
+                PADDING=PADDING,
+                WARPS=WARPS,
+                THREADS=THREADS,
+            ),
+            params_file,
+        )
+        generate_params(
+            "MyTiles",
+            dict(
+                BLOCK_W=Q + 2,
+                BLOCK_C8=WARPS,
+            ),
+            tiles_file,
+        )
         module, conv_kernel = compile_test_kernel(
             kernel_name="conv_group_4_16w_4h_64c",
             source_file_name="conv_group_4",
@@ -177,7 +198,7 @@ def test_conv_group_4_16w_4h_64c():
 
     conv_kernel(
         (1,),
-        (256,),
+        (THREADS,),
         (cp_outputs, cp_loaded_input, cp_loaded_weights, cp_inputs, cp_weights),
     )
 
