@@ -69,31 +69,40 @@ extern "C"
 
         // Load the first chunk of input to shared memory.
         Input in_load[NUM_LOADS_FIRST_INPUT_CHUNK];
-        int in_zfill_size[NUM_LOADS_FIRST_INPUT_CHUNK];
+        bool x_inbounds[NUM_LOADS_FIRST_INPUT_CHUNK];
+        int thread_load_y[NUM_LOADS_FIRST_INPUT_CHUNK];
         bool do_load[NUM_LOADS_FIRST_INPUT_CHUNK];
         SmemInput in_smem_store[NUM_LOADS_FIRST_INPUT_CHUNK];
+        int block_x = -PADDING;
         for (int block_load_idx = 0; block_load_idx < NUM_LOADS_FIRST_INPUT_CHUNK; ++block_load_idx)
         {
             int thread_load_idx = block_load_idx * THREADS + threadIdx.x;
             int thread_c8 = thread_load_idx % C8;
-            int thread_x = ((thread_load_idx / C8) % BLOCK_W) - PADDING;
-            int thread_y = thread_load_idx / (BLOCK_W * C8) - PADDING;
-            bool xy_inbounds = thread_x >= 0 && thread_x < Q && thread_y >= 0 && thread_y < P;
+            int thread_x = ((thread_load_idx / C8) % BLOCK_W);
+            int thread_y = thread_load_idx / (BLOCK_W * C8);
+
+            int x = block_x + thread_x;
+            x_inbounds[block_load_idx] = x >= 0 && x < Q;
             do_load[block_load_idx] = thread_load_idx < NUM_THREAD_LOADS_FIRST_INPUT_CHUNK;
-            in_zfill_size[block_load_idx] = xy_inbounds ? 0 : LOAD_VECTOR_SIZE;
-            in_load[block_load_idx] = Input(in).y(thread_y).x(thread_x).c8(thread_c8);
-            in_smem_store[block_load_idx] = SmemInput(smem_in).y(thread_y + PADDING).x(thread_x + PADDING).c8(thread_c8);
+            in_load[block_load_idx] = Input(in).y(thread_y).x(x).c8(thread_c8);
+            in_smem_store[block_load_idx] = SmemInput(smem_in).y(thread_y).x(thread_x).c8(thread_c8);
+            thread_load_y[block_load_idx] = thread_y;
         }
 
+        int block_y = -PADDING;
         for (int block_load_idx = 0; block_load_idx < NUM_LOADS_FIRST_INPUT_CHUNK; ++block_load_idx)
         {
             if (do_load[block_load_idx])
             {
+                int y = thread_load_y[block_load_idx] + block_y;
+                bool y_inbounds = (y >= 0 && y < P);
+                bool xy_inbounds = x_inbounds[block_load_idx] && y_inbounds;
+                int zfill = xy_inbounds ? 0 : LOAD_VECTOR_SIZE;
                 __pipeline_memcpy_async(
                     in_smem_store[block_load_idx].get(),
-                    in_load[block_load_idx].get(),
+                    in_load[block_load_idx].y(block_y).get(),
                     LOAD_VECTOR_SIZE,
-                    in_zfill_size[block_load_idx]);
+                    zfill);
             }
         }
         __pipeline_commit();
