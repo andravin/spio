@@ -145,7 +145,7 @@ def test_conv_group_4_16w_4h_64c():
         )
         generate_tensors(
             [
-                TensorSpec("Input", "const uint4", dict(n=N, h=H, w=W, c8=C8)),
+                TensorSpec("Input", "const uint4", dict(n=N, y=H, x=W, c8=C8)),
                 TensorSpec(
                     "ConstSmemInput", "const uint4", dict(y=H, x=BLOCK_W, c8=C8)
                 ),
@@ -176,6 +176,7 @@ def test_conv_group_4_16w_4h_64c():
             dict(
                 BLOCK_W=Q + 2,
                 BLOCK_C8=WARPS,
+                CHUNK_P=4,
             ),
             tiles_file,
         )
