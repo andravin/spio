@@ -30,6 +30,8 @@ extern "C"
     {
         constexpr int UNIT = 2;
 
+        constexpr int CHUNK_H = CHUNK_P + R - 1;
+
         constexpr int LOAD_VECTOR_SIZE = 16;
         constexpr int MAX_BYTES_PER_BLOCK_LOAD = THREADS * LOAD_VECTOR_SIZE;
 
@@ -38,7 +40,7 @@ extern "C"
         constexpr int NUM_BYTES_PER_INPUT_CHUNK = CHUNK_P * NUM_BYTES_PER_INPUT_ROW;
         constexpr int NUM_LOADS_PER_INPUT_CHUNK = cdiv(NUM_BYTES_PER_INPUT_CHUNK, MAX_BYTES_PER_BLOCK_LOAD);
 
-        constexpr int FIRST_CHUNK_P = CHUNK_P + R - 1;
+        constexpr int FIRST_CHUNK_P = CHUNK_H;
         constexpr int NUM_BYTES_FIRST_INPUT_CHUNK = FIRST_CHUNK_P * NUM_BYTES_PER_INPUT_ROW;
         constexpr int NUM_LOADS_FIRST_INPUT_CHUNK = cdiv(NUM_BYTES_FIRST_INPUT_CHUNK, MAX_BYTES_PER_BLOCK_LOAD);
         constexpr int NUM_THREAD_LOADS_FIRST_INPUT_CHUNK = cdiv(NUM_BYTES_FIRST_INPUT_CHUNK, LOAD_VECTOR_SIZE);
@@ -130,16 +132,22 @@ extern "C"
         int warp_c8 = group_idx;
         for (int s = 0; s < S; ++s)
         {
+            // Load input rows shifted by s from smem.
+            MMA_M16_N8_K8_F16_A in_i[CHUNK_H];
             int load_j = (lane_idx % 16) + s;
             auto in_smem_load = ConstSmemInput(smem_in).x(load_j).c8(warp_c8);
+            for (int i = 0; i < CHUNK_H; ++i)
+            {
+                in_i[i].vector() = ldmatrix_x2(in_smem_load.y(i).get());
+            }
+
+            // Multiply the input rows by the filters.
             for (int r = 0; r < R; ++r)
             {
                 for (int p = 0; p < P; ++p)
                 {
                     int i = p + r;
-                    MMA_M16_N8_K8_F16_A in_i;
-                    in_i.vector() = ldmatrix_x2(in_smem_load.y(i).get());
-                    mma_m16_n8_k8(acc[p], in_i, wgts[r * S + s], acc[p]);
+                    mma_m16_n8_k8(acc[p], in_i[i], wgts[r * S + s], acc[p]);
                 }
             }
         }
