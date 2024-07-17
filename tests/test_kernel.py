@@ -193,28 +193,12 @@ def test_conv_group_4_16w_4h_64c():
     cp_outputs = cp.asarray(outputs)
     cp_inputs = cp.asarray(inputs)
     cp_weights = cp.asarray(conv.weight.detach().type(torch.float16))
-    cp_loaded_input = cp.zeros((N, H, W + 2, C), dtype=cp.float16)
-    cp_loaded_weights = cp.zeros((K, R, S, group_width), dtype=cp.float16)
 
     conv_kernel(
         (1,),
         (THREADS,),
-        (cp_outputs, cp_loaded_input, cp_loaded_weights, cp_inputs, cp_weights),
+        (cp_outputs, cp_inputs, cp_weights),
     )
-
-    for n in range(N):
-        for y in range(H):
-            for x in range(W):
-                for c in range(C):
-                    assert cp_loaded_input[n, y, x + 1, c] == cp_inputs[n, c, y, x]
-    cp.testing.assert_array_equal(cp_loaded_input[:, :, 0, :], 0)
-    cp.testing.assert_array_equal(cp_loaded_input[:, :, -1, :], 0)
-
-    for k in range(K):
-        for c in range(group_width):
-            for r in range(R):
-                for s in range(S):
-                    assert cp_loaded_weights[k, r, s, c] == cp_weights[k, c, r, s]
 
     diff = ref_outputs - outputs
     torch.testing.assert_close(ref_outputs, outputs)

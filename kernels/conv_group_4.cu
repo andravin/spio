@@ -25,8 +25,6 @@ extern "C"
     // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#pipeline-interface
     __global__ void conv_group_4_16w_4h_64c_test(
         uint4 *__restrict__ out,
-        uint4 *__restrict__ padded_in,
-        uint4 *__restrict__ weights_out,
         const uint4 *__restrict__ in,
         const uint4 *__restrict__ weights)
     {
@@ -113,21 +111,6 @@ extern "C"
         for (int rs = 0; rs < R * S; ++rs)
         {
             wgts[rs].vector() = ldmatrix_x1(smem_weights_load.s(rs).get());
-        }
-
-        // XXX write inputs to output
-        for (int idx = threadIdx.x; idx < NUM_PADDED_INPUTS; idx += THREADS)
-        {
-            padded_in[idx] = smem_in[idx];
-        }
-
-        // XXX write weights to weights_output
-        int lane_frag_k = WeightsFrag::col(lane_idx);
-        int lane_frag_c = WeightsFrag::row(lane_idx);
-        int store_k = warp_k + lane_frag_k;
-        for (int rs = 0; rs < R * S; ++rs)
-        {
-            reinterpret_cast<unsigned *>(weights_out)[WeightsOutIdx().k(store_k).rs(rs).c2(lane_frag_c / 2)] = wgts[rs].vector();
         }
 
         // Initialize the accumulators.
