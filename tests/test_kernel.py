@@ -91,6 +91,9 @@ def test_mma_m16_n8_k16_kernel():
 
 
 def test_conv_group_4_16w_4h_64c():
+    # https://github.com/NVIDIA/cutlass/issues/1373#issuecomment-2121019973
+    debug = False
+
     N = 1
     C = 64
     H = 4
@@ -158,13 +161,14 @@ def test_conv_group_4_16w_4h_64c():
         generate_params(
             "MyParams",
             dict(
+                N=N,
                 C=C,
                 R=R,
                 S=S,
                 C8=C8,
                 GROUP_WIDTH=group_width,
-                P=P,
-                Q=Q,
+                H=H,
+                W=W,
                 PADDING=PADDING,
                 WARPS=WARPS,
                 THREADS=THREADS,
@@ -183,7 +187,7 @@ def test_conv_group_4_16w_4h_64c():
         module, conv_kernel = compile_test_kernel(
             kernel_name="conv_group_4_16w_4h_64c",
             source_file_name="conv_group_4",
-            debug=True,
+            debug=debug,
             includes=[include_dir],
         )
 
