@@ -1,15 +1,7 @@
 from typing import Dict, Tuple, List
 from dataclasses import dataclass
 
-
-def tensor_header():
-    """Return the C++ statement that includes the spio tensor header file.
-
-    This file implements the C++ base template classes from which the
-    custom tensor classes inherit. You must include this header before using
-    the code returned by the generate_tensor() function.
-    """
-    return '#include "spio/tensor.h"'
+from .index import _generate_index
 
 
 @dataclass
@@ -18,21 +10,22 @@ class TensorSpec:
     data_type: str
     dims: Dict[str, int]
 
+    def generate(self) -> str:
+        return _generate_tensor(self.class_name, self.data_type, self.dims)
+
 
 def generate_tensors(tensor_specs: List[TensorSpec], header_file_name: str) -> None:
-    code = tensor_header()
+    code = _tensor_header()
     code += ""
     for tensor_spec in tensor_specs:
-        code += generate_tensor(
-            tensor_spec.class_name, tensor_spec.data_type, tensor_spec.dims
-        )
-        code += ""
+        code += tensor_spec.generate()
+        code += "\n"
 
     with open(header_file_name, "w") as file:
         file.write(code)
 
 
-def generate_tensor(class_name: str, data_type: str, dims: Dict[str, int]) -> str:
+def _generate_tensor(class_name: str, data_type: str, dims: Dict[str, int]) -> str:
     """Return the C++ source code that implements a custom tensor class.
 
     Custom tensor classes use named tensor dimensions.
@@ -43,13 +36,37 @@ def generate_tensor(class_name: str, data_type: str, dims: Dict[str, int]) -> st
         dims(Dict[str, int]): an (ordered) dict that maps dimension names to their sizes.
     """
     code = ""
+    index_class_name = f"_{class_name}_Index"
+    code += _generate_index(index_class_name, dims)
+    code += "\n"
     code += _class(class_name, data_type, tuple(dims.values()))
+    code += _using_index(index_class_name)
     for name, value in dims.items():
         code += _dim(name, value)
     for d, name in enumerate(dims.keys()):
         code += _dim_to_pointer(class_name, d, name)
     code += _tail()
     return code
+
+
+def _tensor_header():
+    """Return the C++ statement that includes the spio tensor header file.
+
+    This file implements the C++ base template classes from which the
+    custom tensor classes inherit. You must include this header before using
+    the code returned by the generate_tensor() function.
+    """
+    return '#include "spio/tensor.h"'
+
+
+def _using_index(index_class_name: str):
+    return f"""
+        using Index = {index_class_name};
+
+        static constexpr int size = Index::size;
+
+        static constexpr int num_bytes = size * sizeof(data_type);
+"""
 
 
 def _class(class_name: str, data_type: str, shape: Tuple[int, ...]) -> str:
@@ -60,6 +77,8 @@ def _class(class_name: str, data_type: str, shape: Tuple[int, ...]) -> str:
     class {class_name} : public spio::{base} {{
     public:
         using Base = {base};
+
+        using data_type = {data_type};
 
         DEVICE constexpr {class_name}({data_type} *data  = nullptr) : Base(data) {{}}
 

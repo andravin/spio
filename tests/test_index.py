@@ -9,8 +9,10 @@ from subprocess import CalledProcessError
 from tempfile import NamedTemporaryFile
 
 import spio
+from spio import IndexSpec
 
 CPP_SOURCES = ["test_index.cpp"]
+
 
 def compile_cpp_tests(extra_cpp_test_files=[]):
     src_dir = spio.spio_cpp_tests_src_path()
@@ -24,7 +26,7 @@ def test_cpp_tests():
     """Run all C++ unit tests."""
 
     test_source = _test_generate_index()
-    test_source += _test_generate_tensor();
+    test_source += _test_generate_tensor()
 
     test_source_file = NamedTemporaryFile(prefix="spio_", suffix=".cpp")
     with open(test_source_file.name, "w") as f:
@@ -38,8 +40,9 @@ def test_cpp_tests():
 
 def _test_generate_index():
     """Return the C++ source code that tests a custom index class."""
-    my_index_code = spio.generate_index("MyIndex", dict(n=4, h=32, w=64, c=128))
-    header = spio.index_header()
+    my_index_code = spio.index._generate_index("MyIndex", dict(n=4, h=32, w=64, c=128))
+    size = 4 * 32 * 64 * 128
+    header = spio.index._index_header()
     test_code = f"""
 #include "utest.h"
 
@@ -64,6 +67,11 @@ UTEST(MyIndex, index_from_offset)
     EXPECT_EQ(idx.w(), (offset / 128) % 64);
     EXPECT_EQ(idx.c(), offset % 128);
 }}
+
+UTEST(MyIndex, size)
+{{
+    EXPECT_EQ(MyIndex::size, {size});
+}}
 """
     return test_code
 
@@ -75,10 +83,10 @@ def _test_generate_tensor():
     W = 33
     C = 42
 
-    my_tensor_code = spio.generate_tensor(
+    my_tensor_code = spio.tensor._generate_tensor(
         "MyTensor", "const float", dict(n=N, h=H, w=W, c=C)
     )
-    header = spio.tensor_header()
+    header = spio.tensor._tensor_header()
     test_code = f"""
 
 {header}
@@ -111,6 +119,7 @@ UTEST(MyTensor, offset_from_tensor)
             }}
         }}
     }}
+    EXPECT_EQ(MyTensor::num_bytes, static_cast<int>(sizeof(float) * N * H * W *C));
 }}
 """
     return test_code

@@ -36,6 +36,8 @@ namespace spio
 
         DEVICE constexpr Tensor2D _d1(int d1) const { return Tensor2D(get() + d1 * _D1_Stride); }
         DEVICE constexpr Tensor2D _d0(int d0) const { return Tensor2D(get() + d0 * _D0_Stride); }
+
+        DEVICE static constexpr int num_bytes(int D0) { return sizeof(DataType) * D0 * _D1; }
     };
 
     /// A base class for a 3-dimensional index.
@@ -53,6 +55,8 @@ namespace spio
         DEVICE constexpr Tensor3D _d2(int d2) const { return Tensor3D(get() + d2 * _D2_Stride); }
         DEVICE constexpr Tensor3D _d1(int d1) const { return Tensor3D(get() + d1 * _D1_Stride); }
         DEVICE constexpr Tensor3D _d0(int d0) const { return Tensor3D(get() + d0 * _D0_Stride); }
+
+        DEVICE static constexpr int num_bytes(int D0) { return sizeof(DataType) * D0 * _D1 * _D2; }
     };
 
     /// A base class for a 4-dimensional index.
@@ -72,6 +76,8 @@ namespace spio
         DEVICE constexpr Tensor4D _d2(int d2) const { return Tensor4D(get() + d2 * _D2_Stride); }
         DEVICE constexpr Tensor4D _d1(int d1) const { return Tensor4D(get() + d1 * _D1_Stride); }
         DEVICE constexpr Tensor4D _d0(int d0) const { return Tensor4D(get() + d0 * _D0_Stride); }
+
+        DEVICE static constexpr int num_bytes(int D0) { return sizeof(DataType) * D0 * _D1 * _D2 * _D3; }
     };
 }
 

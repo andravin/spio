@@ -1,0 +1,1 @@
+from .conv_small_group import ConvSmallGroupKernel

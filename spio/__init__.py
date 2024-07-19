@@ -1,6 +1,7 @@
 from .compiler import compile, nvcc_full_path
-from .index import generate_index, index_header, generate_indices, IndexSpec
-from .tensor import generate_tensor, tensor_header, generate_tensors, TensorSpec
+from .index import IndexSpec
+from .tensor import TensorSpec
+from .fragment import FragmentSpec
 from .paths import (
     spio_cpp_tests_src_path,
     spio_include_path,
@@ -9,5 +10,8 @@ from .paths import (
     spio_kernels_path,
     spio_cubins_path,
 )
-from .compile_test_kernel import compile_test_kernel
-from .params import generate_params
+from .compile_kernel import compile_kernel
+from .params import ParamsSpec
+from .math import divup
+from .code_directory import GenDirectory
+from .generators import generate

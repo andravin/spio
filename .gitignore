@@ -5,4 +5,4 @@
 *.cubin
 
 # PyTorch profiler results.
-trace.json
+trace*.json
