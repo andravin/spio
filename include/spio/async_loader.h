@@ -10,12 +10,15 @@ __device__ constexpr int cdiv(int n, int d)
 
 template <
     class Input_, class SmemInput_,
-    int N_, int H_, int W_, int C8_,
     int CHUNK_H_, int CHUNK_W_, int CHUNK_C8_,
     int THREADS_>
 class AsyncLoader
 {
 public:
+    static constexpr int N_ = Input_::N;
+    static constexpr int H_ = Input_::Y;
+    static constexpr int W_ = Input_::X;
+    static constexpr int C8_ = Input_::C8;
     static constexpr int UNIT = 2;
     static constexpr int LOAD_VECTOR_SIZE = 16;
     static constexpr int MAX_BYTES_PER_BLOCK_LOAD = THREADS_ * LOAD_VECTOR_SIZE;

@@ -5,6 +5,8 @@
 #include "spio/ldmatrix.h"
 #include "spio/async_loader.h"
 
+// TODO tell code analysis to ignore these generated header files.
+// https://devblogs.microsoft.com/cppblog/customized-warning-levels-and-code-analysis-for-external-headers/
 #include "my_indices.h"
 #include "my_tensors.h"
 #include "my_params.h"
@@ -30,7 +32,7 @@ extern "C"
         constexpr int NUM_WEIGHTS = C * R * S * GROUP_WIDTH;
         constexpr int NUM_WEIGHTS_VECTORS = NUM_WEIGHTS * UNIT / LOAD_VECTOR_SIZE;
 
-        using InputLoader = AsyncLoader<Input, SmemInput, N, H, W, C8, CHUNK_H, BLOCK_W, BLOCK_C8, THREADS>;
+        using InputLoader = AsyncLoader<Input, SmemInput, CHUNK_H, BLOCK_W, BLOCK_C8, THREADS>;
 
         __shared__ uint4 smem_weights[NUM_WEIGHTS_VECTORS];
         __shared__ uint4 smem_in[InputLoader::NUM_BYTES_PER_CHUNK / sizeof(uint4)];
