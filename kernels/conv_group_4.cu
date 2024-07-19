@@ -32,7 +32,7 @@ extern "C"
         constexpr int NUM_WEIGHTS = C * R * S * GROUP_WIDTH;
         constexpr int NUM_WEIGHTS_VECTORS = NUM_WEIGHTS * UNIT / LOAD_VECTOR_SIZE;
 
-        using InputLoader = AsyncLoader<Input, SmemInput, CHUNK_H, BLOCK_W, BLOCK_C8, THREADS>;
+        using InputLoader = AsyncLoader<Input, SmemInput, CHUNK_H, THREADS>;
 
         __shared__ uint4 smem_weights[NUM_WEIGHTS_VECTORS];
         __shared__ uint4 smem_in[InputLoader::NUM_BYTES_PER_CHUNK / sizeof(uint4)];
