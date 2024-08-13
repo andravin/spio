@@ -8,6 +8,53 @@
 
 using namespace spio;
 
+using WeightsReg = _MMA_M16_N8_F16_B<Weights::R * Weights::S>;
+
+namespace
+{
+    /// @brief  Return the maximum of two integers. Is a constexpr.
+    __device__ constexpr int _max(int a, int b)
+    {
+        return a > b ? a : b;
+    }
+
+    __device__ inline uint4 ld_weights_x4(const void *p)
+    {
+        if constexpr (Mode::igrad)
+        {
+            return ldmatrix_x4_trans(p);
+        }
+        else
+        {
+            return ldmatrix_x4(p);
+        }
+    }
+
+    __device__ inline unsigned ld_weights_x1(const void *p)
+    {
+        if constexpr (Mode::igrad)
+        {
+            return ldmatrix_x1_trans(p);
+        }
+        else
+        {
+            return ldmatrix_x1(p);
+        }
+    }
+
+    __device__ inline unsigned get_weight(const WeightsReg &wgts, int r, int s)
+    {
+        if constexpr (Mode::igrad)
+        {
+            return wgts.reg((Weights::R - 1 - r) * Weights::S + (Weights::S - 1 - s));
+        }
+        else
+        {
+            return wgts.reg(r * Weights::S + s);
+        }
+    }
+}
+
 extern "C"
 {
     __global__ void conv_small_group(
@@ -18,9 +65,10 @@ extern "C"
         //
         // Define the shared memory buffers.
         //
-        __shared__ uint4 smem_weights_buf[SmemWeights::size];
         __shared__ uint4 smem_input_buf[SmemInput::size];
-        __shared__ uint4 smem_output_buf[SmemOutput::size];
+        __shared__ uint4 smem_buf[_max(SmemWeights::size, SmemOutput::size)];
+        uint4 *smem_weights_buf = smem_buf;
+        uint4 *smem_output_buf = smem_buf;
 
         //
         // Define the block tile.
@@ -158,19 +206,18 @@ extern "C"
         // Copy weights from smem to registers.
         //
         //
-        _MMA_M16_N8_F16_B<Weights::R * Weights::S> wgts;
+        WeightsReg wgts;
         __pipeline_wait_prior(1);
         __syncthreads();
         int rs = 0;
         for (; rs < Weights::R * Weights::S; rs += 4)
         {
-            wgts.reg4(rs / 4) = ldmatrix_x4(smem_weights_load.rs(rs).get());
+            wgts.reg4(rs / 4) = ld_weights_x4(smem_weights_load.rs(rs).get());
         }
         for (; rs < Weights::R * Weights::S; ++rs)
         {
-            wgts.reg(rs) = ldmatrix_x1(smem_weights_load.rs(rs).get());
+            wgts.reg(rs) = ld_weights_x1(smem_weights_load.rs(rs).get());
         }
-
         //
         // Declare the accumulators.
         //
@@ -224,7 +271,7 @@ extern "C"
                     for (int r = 0; r <= phase; ++r)
                     {
                         int p = Weights::R - 1 - r + phase;
-                        mma_m16_n8_k8(acc[p % Weights::R].vec4(), in.reg2(), wgts.reg(r * Weights::S + s), acc[p % Weights::R].vec4());
+                        mma_m16_n8_k8(acc[p % Weights::R].vec4(), in.reg2(), get_weight(wgts, r, s), acc[p % Weights::R].vec4());
                     }
                 }
                 __syncthreads();
@@ -275,7 +322,6 @@ extern "C"
                 {
                     __pipeline_wait_prior(pipeline.active(LOAD_INPUT_STAGE) ? 1 : 0);
                     __syncthreads();
-
                     auto smem_input_load_iter = smem_input_load.ping_pong(ping_pong);
                     for (int s = 0; s < Weights::S; ++s)
                     {
@@ -283,28 +329,25 @@ extern "C"
                         MMA_M16_K16_F16_A in;
                         in.reg2() = ldmatrix_x2(smem_input_load_iter.x(s).get());
 
-                        // Multiply shifted row by column of weights, updating the corresponding output row.
+                        // Multiply the "s"-shifted row by column "s" of the kernel, updating the corresponding output row.
                         for (int r = 0; r < Weights::R; ++r)
                         {
                             int p = Weights::R - 1 - r + phase;
-                            mma_m16_n8_k8(acc[p % Weights::R].vec4(), in.reg2(), wgts.reg(r * Weights::S + s), acc[p % Weights::R].vec4());
+                            mma_m16_n8_k8(acc[p % Weights::R].vec4(), in.reg2(), get_weight(wgts, r, s), acc[p % Weights::R].vec4());
                         }
                     }
                     int store_p = iter + phase - Weights::R;
                     *smem_output_store_q0 = acc[phase].to_half2(0);
                     *smem_output_store_q8 = acc[phase].to_half2(1);
                     acc[phase].zero();
-
-                    // If the first output row is inbounds store it.
                     __syncthreads();
-                    if (store_p >= 0 && store_p < num_p)
+
+                    // If the current output row is inbounds store it.
+                    if (store_p < num_p && thread_stores_output)
                     {
-                        if (thread_stores_output)
-                        {
-                            *output = *smem_output_load;
-                        }
-                        output = output.p(1);
+                        *output = *smem_output_load;
                     }
+                    output = output.p(1);
                 }
             }
         }

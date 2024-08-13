@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 from dataclasses import dataclass
 
 
@@ -10,16 +10,19 @@ class ParamsSpec:
     def generate(self) -> None:
         code = f"namespace {self.name_space} {{\n"
         for name, val in self.params.items():
-            c_type_name = _c_type_name(val)
-            code += f"    inline constexpr {c_type_name} {name} = {val};\n"
+            c_type_name, c_value = _c_type_name(val)
+            code += f"    inline constexpr {c_type_name} {name} = {c_value};\n"
         code += "}\n"
         return code
 
 
-def _c_type_name(val: Any) -> str:
-    if isinstance(val, int):
-        return "int"
+def _c_type_name(val: Any) -> Tuple[str, Any]:
+    if isinstance(val, bool):
+        # Careful, bool is int, so check for bool first.
+        return "bool", "true" if val else "false"
+    elif isinstance(val, int):
+        return "int", val
     elif isinstance(val, float):
-        return "float"
+        return "float", val
     else:
         raise ValueError(f"Unsupported parameter type {type(val)}")

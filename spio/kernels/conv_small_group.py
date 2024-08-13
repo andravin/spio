@@ -22,7 +22,7 @@ class _ConvSmallGroupParams:
     C: int
     H: int
     W: int
-    padding: int = 1 # Also allow tuple (padding_h, padding_w)
+    padding: int = 1  # Also allows tuple (padding_h, padding_w)
     R: int = 3
     S: int = 3
 
@@ -58,17 +58,21 @@ class ConvSmallGroupKernel:
 
     Params = _ConvSmallGroupParams
 
-    def __init__(self, params: Params, debug=False, lineinfo=True):
+    def __init__(self, params: Params, debug=False, lineinfo=True, igrad=False):
         self.params = params
-
-        N, C, H, W = params.N, params.C, params.H, params.W
-
-        PADDING_H, PADDING_W = params.padding_h, params.padding_w
 
         R, S = params.R, params.S
 
-        P = params.P
-        Q = params.Q
+        if igrad:
+            N, C, H, W = params.N, params.C, params.P, params.Q
+            P, Q = params.H, params.W
+            PADDING_H = R - 1 - params.padding_h
+            PADDING_W = S - 1 - params.padding_w
+        else:
+            N, C, H, W = params.N, params.C, params.H, params.W
+            P, Q = params.P, params.Q
+            PADDING_H, PADDING_W = params.padding_h, params.padding_w
+
 
         # Hardcoded parameter:
         GROUP_WIDTH = 8
@@ -77,8 +81,13 @@ class ConvSmallGroupKernel:
         C8 = C // 8
         GROUPS = C // GROUP_WIDTH
 
+        # Tile parameters
+        # These could be optimized by auto-tuning.
+        target_groups = 8
+        target_block_p = 16
+
         # Tiles
-        BLOCK_P = min(16, P)
+        BLOCK_P = min(target_block_p, P)
         BLOCK_Q = 16
         BLOCK_GROUPS = min(8, GROUPS)
 
@@ -113,6 +122,7 @@ class ConvSmallGroupKernel:
                             threads=THREADS,
                         ),
                     ),
+                    ParamsSpec("Mode", dict(igrad=igrad)),
                     IndexSpec(
                         "BlockIdx",
                         dict(n=BLOCKS_N, p=BLOCKS_P, q=BLOCKS_Q, c8=BLOCKS_C8),
@@ -187,6 +197,13 @@ class ConvSmallGroupKernel:
         )
         return (outputs, inputs, weights)
 
+    def get_grad_test_args(self):
+        outputs, inputs, weights = self.get_test_args()
+        inputs.requires_grad = True
+        weights.requires_grad = True
+        deltas = torch.randn_like(outputs)
+        return (inputs, weights, deltas)
+
     def reference(self, inputs, weights):
         return torch.nn.functional.conv2d(
             inputs,
@@ -196,3 +213,10 @@ class ConvSmallGroupKernel:
             padding=self.params.padding,
             groups=self.GROUPS,
         )
+
+    def grad_reference(self, inputs, weights, deltas):
+        """https://discuss.pytorch.org/t/compare-correct-gradients-of-pytorch-with-own-implementation/177152/2"""
+        outputs = self.reference(inputs, weights)
+        wgrad = torch.autograd.grad(outputs, weights, deltas, retain_graph=True)
+        igrad = torch.autograd.grad(outputs, inputs, deltas)
+        return (igrad[0], wgrad[0])

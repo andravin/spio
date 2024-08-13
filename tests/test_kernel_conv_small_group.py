@@ -15,6 +15,20 @@ def run_kernel_tests(kernel_class, test_params):
         run_kernel_test(kernel_class, params)
 
 
+def run_igrad_kernel_test(kernel_class, params):
+    kernel = ConvSmallGroupKernel(params, igrad=True)
+    inputs, weights, deltas = kernel.get_grad_test_args()
+    igrad_ref, wgrad_ref = kernel.grad_reference(inputs, weights, deltas)
+    igrad = torch.zeros_like(inputs)
+    kernel(igrad, deltas.detach(), weights.detach())
+    torch.testing.assert_close(igrad, igrad_ref, msg=str(params))
+
+
+def run_igrad_kernel_tests(kernel_class, test_params):
+    for params in test_params:
+        run_igrad_kernel_test(kernel_class, params)
+
+
 def test_benchmark_conv_small_group():
     run_kernel_test(
         ConvSmallGroupKernel, ConvSmallGroupKernel.Params(N=128, C=128, H=64, W=64)
@@ -24,12 +38,15 @@ def test_benchmark_conv_small_group():
 def test_benchmark_conv_small_group_5x5():
     run_kernel_test(
         ConvSmallGroupKernel,
-        ConvSmallGroupKernel.Params(N=128, C=128, H=64, W=64, R=5, S=5, padding=1),
+        ConvSmallGroupKernel.Params(N=128, C=128, H=64, W=64, R=5, S=5, padding=2),
     )
 
+def test_benchmark_igrad_conv_small_group():
+    run_igrad_kernel_test(
+        ConvSmallGroupKernel, ConvSmallGroupKernel.Params(N=128, C=128, H=64, W=64)
+    )
 
-def test_kernel_conv_small_group():
-
+def _get_conv_small_group_params():
     conv_rxs_tests = [
         ConvSmallGroupKernel.Params(
             N=1, C=128, H=32, W=32, R=r, S=s, padding=(r // 2, s // 2)
@@ -66,5 +83,14 @@ def test_kernel_conv_small_group():
     ]
 
     all_tests = conv_rxs_tests + padding_tests + group_tests + misc_tests
+    return all_tests
 
+
+def test_kernel_conv_small_group():
+    all_tests = _get_conv_small_group_params()
     run_kernel_tests(ConvSmallGroupKernel, all_tests)
+
+
+def test_conv_small_group_igrad():
+    all_tests = _get_conv_small_group_params()
+    run_igrad_kernel_tests(ConvSmallGroupKernel, all_tests)
