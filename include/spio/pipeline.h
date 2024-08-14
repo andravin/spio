@@ -14,7 +14,7 @@ namespace spio
     class Pipeline
     {
     public:
-        DEVICE Pipeline(unsigned state=0) : _state(state) {}
+        DEVICE Pipeline(unsigned state = 0) : _state(state) {}
 
         DEVICE bool active(unsigned stage) const { return (stage & _state) != 0; }
 

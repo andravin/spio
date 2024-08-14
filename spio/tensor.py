@@ -1,5 +1,6 @@
 from typing import Dict, Tuple, List
 from dataclasses import dataclass
+from math import prod
 
 from .index import _generate_index
 
@@ -12,6 +13,10 @@ class TensorSpec:
 
     def generate(self) -> str:
         return _generate_tensor(self.class_name, self.data_type, self.dims)
+
+    @property
+    def num_bytes(self) -> int:
+        return prod(self.dims.values()) * _sizeof_data_type(self.data_type)
 
 
 def generate_tensors(tensor_specs: List[TensorSpec], header_file_name: str) -> None:
@@ -107,3 +112,26 @@ def _tail() -> str:
     return f"""
     }};
 """
+
+
+def _sizeof_data_type(data_type: str) -> int:
+    DataTypeSizes = dict(
+        float=4,
+        float2=8,
+        float4=16,
+        unsigned=4,
+        uint2=8,
+        uint4=16,
+        half=2,
+        half2=4,
+    )
+    return DataTypeSizes[_strip_data_type(data_type)]
+
+
+def _strip_data_type(data_type: str) -> str:
+    if data_type.startswith("const "):
+        return _strip_data_type(data_type[6:])
+    elif data_type.startswith("__half"):
+        return _strip_data_type("half" + data_type[6:])
+    else:
+        return data_type

@@ -1,1 +1,2 @@
 from .conv_small_group import ConvSmallGroupKernel
+from .conv_small_group_wgrad import ConvSmallGroupWgradKernel

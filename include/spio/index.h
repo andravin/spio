@@ -81,6 +81,32 @@ namespace spio
         DEVICE constexpr unsigned _d1() const { return (offset() / _D1_Stride) % _D1; }
         DEVICE constexpr unsigned _d0() const { return offset() / _D0_Stride; }
     };
+
+    /// A base class for a 5-dimensional index.
+    template <unsigned _D1, unsigned _D2, unsigned _D3, unsigned _D4>
+    class Index5D : public IndexBase
+    {
+    public:
+        constexpr static unsigned _D4_Stride = 1;
+        constexpr static unsigned _D3_Stride = _D4 * _D4_Stride;
+        constexpr static unsigned _D2_Stride = _D3 * _D3_Stride;
+        constexpr static unsigned _D1_Stride = _D2 * _D2_Stride;
+        constexpr static unsigned _D0_Stride = _D1 * _D1_Stride;
+
+        using IndexBase::IndexBase;
+
+        DEVICE constexpr Index5D _d4(unsigned d4) const { return Index5D(offset() + d4 * _D4_Stride); }
+        DEVICE constexpr Index5D _d3(unsigned d3) const { return Index5D(offset() + d3 * _D3_Stride); }
+        DEVICE constexpr Index5D _d2(unsigned d2) const { return Index5D(offset() + d2 * _D2_Stride); }
+        DEVICE constexpr Index5D _d1(unsigned d1) const { return Index5D(offset() + d1 * _D1_Stride); }
+        DEVICE constexpr Index5D _d0(unsigned d0) const { return Index5D(offset() + d0 * _D0_Stride); }
+
+        DEVICE constexpr unsigned _d4() const { return (offset() / _D4_Stride) % _D4; }
+        DEVICE constexpr unsigned _d3() const { return (offset() / _D3_Stride) % _D3; }
+        DEVICE constexpr unsigned _d2() const { return (offset() / _D2_Stride) % _D2; }
+        DEVICE constexpr unsigned _d1() const { return (offset() / _D1_Stride) % _D1; }
+        DEVICE constexpr unsigned _d0() const { return offset() / _D0_Stride; }
+    };
 }
 
 #endif

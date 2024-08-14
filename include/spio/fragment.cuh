@@ -12,6 +12,8 @@ namespace spio
     class _MMA_F16
     {
     public:
+        __device__ constexpr int size() const { return NUM_FRAGMENTS; }
+
         __device__ __half2 &fragment(int idx) { return _data[idx]; }
         __device__ __half2 fragment(int idx) const { return _data[idx]; }
 
@@ -42,6 +44,8 @@ namespace spio
     class _MMA_F32
     {
     public:
+        __device__ constexpr int size() const { return NUM_FRAGMENTS; }
+
         __device__ float2 &fragment(int idx) { return _data[idx]; }
         __device__ float2 fragment(int idx) const { return _data[idx]; }
 

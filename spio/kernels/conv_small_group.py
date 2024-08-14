@@ -29,7 +29,7 @@ class _ConvSmallGroupParams:
     @property
     def GROUP_WIDTH(self):
         return 8
-    
+
     @property
     def GROUPS(self):
         return self.C // self.GROUP_WIDTH
@@ -41,6 +41,14 @@ class _ConvSmallGroupParams:
     @property
     def padding_w(self):
         return self.padding[1] if isinstance(self.padding, tuple) else self.padding
+
+    @property
+    def transpose_padding_h(self):
+        return self.R - 1 - self.padding_h
+
+    @property
+    def transpose_padding_w(self):
+        return self.S - 1 - self.padding_w
 
     @property
     def P(self):
@@ -116,13 +124,14 @@ class ConvSmallGroupKernel:
         if igrad:
             N, C, H, W = params.N, params.C, params.P, params.Q
             P, Q = params.H, params.W
-            PADDING_H = R - 1 - params.padding_h
-            PADDING_W = S - 1 - params.padding_w
+            PADDING_H, PADDING_W = (
+                params.transpose_padding_h,
+                params.transpose_padding_w,
+            )
         else:
             N, C, H, W = params.N, params.C, params.H, params.W
             P, Q = params.P, params.Q
             PADDING_H, PADDING_W = params.padding_h, params.padding_w
-
 
         # Hardcoded parameter:
         GROUP_WIDTH = params.GROUP_WIDTH
