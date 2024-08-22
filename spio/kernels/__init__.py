@@ -1,2 +1,4 @@
+from .conv_small_group_params import ConvSmallGroupParams
 from .conv_small_group import ConvSmallGroupKernel
 from .conv_small_group_wgrad import ConvSmallGroupWgradKernel
+from .auto_tune import auto_tune

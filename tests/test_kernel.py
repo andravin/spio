@@ -12,7 +12,7 @@ from spio import (
     ParamsSpec,
     FragmentSpec,
     generate,
-    compile_kernel,
+    compile_and_load_kernel,
 )
 
 
@@ -24,7 +24,7 @@ def _set_printoptions():
 
 def test_add_kernel():
     """Compile and run a simple CUDA kernel."""
-    module, add_kernel = compile_kernel(kernel_name="add")
+    module, add_kernel = compile_and_load_kernel(kernel_name="add")
 
     x1 = cp.arange(25, dtype=cp.float32).reshape(5, 5)
     x2 = cp.arange(25, dtype=cp.float32).reshape(5, 5)
@@ -35,8 +35,8 @@ def test_add_kernel():
 
 def test_mma_m16_n8_k8_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k8."""
-    module, mma_kernel = compile_kernel(
-        kernel_name="mma_m16_n8_k8", source_file_name="mma"
+    module, mma_kernel = compile_and_load_kernel(
+        kernel_name="mma_m16_n8_k8", source_file_name="mma.cu"
     )
 
     A = cp.zeros((16, 8), dtype=cp.float16)
@@ -62,8 +62,8 @@ def test_mma_m16_n8_k8_kernel():
 
 def test_mma_m16_n8_k16_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k16."""
-    module, mma_kernel = compile_kernel(
-        kernel_name="mma_m16_n8_k16", source_file_name="mma", debug=True
+    module, mma_kernel = compile_and_load_kernel(
+        kernel_name="mma_m16_n8_k16", source_file_name="mma.cu", debug=True
     )
 
     A = cp.zeros((16, 16), dtype=cp.float16)
@@ -216,9 +216,9 @@ def test_conv_group_4_16w_4h_64c():
             include_dir / "my_header.h",
         )
 
-        module, conv_kernel = compile_kernel(
+        module, conv_kernel = compile_and_load_kernel(
             kernel_name="conv_group_4_16w_4h_64c",
-            source_file_name="conv_group_4",
+            source_file_name="conv_group_4.cu",
             debug=debug,
             lineinfo=lineinfo,
             includes=[include_dir],
@@ -283,9 +283,8 @@ def test_memcpy_kernel():
             include_dir / "my_params.h",
         )
 
-        module, memcpy_kernel = compile_kernel(
+        module, memcpy_kernel = compile_and_load_kernel(
             kernel_name="memcpy_simple",
-            source_file_name="memcpy_simple",
             debug=debug,
             lineinfo=lineinfo,
             includes=[include_dir],
@@ -379,7 +378,7 @@ def test_row_memcpy_kernel():
             include_dir / "parameters.h",
         )
 
-        module, kernel = compile_kernel(
+        module, kernel = compile_and_load_kernel(
             kernel_name="row_memcpy",
             debug=debug,
             lineinfo=lineinfo,

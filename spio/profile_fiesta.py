@@ -5,7 +5,9 @@ import torch
 from torch import nn
 import cupy
 
-GROUP_WIDTH = 4
+import spio
+
+GROUP_WIDTH = 8
 CHANNELS_LAST = True
 WARMUP_ITERS = 10
 BENCHMARK_ITERS = 1
@@ -20,10 +22,11 @@ parser.add_argument("--channels", type=int, default=CHANNELS)
 parser.add_argument("--compile", action="store_true")
 parser.add_argument("--channels-first", action="store_true")
 parser.add_argument("--use-bias", action="store_true")
-parser.add_argument("--resolution", type=int, default=256)
+parser.add_argument("--resolution", type=int, default=64)
 parser.add_argument("--depth", type=int, default=1)
 parser.add_argument("--summary", action="store_true")
 parser.add_argument("--batch-size", type=int, default=128)
+parser.add_argument("--spio", action="store_true")
 args = parser.parse_args()
 
 torch.backends.cudnn.benchmark = True
@@ -101,7 +104,6 @@ if args.summary:
     )
     sys.exit(0)
 
-
 if args.compile:
     model = torch.compile(model)
 
@@ -112,9 +114,14 @@ def fwd_bwd(inp):
 
 
 with torch.autocast(device_type="cuda", dtype=torch.float16):
-    # warm up
+
+    if args.spio:
+        model = spio.replace_ops(model)
+
+    print(f"Warming up {WARMUP_ITERS} iterations ..")
     for i in range(WARMUP_ITERS):
         fwd_bwd(inputs[i])
+    print(".. done.")
 
     if CUDA_PROFILE:
         # Run the benchmark with a CUDA profiler section.
@@ -128,7 +135,11 @@ with torch.autocast(device_type="cuda", dtype=torch.float16):
             for i in range(WARMUP_ITERS, TOTAL_ITERS):
                 fwd_bwd(inputs[i])
                 prof.step()
-        compiled = "compiled" if args.compile else "uncompiled"
-        prof.export_chrome_trace(
-            f"fiesta2_gw{args.group_width}_d{args.depth}_c{args.channels}_hw{args.resolution}-{memory_format_name}_{compiled}.json"
-        )
+        
+        filename = f"fiesta2_gw{args.group_width}_d{args.depth}_c{args.channels}_hw{args.resolution}-{memory_format_name}"
+        if args.compile:
+            filename += "_compiled"
+        if args.spio:
+            filename += "_spio"
+        filename += f".json"
+        prof.export_chrome_trace(filename)

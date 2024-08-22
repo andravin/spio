@@ -4,18 +4,19 @@ import sys
 import torch
 import timm
 
-
-def fwd_bwd(inp):
-    out = model(inp)
-    out.sum().backward()
+import spio
 
 
 def trace_file_name(args):
     memory_format_name = "channels_last" if args.channels_last else "channels_first"
     compiled = "compiled" if args.compile else "not-compiled"
-    return (
-        f"trace_{args.model}_{memory_format_name}_{compiled}_bs{args.batch_size}.json"
-    )
+    filename = f"trace_{args.model}_{memory_format_name}_bs{args.batch_size}"
+    if args.compile:
+        filename += f"_compiled"
+    if args.spio:
+        filename += "_spio"
+    filename += ".json"
+    return filename
 
 
 parser = argparse.ArgumentParser()
@@ -27,6 +28,8 @@ parser.add_argument("--batch-size", type=int, default=128)
 parser.add_argument("--warmup-iters", type=int, default=10)
 parser.add_argument("--benchmark-iters", type=int, default=1)
 parser.add_argument("--summary", action="store_true")
+parser.add_argument("--spio", action="store_true")
+
 args = parser.parse_args()
 
 torch.backends.cudnn.benchmark = True
@@ -40,7 +43,7 @@ training_input_size = model.default_cfg["input_size"]
 
 inputs = [
     torch.randn((args.batch_size, *training_input_size), device="cuda").to(
-        memory_format=memory_format
+        memory_format=memory_format, dtype=torch.float16
     )
     for _ in range(total_iters)
 ]
@@ -69,12 +72,19 @@ if args.summary:
 if args.compile:
     model = torch.compile(model)
 
-with torch.autocast(device_type="cuda", dtype=torch.float16):
-    for i in range(args.warmup_iters):
-        fwd_bwd(inputs[i])
+if args.spio:
+    model = spio.replace_ops(model)
 
-    with torch.profiler.profile() as prof:
-        for i in range(args.warmup_iters, total_iters):
-            fwd_bwd(inputs[i])
-            prof.step()
-    prof.export_chrome_trace(trace_file_name(args))
+for i in range(args.warmup_iters):
+    with torch.autocast(device_type="cuda", dtype=torch.float16):
+        out = model(inputs[i]).sum()
+    out.backward()
+
+with torch.profiler.profile() as prof:
+    for i in range(args.warmup_iters, total_iters):
+        with torch.autocast(device_type="cuda", dtype=torch.float16):
+            out = model(inputs[i]).sum()
+        out.backward()
+        prof.step()
+
+prof.export_chrome_trace(trace_file_name(args))

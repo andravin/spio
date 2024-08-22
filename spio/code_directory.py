@@ -9,3 +9,7 @@ class GenDirectory(TemporaryDirectory):
     def __enter__(self):
         dir_name = super().__enter__()
         return Path(dir_name)
+
+    @property
+    def path(self):
+        return Path(self.name)

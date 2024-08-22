@@ -1,101 +1,52 @@
 import torch
-from spio.kernels import ConvSmallGroupKernel, ConvSmallGroupWgradKernel
+from spio import (
+    conv2d_gw8,
+    run_function_test,
+    run_function_tests,
+    run_grad_function_test,
+    run_grad_function_tests,
+    run_kernel_tests,
+)
+from spio.kernels import ConvSmallGroupKernel, ConvSmallGroupParams
 
-
-def run_kernel_test(kernel_class, params):
-    kernel = kernel_class(params)
-    outputs, *args = kernel.get_test_args()
-    kernel(outputs, *args)
-    torch_outputs = kernel.reference(*args)
-    torch.testing.assert_close(outputs, torch_outputs, msg=str(params))
-
-
-def run_kernel_tests(kernel_class, test_params):
-    for params in test_params:
-        run_kernel_test(kernel_class, params)
-
-
-def run_igrad_kernel_test(kernel_class, params):
-    kernel = ConvSmallGroupKernel(params, igrad=True)
-    inputs, weights, deltas = kernel.get_grad_test_args()
-    igrad_ref, _ = kernel.grad_reference(inputs, weights, deltas)
-    igrad = torch.zeros_like(inputs)
-    kernel(igrad, deltas.detach(), weights.detach())
-    torch.testing.assert_close(igrad, igrad_ref, msg=str(params))
-
-
-def run_wgrad_kernel_test(kernel_class, params):
-    kernel = ConvSmallGroupWgradKernel(params)
-    inputs, weights, deltas = kernel.get_grad_test_args()
-    _, wgrad_ref = kernel.grad_reference(inputs, weights, deltas)
-    wgrad = torch.zeros_like(weights)
-    TOLERANCE = 1e-3
-    depth = params.N * params.P * params.Q
-    tolerance = TOLERANCE * depth
-    max_val = torch.amax(torch.abs(wgrad_ref))
-    kernel(wgrad, inputs.detach(), deltas.detach())
-    torch.testing.assert_close(
-        wgrad, wgrad_ref, msg=str(params), rtol=TOLERANCE, atol=tolerance
-    )
-
-
-def run_igrad_kernel_tests(kernel_class, test_params):
-    for params in test_params:
-        run_igrad_kernel_test(kernel_class, params)
-
-
-def run_wgrad_kernel_tests(kernel_class, test_params):
-    for params in test_params:
-        run_wgrad_kernel_test(kernel_class, params)
+Params = ConvSmallGroupParams
 
 
 def test_benchmark_conv_small_group():
-    run_kernel_test(
-        ConvSmallGroupKernel, ConvSmallGroupKernel.Params(N=128, C=128, H=64, W=64)
-    )
+    run_function_test(conv2d_gw8, Params(N=128, C=128, H=64, W=64))
 
 
 def test_benchmark_conv_small_group_5x5():
-    run_kernel_test(
-        ConvSmallGroupKernel,
-        ConvSmallGroupKernel.Params(N=128, C=128, H=64, W=64, R=5, S=5, padding=2),
+    run_function_test(
+        conv2d_gw8,
+        Params(N=128, C=128, H=64, W=64, R=5, S=5, padding=2),
     )
 
 
-def test_benchmark_igrad_conv_small_group():
-    run_igrad_kernel_test(
-        ConvSmallGroupKernel, ConvSmallGroupKernel.Params(N=128, C=128, H=64, W=64)
-    )
+def test_benchmark_grad_conv_small_group():
+    run_grad_function_test(conv2d_gw8, Params(N=128, C=128, H=64, W=64))
 
 
-def test_benchmark_wgrad_conv_small_group():
-    run_wgrad_kernel_test(
-        ConvSmallGroupWgradKernel,
-        ConvSmallGroupWgradKernel.Params(N=128, C=1024, H=64, W=64),
-    )
+def test_conv_small_group_function():
+    run_function_tests(conv2d_gw8, _get_test_params())
 
 
-def test_benchmark_wgrad_conv_small_group_16h_16w():
-    run_wgrad_kernel_test(
-        ConvSmallGroupWgradKernel,
-        ConvSmallGroupWgradKernel.Params(N=128, C=1024, H=16, W=16),
-    )
+def test_conv_small_group_kernel():
+    run_kernel_tests(ConvSmallGroupKernel, _get_test_params())
 
 
-def test_wgrad_conv_small_group():
-    run_wgrad_kernel_tests(ConvSmallGroupWgradKernel, _get_conv_small_group_params())
+
+def test_conv_small_group_grad():
+    run_grad_function_tests(conv2d_gw8, _get_test_params())
 
 
-def test_kernel_conv_small_group():
-    run_kernel_tests(ConvSmallGroupKernel, _get_conv_small_group_params())
-
-
-def test_conv_small_group_igrad():
-    run_igrad_kernel_tests(ConvSmallGroupKernel, _get_conv_small_group_params())
-
-
-def _get_conv_small_group_params():
-    Params = ConvSmallGroupKernel.Params
+def _get_test_params():
+    model_tests = [
+        Params(N=64, C=672, H=24, W=24, padding=1, R=3, S=3),
+        Params(N=256, C=32, H=112, W=112, padding=1, R=3, S=3),
+        Params(N=256, C=144, H=56, W=56, padding=1, R=3, S=3),
+        Params(N=256, C=240, H=28, W=28, padding=2, R=5, S=5),
+    ]
     conv_rxs_tests = [
         Params(N=1, C=128, H=32, W=32, R=r, S=s, padding=(r // 2, s // 2))
         for r in range(1, 6)
@@ -109,11 +60,11 @@ def _get_conv_small_group_params():
         Params(N=1, C=128, H=64, W=64, padding=7),
     ]
 
-    MIN_GROUPS = 1
-    MAX_GROUPS = 16
+    min_groups = 1
+    max_groups = 16
     group_tests = [
         Params(N=4, C=groups * 8, H=32, W=32)
-        for groups in range(MIN_GROUPS, MAX_GROUPS + 1)
+        for groups in range(min_groups, max_groups + 1)
     ]
 
     misc_tests = [
@@ -129,5 +80,5 @@ def _get_conv_small_group_params():
         Params(N=6, C=128, H=48, W=32),
     ]
 
-    all_tests = conv_rxs_tests + padding_tests + group_tests + misc_tests
+    all_tests = model_tests + conv_rxs_tests + padding_tests + group_tests + misc_tests
     return all_tests
