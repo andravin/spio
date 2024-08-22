@@ -59,6 +59,7 @@ if args.summary:
             "num_params",
             "params_percent",
             "kernel_size",
+            "groups",
             "mult_adds",
             "trainable",
         ],
