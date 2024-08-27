@@ -1,23 +1,20 @@
 from dataclasses import dataclass
+from itertools import product
 
 import cupy as cp
 import torch
 
 from spio import (
     divup,
-    GenDirectory,
+    generate,
+    ParamsSpec,
     IndexSpec,
     TensorSpec,
-    ParamsSpec,
     FragmentSpec,
-    FragmentSpec,
-    generate,
-    compile_kernel,
-    load_kernel,
 )
 
-from .auto_tune import auto_tune
 from .kernel import Kernel
+from .kernel_cache import KernelCache
 from .launch_params import LaunchParams
 from .conv_small_group_params import ConvSmallGroupParams
 
@@ -27,16 +24,13 @@ class ConvSmallGroupConfig:
     groups: int = 8
     block_p: int = 16
 
-    def is_valid(self, params: ConvSmallGroupParams) -> bool:
-        return True
-
 
 class ConvSmallGroupKernel(Kernel):
 
     kernel_name = "conv_small_group"
 
-    _FpropKernelsCache = {}
-    _DgradKernelsCache = {}
+    _fprop_kernel_cache = KernelCache()
+    _dgrad_kernel_cache = KernelCache()
 
     @classmethod
     def configs(cls, params: ConvSmallGroupParams):
@@ -48,11 +42,10 @@ class ConvSmallGroupKernel(Kernel):
             for groups in [2, 4, 8, params.groups]
             if groups <= min(params.groups, 8)
         ]
-        for groups in groups_values:
-            for block_p in block_p_values:
-                config = ConvSmallGroupConfig(groups=groups, block_p=block_p)
-                if config.is_valid(params):
-                    yield config
+        yield from (
+            ConvSmallGroupConfig(groups=groups, block_p=block_p)
+            for groups, block_p in product(groups_values, block_p_values)
+        )
 
     @classmethod
     def fprop_kernel(
@@ -61,35 +54,13 @@ class ConvSmallGroupKernel(Kernel):
         args,
         config: ConvSmallGroupConfig = None,
     ):
-        if config is None:
-            if params not in cls._FpropKernelsCache:
-                kernel, _, _ = auto_tune(
-                    cls,
-                    params,
-                    args,
-                    igrad=False,
-                )
-                cls._FpropKernelsCache[params] = kernel
-            return cls._FpropKernelsCache[params]
-        else:
-            return cls(params, config=config, igrad=False)
+        return cls._fprop_kernel_cache.get(cls, params, args, config=config, igrad=False)
 
     @classmethod
     def dgrad_kernel(
         cls, params: ConvSmallGroupParams, args, config: ConvSmallGroupConfig = None
     ):
-        if config is None:
-            if params not in cls._DgradKernelsCache:
-                kernel, _, _ = auto_tune(
-                    cls,
-                    params,
-                    args,
-                    igrad=True,
-                )
-                cls._DgradKernelsCache[params] = kernel
-            return cls._DgradKernelsCache[params]
-        else:
-            return cls(params, config=config, igrad=True)
+        return cls._dgrad_kernel_cache.get(cls, params, args, config=config, igrad=True)
 
     @classmethod
     def arrange_kernel_args(cls, args, outputs=[]):

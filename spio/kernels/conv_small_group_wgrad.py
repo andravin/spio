@@ -1,18 +1,12 @@
 from dataclasses import dataclass
-from tempfile import NamedTemporaryFile
+from itertools import product
+
 
 import cupy as cp
 import torch
 
-from .conv_small_group import ConvSmallGroupKernel
-from .auto_tune import auto_tune
-from .kernel import Kernel
-from .launch_params import LaunchParams
-from .conv_small_group_params import ConvSmallGroupParams
-
 from spio import (
     divup,
-    GenDirectory,
     generate,
     ParamsSpec,
     IndexSpec,
@@ -20,21 +14,23 @@ from spio import (
     FragmentSpec,
 )
 
+from .kernel import Kernel
+from .kernel_cache import KernelCache
+from .launch_params import LaunchParams
+from .conv_small_group_params import ConvSmallGroupParams
+
 
 @dataclass(frozen=True)
 class ConvSmallGroupWgradConfig:
     groups: int = 8
     block_h: int = 16
 
-    def is_valid(self, params: ConvSmallGroupParams) -> bool:
-        return True
-
 
 class ConvSmallGroupWgradKernel(Kernel):
 
     kernel_name = "conv_small_group_wgrad"
 
-    _KernelsCache = {}
+    _kernel_cache = KernelCache()
 
     @classmethod
     def configs(cls, params: ConvSmallGroupParams):
@@ -46,21 +42,14 @@ class ConvSmallGroupWgradKernel(Kernel):
             for groups in [2, 4, 8, params.groups]
             if groups <= min(params.groups, 8)
         ]
-        for groups in groups_values:
-            for block_h in block_h_values:
-                config = ConvSmallGroupWgradConfig(groups=groups, block_h=block_h)
-                if config.is_valid(params):
-                    yield config
+        yield from (
+            ConvSmallGroupWgradConfig(groups=groups, block_h=block_h)
+            for groups, block_h in product(groups_values, block_h_values)
+        )
 
     @classmethod
     def wgrad_kernel(cls, params: ConvSmallGroupParams, args, config=None):
-        if config is None:
-            if params not in cls._KernelsCache:
-                kernel, _, _ = auto_tune(cls, params, args)
-                cls._KernelsCache[params] = kernel
-            return cls._KernelsCache[params]
-        else:
-            return cls(params, config=config)
+        return cls._kernel_cache.get(cls, params, args, config=config)
 
     def __init__(self, params, config=None, **kwargs):
         params.validate()
