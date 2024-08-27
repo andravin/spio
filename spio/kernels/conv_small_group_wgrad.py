@@ -34,14 +34,20 @@ class ConvSmallGroupWgradKernel(Kernel):
 
     @classmethod
     def configs(cls, params: ConvSmallGroupParams):
+        max_groups = min(params.groups, 8)
         block_h_values = [
-            block_h for block_h in [2, 4, 8, 16, 32, params.H] if block_h <= params.H
+            block_h for block_h in [1, 2, 4, 8, 16, 32, 64] if block_h <= params.H
         ]
+        if params.H not in block_h_values:
+            block_h_values.append(params.H)
         groups_values = [
             groups
-            for groups in [2, 4, 8, params.groups]
-            if groups <= min(params.groups, 8)
+            for groups in [1, 2, 4, 8]
+            if groups <= max_groups
         ]
+        if params.groups not in groups_values and params.groups <= max_groups:
+            groups_values.append(params.groups)
+
         yield from (
             ConvSmallGroupWgradConfig(groups=groups, block_h=block_h)
             for groups, block_h in product(groups_values, block_h_values)
