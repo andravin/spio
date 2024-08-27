@@ -4,8 +4,9 @@ from multiprocessing.pool import AsyncResult
 from .compile_kernel import compile_kernel
 
 # TODO make this configurable
-NUM_PROCESSES = 16
-pool = Pool(NUM_PROCESSES)
+WORKERS = 32
+
+pool = Pool(WORKERS)
 
 
 def compile_kernels(compiler_args):
