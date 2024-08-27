@@ -5,10 +5,14 @@ from .compiler_pool import compile_kernels
 
 
 def run_kernel_test(kernel_cls, params):
-    args = params.random_args()
-    torch_outputs = params.reference(*args, **params.kwargs)
+    inputs = params.random_inputs()
+    weights = params.random_weights()
+    torch_args = inputs + weights
+    torch_outputs = params.reference(*torch_args, **params.kwargs)
     outputs = params.empty_outputs()
-    kernel_args = kernel_cls.arrange_kernel_args(args, outputs=outputs)
+    kernel_args = kernel_cls.arrange_kernel_args(
+        inputs=inputs, weights=weights, outputs=outputs
+    )
     kernels = [
         kernel_cls.fprop_kernel(params, kernel_args, config=config)
         for config in kernel_cls.configs(params)

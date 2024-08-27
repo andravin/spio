@@ -97,19 +97,25 @@ class ConvSmallGroupParams:
     @property
     def weight_shape(self):
         return (self.C, self.group_width, self.R, self.S)
-
-    def random_args(self, training=False, device="cuda"):
+    
+    def random_inputs(self, training=False, device="cuda"):
         inputs = torch.randn(self.input_shape, device="cuda", dtype=torch.float16).to(
-            memory_format=torch.channels_last
-        )
-        weights = torch.randn(self.weight_shape, device="cuda", dtype=torch.float16).to(
             memory_format=torch.channels_last
         )
         if training:
             inputs.requires_grad = True
+        return [inputs]
+    
+    def random_weights(self, training=False, device="cuda"):
+        weights = torch.randn(self.weight_shape, device="cuda", dtype=torch.float16).to(
+            memory_format=torch.channels_last
+        )
+        if training:
             weights.requires_grad = True
+        return [weights]       
 
-        return (inputs, weights, None)
+    def random_args(self, training=False, device="cuda"):
+        return self.random_inputs(training, device) + self.random_weights(training, device)
 
     @property
     def kwargs(self):

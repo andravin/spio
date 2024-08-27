@@ -1,4 +1,4 @@
-from .auto_tune import auto_tune
+from .benchmark import benchmark
 
 
 class KernelCache:
@@ -8,8 +8,8 @@ class KernelCache:
     def get(self, kernel_cls, params, args, config=None, **kwargs):
         if config is None:
             if params not in self._cache:
-                kernel, _, _ = auto_tune(kernel_cls, params, args, **kwargs)
-                self._cache[params] = kernel
+                best = benchmark(kernel_cls, params, [args], **kwargs)
+                self._cache[params] = best.kernel
             return self._cache[params]
         else:
             return kernel_cls(params, config=config, **kwargs)

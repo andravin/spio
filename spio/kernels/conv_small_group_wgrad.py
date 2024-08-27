@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from itertools import product
-
+from math import prod
 
 import cupy as cp
 import torch
@@ -28,7 +28,8 @@ class ConvSmallGroupWgradConfig:
 
 class ConvSmallGroupWgradKernel(Kernel):
 
-    kernel_name = "conv_small_group_wgrad"
+    kernel_name = "spio_conv2d_gw8_wgrad"
+    kernel_source_file = "conv_small_group_wgrad.cu"
 
     _kernel_cache = KernelCache()
 
@@ -40,11 +41,7 @@ class ConvSmallGroupWgradKernel(Kernel):
         ]
         if params.H not in block_h_values:
             block_h_values.append(params.H)
-        groups_values = [
-            groups
-            for groups in [1, 2, 4, 8]
-            if groups <= max_groups
-        ]
+        groups_values = [groups for groups in [1, 2, 4, 8] if groups <= max_groups]
         if params.groups not in groups_values and params.groups <= max_groups:
             groups_values.append(params.groups)
 
@@ -184,3 +181,15 @@ class ConvSmallGroupWgradKernel(Kernel):
         wgrad_f32 = torch.zeros_like(wgrad, dtype=torch.float32)
         self.launch(wgrad_f32, inputs, deltas)
         wgrad.copy_(wgrad_f32)
+
+    @staticmethod
+    def macs(params: ConvSmallGroupParams):
+        return prod(params.output_shape) * prod((params.R, params.S, params.group_width))
+    
+    @staticmethod
+    def bytes_read(params: ConvSmallGroupParams):
+        return (prod(params.input_shape) + prod(params.output_shape)) * 2
+    
+    @staticmethod
+    def bytes_written(params: ConvSmallGroupParams):
+        return prod(params.weight_shape) * 2

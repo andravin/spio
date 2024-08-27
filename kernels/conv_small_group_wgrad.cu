@@ -25,7 +25,7 @@ namespace
 
 extern "C"
 {
-    __global__ void conv_small_group_wgrad(
+    __global__ void spio_conv2d_gw8_wgrad(
         float *__restrict__ wgrad_ptr,
         const uint4 *__restrict__ input_ptr,
         const uint4 *__restrict__ deltas_ptr)

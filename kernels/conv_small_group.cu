@@ -57,7 +57,7 @@ namespace
 
 extern "C"
 {
-    __global__ void conv_small_group(
+    __global__ void SPIO_CONV_KERNEL(
         uint4 *__restrict__ dst,
         const uint4 *__restrict__ src,
         const uint4 *__restrict__ weights)

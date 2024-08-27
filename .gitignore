@@ -7,3 +7,4 @@
 # PyTorch profiler results.
 trace*.json
 *fiesta*.json
+*.dat
