@@ -74,7 +74,7 @@ extern "C"
         // Define the block tile.
         //
         BlockIdx block_idx(blockIdx.x);
-        int block_n = block_idx.n();
+        int block_n = block_idx.n() * Block::n;
         int block_p = block_idx.p() * Block::p;
         int block_q = block_idx.q() * Block::q;
         int block_c8 = block_idx.c8() * Block::c8;
@@ -103,15 +103,17 @@ extern "C"
         {
             InputIdx idx(threadIdx.x);
             int block_x = block_q - Block::padding_w;
+            int n = block_n + idx.n();
             int x = block_x + idx.x();
             int c8 = block_c8 + idx.c8();
 
-            smem_input_store = smem_input_store.x(idx.x()).c8(idx.c8());
-            input = input.n(block_n).x(x).c8(c8);
+            smem_input_store = smem_input_store.n(idx.n()).x(idx.x()).c8(idx.c8());
+            input = input.n(n).x(x).c8(c8);
 
+            bool n_inbounds = (n < Input::N);
             bool x_inbounds = (x >= 0 && x < Input::X);
             bool c8_inbounds = (c8 < Input::C8);
-            bool thread_inbounds = (x_inbounds && c8_inbounds);
+            bool thread_inbounds = (n_inbounds && x_inbounds && c8_inbounds);
             thread_loads_input = threadIdx.x < InputIdx::size;
             zfill = thread_inbounds ? 0 : sizeof(Input::data_type);
         }
@@ -120,20 +122,24 @@ extern "C"
         SmemInput smem_input_load(smem_input_buf);
         {
             SmemInputLoadIdx idx(threadIdx.x);
-            smem_input_load = smem_input_load.x(idx.q()).c8(idx.c8());
+            smem_input_load = smem_input_load.n(idx.n()).x(idx.q()).c8(idx.c8());
         }
 
         // Register to output-smem.
-        SmemOutput smem_output_store_q0;
-        SmemOutput smem_output_store_q8;
+        SmemOutput smem_output_store_qn0;
+        SmemOutput smem_output_store_qn8;
         {
             SmemOutputStoreIdx idx(threadIdx.x);
-            int lane_q_0 = Acc::q(idx.lane(), 0);
-            int lane_q_8 = Acc::q(idx.lane(), 1);
+            int lane_qn_0 = Acc::qn(idx.lane(), 0);
+            int lane_qn_8 = Acc::qn(idx.lane(), 1);
+            int lane_q_0 = lane_qn_0 / Block::n;
+            int lane_q_8 = lane_qn_8 / Block::n;
+            int lane_n_0 = lane_qn_0 % Block::n;
+            int lane_n_8 = lane_qn_8 % Block::n;
             int lane_k2 = Acc::k2(idx.lane());
             auto smem_output_store = SmemOutput(reinterpret_cast<__half2 *>(smem_output_buf)).k8(idx.k8()).k2(lane_k2);
-            smem_output_store_q0 = smem_output_store.q(lane_q_0);
-            smem_output_store_q8 = smem_output_store.q(lane_q_8);
+            smem_output_store_qn0 = smem_output_store.n(lane_n_0).q(lane_q_0);
+            smem_output_store_qn8 = smem_output_store.n(lane_n_8).q(lane_q_8);
         }
 
         // Output-smem to output.
@@ -143,12 +149,11 @@ extern "C"
         {
             OutputStoreIdx idx(threadIdx.x);
             int q = block_q + idx.q();
+            int n = block_n + idx.n();
             int k8 = block_c8 + idx.k8();
-
-            smem_output_load = smem_output_load.q(idx.q()).k8(idx.k8());
-            output = output.n(block_n).p(block_p).q(q).k8(k8);
-
-            thread_stores_output = q < Output::Q && k8 < Output::K8 && threadIdx.x < OutputStoreIdx::size;
+            smem_output_load = smem_output_load.n(idx.n()).q(idx.q()).k8(idx.k8());
+            output = output.n(n).p(block_p).q(q).k8(k8);
+            thread_stores_output = n < Output::N && q < Output::Q && k8 < Output::K8 && threadIdx.x < OutputStoreIdx::size;
         }
 
         //
@@ -279,8 +284,8 @@ extern "C"
         }
 
         // Store the first output row to shared memory.
-        *smem_output_store_q0 = acc[Weights::R - 1].to_half2(0);
-        *smem_output_store_q8 = acc[Weights::R - 1].to_half2(1);
+        *smem_output_store_qn0 = acc[Weights::R - 1].to_half2(0);
+        *smem_output_store_qn8 = acc[Weights::R - 1].to_half2(1);
         acc[Weights::R - 1].zero();
 
         // If the first output row is inbounds store it to global memory
@@ -337,8 +342,8 @@ extern "C"
                         }
                     }
                     int store_p = iter + phase - Weights::R;
-                    *smem_output_store_q0 = acc[phase].to_half2(0);
-                    *smem_output_store_q8 = acc[phase].to_half2(1);
+                    *smem_output_store_qn0 = acc[phase].to_half2(0);
+                    *smem_output_store_qn8 = acc[phase].to_half2(1);
                     acc[phase].zero();
                     __syncthreads();
 
