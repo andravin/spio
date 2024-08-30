@@ -31,4 +31,4 @@ from .run_test import (
     run_grad_function_tests,
 )
 
-from .compiler_pool import compile_kernels
+from .compiler_pool import compile_kernels, lineinfo, debug

@@ -11,16 +11,16 @@ ADA_ARCH = "sm_89"
 def compile_kernel(
     kernel_name=None,
     source_file_name=None,
-    debug=False,
-    lineinfo=False,
     includes=[],
     output_file=None,
     arch=ADA_ARCH,
+    debug=False,
+    lineinfo=False,
 ):
     cuda_source_file = spio_kernels_path() / source_file_name
     includes = includes + [spio_include_path()]
-    args = [[cuda_source_file]]
-    kwargs = dict(
+    return compile(
+        [cuda_source_file],
         includes=includes,
         compile=True,
         cubin=True,
@@ -29,7 +29,6 @@ def compile_kernel(
         device_debug=debug,
         lineinfo=lineinfo,
     )
-    return compile(*args, **kwargs)
 
 
 def load_kernel(kernel_name: str, cubin_file_name: str = None):
@@ -41,11 +40,11 @@ def load_kernel(kernel_name: str, cubin_file_name: str = None):
 def compile_and_load_kernel(
     kernel_name=None,
     source_file_name=None,
-    debug=False,
-    lineinfo=False,
     includes=[],
     output_file=None,
     arch=ADA_ARCH,
+    debug=False,
+    lineinfo=False,
 ):
     if source_file_name is None:
         source_file_name = f"{kernel_name}.cu"

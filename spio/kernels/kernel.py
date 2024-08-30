@@ -16,21 +16,13 @@ class Kernel:
         return (
             self.kernel_name,
             self.kernel_source_file,
-            self.debug,
-            self.lineinfo,
             [self.gencode_dir.name],
             self.cubin_file.name,
         )
 
-    def __init__(
-        self,
-        debug=False,
-        lineinfo=False,
-    ):
+    def __init__(self):
         self.module = None
         self.kernel = None
-        self.debug = debug
-        self.lineinfo = lineinfo
 
     def generate(self, specs):
         self.cubin_file = NamedTemporaryFile(
