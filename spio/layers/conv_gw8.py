@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from .conv_gw8_function import conv2d_gw8
+from ..functional import conv2d_gw8
 
 
 class Conv2dGw8(nn.Conv2d):

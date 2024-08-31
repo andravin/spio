@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 
 @dataclass(frozen=True)
-class ConvSmallGroupParams:
+class Conv2dGw8Params:
     N: int
     C: int
     H: int
@@ -21,7 +21,7 @@ class ConvSmallGroupParams:
         assert weight.dtype == torch.float16
         N, C, H, W = input.shape
         K, group_width, R, S = weight.shape
-        params = ConvSmallGroupParams(
+        params = Conv2dGw8Params(
             N=N, C=C, H=H, W=W, R=R, S=S, padding=padding, group_width=group_width
         )
         params.validate()

@@ -1,5 +1,4 @@
-import spio
-
+import spio.compiler
 
 def test_nvcc():
-    assert spio.nvcc_full_path() is not None
+    assert spio.compiler.nvcc_full_path() is not None

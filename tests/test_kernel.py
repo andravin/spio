@@ -4,17 +4,16 @@ import cupy as cp
 import torch
 from torch import nn
 
-from spio import (
-    divup,
-    GenDirectory,
+from spio.generators import (
     IndexSpec,
     TensorSpec,
     ParamsSpec,
     FragmentSpec,
     generate,
-    compile_and_load_kernel,
 )
-
+from spio.compiler import compile_and_load_kernel
+from spio.kernels import GenDirectory
+from spio.util import divup
 
 
 def _set_printoptions():
@@ -24,7 +23,7 @@ def _set_printoptions():
 
 def test_add_kernel():
     """Compile and run a simple CUDA kernel."""
-    module, add_kernel = compile_and_load_kernel(kernel_name="add")
+    module, add_kernel = compile_and_load_kernel(kernel_name="add", test_kernel=True)
 
     x1 = cp.arange(25, dtype=cp.float32).reshape(5, 5)
     x2 = cp.arange(25, dtype=cp.float32).reshape(5, 5)
@@ -36,7 +35,7 @@ def test_add_kernel():
 def test_mma_m16_n8_k8_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k8."""
     module, mma_kernel = compile_and_load_kernel(
-        kernel_name="mma_m16_n8_k8", source_file_name="mma.cu"
+        kernel_name="mma_m16_n8_k8", source_file_name="mma.cu", test_kernel=True
     )
 
     A = cp.zeros((16, 8), dtype=cp.float16)
@@ -63,7 +62,7 @@ def test_mma_m16_n8_k8_kernel():
 def test_mma_m16_n8_k16_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k16."""
     module, mma_kernel = compile_and_load_kernel(
-        kernel_name="mma_m16_n8_k16", source_file_name="mma.cu", debug=True
+        kernel_name="mma_m16_n8_k16", source_file_name="mma.cu", debug=True, test_kernel=True
     )
 
     A = cp.zeros((16, 16), dtype=cp.float16)
@@ -222,6 +221,7 @@ def test_conv_group_4_16w_4h_64c():
             debug=debug,
             lineinfo=lineinfo,
             includes=[include_dir],
+            test_kernel=True,
         )
 
         outputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16).to(
@@ -288,6 +288,7 @@ def test_memcpy_kernel():
             debug=debug,
             lineinfo=lineinfo,
             includes=[include_dir],
+            test_kernel=True,
         )
 
     inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float32).to(
@@ -383,6 +384,7 @@ def test_row_memcpy_kernel():
             debug=debug,
             lineinfo=lineinfo,
             includes=[include_dir],
+            test_kernel=True,
         )
 
     inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float32).to(

@@ -4,7 +4,7 @@ import inspect
 
 import torch
 
-from ..compiler_pool import compile_kernels
+from ..compiler import compile_kernels
 
 
 def benchmark_kernel(

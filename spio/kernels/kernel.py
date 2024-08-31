@@ -2,9 +2,10 @@ from tempfile import NamedTemporaryFile
 
 import cupy as cp
 
-from ..compile_kernel import compile_kernel, load_kernel
-from spio import generate, GenDirectory
+from ..generators import generate
+from ..compiler import compile_kernel, load_kernel
 
+from .code_directory import GenDirectory
 
 class Kernel:
     @property

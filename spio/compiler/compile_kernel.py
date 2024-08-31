@@ -3,7 +3,14 @@ from typing import Tuple
 
 import cupy as cp
 
-from spio import compile, spio_cubins_path, spio_include_path, spio_kernels_path
+from .paths import (
+    spio_cubins_path,
+    spio_include_path,
+    spio_kernels_path,
+    spio_test_kernels_path,
+)
+
+from .compile import compile
 
 ADA_ARCH = "sm_89"
 
@@ -16,8 +23,10 @@ def compile_kernel(
     arch=ADA_ARCH,
     debug=False,
     lineinfo=False,
+    test_kernel=False,
 ):
-    cuda_source_file = spio_kernels_path() / source_file_name
+    kernel_path = spio_test_kernels_path() if test_kernel else spio_kernels_path()
+    cuda_source_file = kernel_path / source_file_name
     includes = includes + [spio_include_path()]
     return compile(
         [cuda_source_file],
@@ -45,6 +54,7 @@ def compile_and_load_kernel(
     arch=ADA_ARCH,
     debug=False,
     lineinfo=False,
+    test_kernel=False,
 ):
     if source_file_name is None:
         source_file_name = f"{kernel_name}.cu"
@@ -57,5 +67,6 @@ def compile_and_load_kernel(
             includes=includes,
             output_file=cubin_file.name,
             arch=arch,
+            test_kernel=test_kernel,
         )
         return load_kernel(kernel_name, cubin_file.name)

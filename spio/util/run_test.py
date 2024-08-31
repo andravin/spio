@@ -1,7 +1,7 @@
 import torch
 
+from ..compiler import compile_kernels
 from .close import assert_all_close
-from .compiler_pool import compile_kernels
 
 
 def run_kernel_test(kernel_cls, params):

@@ -5,36 +5,35 @@ from math import prod
 import cupy as cp
 import torch
 
-from spio import (
-    divup,
+from ..generators import (
     generate,
     ParamsSpec,
     IndexSpec,
     TensorSpec,
     FragmentSpec,
 )
-
+from ..util import divup
 from .kernel import Kernel
 from .kernel_cache import KernelCache
 from .launch_params import LaunchParams
-from .conv_small_group_params import ConvSmallGroupParams
+from .conv2d_gw8_params import Conv2dGw8Params
 
 
 @dataclass(frozen=True)
-class ConvSmallGroupWgradConfig:
+class Conv2dGw8WgradConfig:
     groups: int = 8
     block_h: int = 16
 
 
-class ConvSmallGroupWgradKernel(Kernel):
+class Conv2dGw8WgradKernel(Kernel):
 
     kernel_name = "spio_conv2d_gw8_wgrad"
-    kernel_source_file = "conv_small_group_wgrad.cu"
+    kernel_source_file = "conv2d_gw8_wgrad.cu"
 
     _kernel_cache = KernelCache()
 
     @classmethod
-    def configs(cls, params: ConvSmallGroupParams):
+    def configs(cls, params: Conv2dGw8Params):
         max_groups = min(params.groups, 8)
         block_h_values = [
             block_h for block_h in [1, 2, 4, 8, 16, 32, 64] if block_h <= params.H
@@ -46,12 +45,12 @@ class ConvSmallGroupWgradKernel(Kernel):
             groups_values.append(params.groups)
 
         yield from (
-            ConvSmallGroupWgradConfig(groups=groups, block_h=block_h)
+            Conv2dGw8WgradConfig(groups=groups, block_h=block_h)
             for groups, block_h in product(groups_values, block_h_values)
         )
 
     @classmethod
-    def wgrad_kernel(cls, params: ConvSmallGroupParams, args, config=None):
+    def wgrad_kernel(cls, params: Conv2dGw8Params, args, config=None):
         return cls._kernel_cache.get(cls, params, args, config=config)
 
     def __init__(self, params, config=None, **kwargs):
@@ -183,13 +182,15 @@ class ConvSmallGroupWgradKernel(Kernel):
         wgrad.copy_(wgrad_f32)
 
     @staticmethod
-    def macs(params: ConvSmallGroupParams):
-        return prod(params.output_shape) * prod((params.R, params.S, params.group_width))
-    
+    def macs(params: Conv2dGw8Params):
+        return prod(params.output_shape) * prod(
+            (params.R, params.S, params.group_width)
+        )
+
     @staticmethod
-    def bytes_read(params: ConvSmallGroupParams):
+    def bytes_read(params: Conv2dGw8Params):
         return (prod(params.input_shape) + prod(params.output_shape)) * 2
-    
+
     @staticmethod
-    def bytes_written(params: ConvSmallGroupParams):
+    def bytes_written(params: Conv2dGw8Params):
         return prod(params.weight_shape) * 2

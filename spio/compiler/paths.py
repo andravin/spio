@@ -24,5 +24,9 @@ def spio_kernels_path() -> Path:
     return spio_path() / "kernels"
 
 
+def spio_test_kernels_path() -> Path:
+    return spio_path() / "tests"
+
+
 def spio_cubins_path() -> Path:
     return spio_path() / "cubins"

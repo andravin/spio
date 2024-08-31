@@ -1,42 +1,43 @@
 import torch
-from spio import (
-    conv2d_gw8,
+
+from spio.functional import conv2d_gw8
+
+from spio.util import (
     run_function_test,
     run_function_tests,
     run_grad_function_test,
     run_grad_function_tests,
     run_kernel_tests,
 )
-from spio.kernels import ConvSmallGroupKernel, ConvSmallGroupParams
+from spio.kernels import Conv2dGw8Kernel, Conv2dGw8Params
 
-Params = ConvSmallGroupParams
+Params = Conv2dGw8Params
 
 
-def test_benchmark_conv_small_group():
+def test_one_conv2d_gw8_3x3():
     run_function_test(conv2d_gw8, Params(N=128, C=128, H=64, W=64))
 
 
-def test_benchmark_conv_small_group_5x5():
+def test_conv2d_gw8_5x5():
     run_function_test(
         conv2d_gw8,
         Params(N=128, C=128, H=64, W=64, R=5, S=5, padding=2),
     )
 
 
-def test_benchmark_grad_conv_small_group():
+def test_conv2d_gw8_grad_3x3():
     run_grad_function_test(conv2d_gw8, Params(N=128, C=128, H=64, W=64))
 
 
-def test_conv_small_group_function():
+def test_conv2d_gw8_function():
     run_function_tests(conv2d_gw8, _get_test_params())
 
 
-def test_conv_small_group_kernel():
-    run_kernel_tests(ConvSmallGroupKernel, _get_test_params())
+def test_conv2d_gw8_kernel():
+    run_kernel_tests(Conv2dGw8Kernel, _get_test_params())
 
 
-
-def test_conv_small_group_grad():
+def test_conv2d_gw8_grad():
     run_grad_function_tests(conv2d_gw8, _get_test_params())
 
 

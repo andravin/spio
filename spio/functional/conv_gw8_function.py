@@ -2,7 +2,7 @@ import torch
 import torch.amp
 from torch.cuda.amp import custom_fwd, custom_bwd
 
-from .kernels import ConvSmallGroupKernel, ConvSmallGroupWgradKernel, ConvSmallGroupParams
+from ..kernels import Conv2dGw8Kernel, Conv2dGw8WgradKernel, Conv2dGw8Params
 
 
 class ConvGw8Function(torch.autograd.Function):
@@ -12,7 +12,7 @@ class ConvGw8Function(torch.autograd.Function):
     def forward(
         ctx, input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1, kernel_config=None
     ):
-        params = ConvSmallGroupParams.from_tensors(
+        params = Conv2dGw8Params.from_tensors(
             input, weight, padding=padding
         )
         ctx.save_for_backward(input, weight, bias)
@@ -20,7 +20,7 @@ class ConvGw8Function(torch.autograd.Function):
         outputs = params.empty_outputs(device=input.device)
         output = outputs[0]
         args = (output, input.detach(), weight.detach())
-        kernel = ConvSmallGroupKernel.fprop_kernel(params, args, config=kernel_config)
+        kernel = Conv2dGw8Kernel.fprop_kernel(params, args, config=kernel_config)
         kernel(*args)
         if bias is not None:
             output += bias.view(-1, 1, 1)
@@ -39,13 +39,13 @@ class ConvGw8Function(torch.autograd.Function):
         if ctx.needs_input_grad[0]:
             dgrad = torch.empty_like(input)
             args = (dgrad, grad_output.detach(), weight.detach())
-            dgrad_kernel = ConvSmallGroupKernel.dgrad_kernel(params, args)
+            dgrad_kernel = Conv2dGw8Kernel.dgrad_kernel(params, args)
             dgrad_kernel(*args)
 
         if ctx.needs_input_grad[1]:
             wgrad = torch.zeros_like(weight)
             args = wgrad, input.detach(), grad_output.detach()
-            wgrad_kernel = ConvSmallGroupWgradKernel.wgrad_kernel(params, args)
+            wgrad_kernel = Conv2dGw8WgradKernel.wgrad_kernel(params, args)
             wgrad_kernel(*args)
 
         if bias is not None and ctx.needs_input_grad[2]:

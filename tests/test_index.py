@@ -8,30 +8,30 @@ work in both C++ and CUDA programs.
 from subprocess import CalledProcessError
 from tempfile import NamedTemporaryFile
 
-import spio
-from spio import IndexSpec
+import spio.generators
+import spio.compiler
 
 CPP_SOURCES = ["test_index.cpp"]
 
 
 def compile_cpp_tests(extra_cpp_test_files=[]):
-    src_dir = spio.spio_cpp_tests_src_path()
-    includes = [spio.spio_include_path(), spio.spio_cpp_tests_src_path()]
+    src_dir = spio.compiler.spio_cpp_tests_src_path()
+    includes = [
+        spio.compiler.spio_include_path(),
+        spio.compiler.spio_cpp_tests_src_path(),
+    ]
     sources = [str(src_dir / src) for src in CPP_SOURCES] + extra_cpp_test_files
     includes = [str(include) for include in includes]
-    return spio.compile(sources=sources, includes=includes, run=True)
+    return spio.compiler.compile(sources=sources, includes=includes, run=True)
 
 
 def test_cpp_tests():
     """Run all C++ unit tests."""
-
     test_source = _test_generate_index()
     test_source += _test_generate_tensor()
-
     test_source_file = NamedTemporaryFile(prefix="spio_", suffix=".cpp")
     with open(test_source_file.name, "w") as f:
         f.write(test_source)
-
     try:
         compile_cpp_tests([test_source_file.name])
     except CalledProcessError as e:
@@ -40,9 +40,11 @@ def test_cpp_tests():
 
 def _test_generate_index():
     """Return the C++ source code that tests a custom index class."""
-    my_index_code = spio.index._generate_index("MyIndex", dict(n=4, h=32, w=64, c=128))
+    my_index_code = spio.generators.index._generate_index(
+        "MyIndex", dict(n=4, h=32, w=64, c=128)
+    )
     size = 4 * 32 * 64 * 128
-    header = spio.index._index_header()
+    header = spio.generators.index._index_header()
     test_code = f"""
 #include "utest.h"
 
@@ -83,10 +85,10 @@ def _test_generate_tensor():
     W = 33
     C = 42
 
-    my_tensor_code = spio.tensor._generate_tensor(
+    my_tensor_code = spio.generators.tensor._generate_tensor(
         "MyTensor", "const float", dict(n=N, h=H, w=W, c=C)
     )
-    header = spio.tensor._tensor_header()
+    header = spio.generators.tensor._tensor_header()
     test_code = f"""
 
 {header}

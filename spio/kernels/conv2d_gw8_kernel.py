@@ -5,8 +5,7 @@ from math import prod
 import cupy as cp
 import torch
 
-from spio import (
-    divup,
+from ..generators import (
     generate,
     MacroSpec,
     ParamsSpec,
@@ -14,32 +13,32 @@ from spio import (
     TensorSpec,
     FragmentSpec,
 )
-
+from ..util import divup
 from .kernel import Kernel
 from .kernel_cache import KernelCache
 from .launch_params import LaunchParams
-from .conv_small_group_params import ConvSmallGroupParams
+from .conv2d_gw8_params import Conv2dGw8Params
 
 
 @dataclass(frozen=True)
-class ConvSmallGroupConfig:
+class Conv2dGw8Config:
     groups: int = 8
     block_p: int = 16
     block_n: int = 1
 
 
-class ConvSmallGroupKernel(Kernel):
+class Conv2dGw8Kernel(Kernel):
 
-    Params = ConvSmallGroupParams
-    Config = ConvSmallGroupConfig
+    Params = Conv2dGw8Params
+    Config = Conv2dGw8Config
 
-    kernel_source_file = "conv_small_group.cu"
+    kernel_source_file = "conv2d_gw8.cu"
 
     _fprop_kernel_cache = KernelCache()
     _dgrad_kernel_cache = KernelCache()
 
     @classmethod
-    def configs(cls, params: ConvSmallGroupParams):
+    def configs(cls, params: Conv2dGw8Params):
         max_groups = min(params.groups, 8)
         block_n_values = [block_n for block_n in [1, 2, 4] if block_n <= params.N]
         block_p_values = [
@@ -51,16 +50,18 @@ class ConvSmallGroupKernel(Kernel):
         if params.groups not in groups_values and params.groups <= max_groups:
             groups_values.append(params.groups)
         yield from (
-            ConvSmallGroupConfig(groups=groups, block_p=block_p, block_n=block_n)
-            for groups, block_p, block_n in product(groups_values, block_p_values, block_n_values)
+            Conv2dGw8Config(groups=groups, block_p=block_p, block_n=block_n)
+            for groups, block_p, block_n in product(
+                groups_values, block_p_values, block_n_values
+            )
         )
 
     @classmethod
     def fprop_kernel(
         cls,
-        params: ConvSmallGroupParams,
+        params: Conv2dGw8Params,
         args,
-        config: ConvSmallGroupConfig = None,
+        config: Conv2dGw8Config = None,
     ):
         return cls._fprop_kernel_cache.get(
             cls, params, args, config=config, igrad=False
@@ -68,7 +69,7 @@ class ConvSmallGroupKernel(Kernel):
 
     @classmethod
     def dgrad_kernel(
-        cls, params: ConvSmallGroupParams, args, config: ConvSmallGroupConfig = None
+        cls, params: Conv2dGw8Params, args, config: Conv2dGw8Config = None
     ):
         return cls._dgrad_kernel_cache.get(cls, params, args, config=config, igrad=True)
 
@@ -167,7 +168,12 @@ class ConvSmallGroupKernel(Kernel):
                 ),
                 IndexSpec(
                     "SmemInputLoadIdx",
-                    dict(c8=BLOCK_C8, repeat=32 // (BLOCK_Q * BLOCK_N), q=BLOCK_Q, n=BLOCK_N),
+                    dict(
+                        c8=BLOCK_C8,
+                        repeat=32 // (BLOCK_Q * BLOCK_N),
+                        q=BLOCK_Q,
+                        n=BLOCK_N,
+                    ),
                 ),
                 IndexSpec("SmemOutputStoreIdx", dict(k8=BLOCK_C8, lane=32)),
                 TensorSpec(
@@ -186,17 +192,17 @@ class ConvSmallGroupKernel(Kernel):
         )
 
     @staticmethod
-    def macs(params: ConvSmallGroupParams, igrad=False):
+    def macs(params: Conv2dGw8Params, igrad=False):
         return prod(params.output_shape) * prod(
             (params.R, params.S, params.group_width)
         )
 
     @staticmethod
-    def bytes_read(params: ConvSmallGroupParams, igrad=False):
+    def bytes_read(params: Conv2dGw8Params, igrad=False):
         input = prod(params.output_shape) if igrad else prod(params.input_shape)
         return (input + prod(params.weight_shape)) * 2
 
     @staticmethod
-    def bytes_written(params: ConvSmallGroupParams, igrad=False):
+    def bytes_written(params: Conv2dGw8Params, igrad=False):
         output = prod(params.input_shape) if igrad else prod(params.output_shape)
         return output * 2

@@ -81,7 +81,7 @@ if args.torchcompile:
     model = torch.compile(model)
 
 if args.spio:
-    model = spio.replace_ops(model)
+    model = spio.transform(model)
 
 schedule = torch.profiler.schedule(
     wait=WAIT_ITERS, warmup=args.warmup_iters, active=args.benchmark_iters, repeat=1
