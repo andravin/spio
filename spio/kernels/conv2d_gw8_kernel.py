@@ -32,8 +32,6 @@ class Conv2dGw8Kernel(Kernel):
     Params = Conv2dGw8Params
     Config = Conv2dGw8Config
 
-    kernel_source_file = "conv2d_gw8.cu"
-
     _fprop_kernel_cache = KernelCache()
     _dgrad_kernel_cache = KernelCache()
 
@@ -81,9 +79,8 @@ class Conv2dGw8Kernel(Kernel):
     def arrange_torch_args(cls, inputs=[], weights=[]):
         return inputs + weights
 
-    def __init__(self, params, config=None, igrad=False, **kwargs):
+    def __init__(self, params, config=None, igrad=False):
         params.validate()
-        super().__init__(**kwargs)
 
         R, S = params.R, params.S
 
@@ -124,71 +121,74 @@ class Conv2dGw8Kernel(Kernel):
         WARPS = BLOCK_GROUPS
         THREADS = WARPS * 32
 
-        self.launch_params = LaunchParams(grid=BLOCKS, block=THREADS)
+        launch_params = LaunchParams(grid=BLOCKS, block=THREADS)
 
-        self.kernel_name = (
-            "spio_conv2d_gw8_fprop" if not igrad else "spio_conv2d_gw8_dgrad"
-        )
+        kernel_name = "spio_conv2d_gw8_fprop" if not igrad else "spio_conv2d_gw8_dgrad"
 
-        self.generate(
-            [
-                MacroSpec(dict(SPIO_CONV_KERNEL=self.kernel_name)),
-                ParamsSpec(
-                    "Block",
-                    dict(
-                        n=BLOCK_N,
-                        p=BLOCK_P,
-                        q=BLOCK_Q,
-                        c8=BLOCK_C8,
-                        padding_h=PADDING_H,
-                        padding_w=PADDING_W,
-                        threads=THREADS,
-                    ),
+        specs = [
+            MacroSpec(dict(SPIO_CONV_KERNEL=kernel_name)),
+            ParamsSpec(
+                "Block",
+                dict(
+                    n=BLOCK_N,
+                    p=BLOCK_P,
+                    q=BLOCK_Q,
+                    c8=BLOCK_C8,
+                    padding_h=PADDING_H,
+                    padding_w=PADDING_W,
+                    threads=THREADS,
                 ),
-                ParamsSpec("Mode", dict(igrad=igrad)),
-                IndexSpec(
-                    "BlockIdx",
-                    dict(n=BLOCKS_N, p=BLOCKS_P, q=BLOCKS_Q, c8=BLOCKS_C8),
+            ),
+            ParamsSpec("Mode", dict(igrad=igrad)),
+            IndexSpec(
+                "BlockIdx",
+                dict(n=BLOCKS_N, p=BLOCKS_P, q=BLOCKS_Q, c8=BLOCKS_C8),
+            ),
+            IndexSpec("InputIdx", dict(n=BLOCK_N, x=BLOCK_W, c8=BLOCK_C8)),
+            TensorSpec("Input", "const uint4", dict(n=N, y=H, x=W, c8=C8)),
+            TensorSpec("Output", "uint4", dict(n=N, p=P, q=Q, k8=C8)),
+            TensorSpec("Weights", "const uint4", dict(k=C, r=R, s=S)),
+            TensorSpec("SmemWeights", "uint4", dict(k=BLOCK_C, r=R, s=S)),
+            TensorSpec(
+                "ConstSmemWeights",
+                "const uint4",
+                dict(kd8=BLOCK_C8, km8=8, rs=R * S),
+            ),
+            IndexSpec("SmemWeightsLoadIdx", dict(kd8=BLOCK_C8, rs=4, km8=8)),
+            TensorSpec(
+                "SmemInput",
+                "uint4",
+                dict(ping_pong=2, x=BLOCK_W, n=BLOCK_N, c8=BLOCK_C8 + 1),
+            ),
+            IndexSpec(
+                "SmemInputLoadIdx",
+                dict(
+                    c8=BLOCK_C8,
+                    repeat=32 // (BLOCK_Q * BLOCK_N),
+                    q=BLOCK_Q,
+                    n=BLOCK_N,
                 ),
-                IndexSpec("InputIdx", dict(n=BLOCK_N, x=BLOCK_W, c8=BLOCK_C8)),
-                TensorSpec("Input", "const uint4", dict(n=N, y=H, x=W, c8=C8)),
-                TensorSpec("Output", "uint4", dict(n=N, p=P, q=Q, k8=C8)),
-                TensorSpec("Weights", "const uint4", dict(k=C, r=R, s=S)),
-                TensorSpec("SmemWeights", "uint4", dict(k=BLOCK_C, r=R, s=S)),
-                TensorSpec(
-                    "ConstSmemWeights",
-                    "const uint4",
-                    dict(kd8=BLOCK_C8, km8=8, rs=R * S),
-                ),
-                IndexSpec("SmemWeightsLoadIdx", dict(kd8=BLOCK_C8, rs=4, km8=8)),
-                TensorSpec(
-                    "SmemInput",
-                    "uint4",
-                    dict(ping_pong=2, x=BLOCK_W, n=BLOCK_N, c8=BLOCK_C8 + 1),
-                ),
-                IndexSpec(
-                    "SmemInputLoadIdx",
-                    dict(
-                        c8=BLOCK_C8,
-                        repeat=32 // (BLOCK_Q * BLOCK_N),
-                        q=BLOCK_Q,
-                        n=BLOCK_N,
-                    ),
-                ),
-                IndexSpec("SmemOutputStoreIdx", dict(k8=BLOCK_C8, lane=32)),
-                TensorSpec(
-                    "SmemOutput",
-                    "__half2",
-                    dict(q=BLOCK_Q, n=BLOCK_N, k8=BLOCK_C8 + 1, k2=4),
-                ),
-                TensorSpec(
-                    "ConstSmemOutput",
-                    "const uint4",
-                    dict(q=BLOCK_Q, n=BLOCK_N, k8=BLOCK_C8 + 1),
-                ),
-                IndexSpec("OutputStoreIdx", dict(n=BLOCK_N, q=BLOCK_Q, k8=BLOCK_C8)),
-                FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k"),
-            ]
+            ),
+            IndexSpec("SmemOutputStoreIdx", dict(k8=BLOCK_C8, lane=32)),
+            TensorSpec(
+                "SmemOutput",
+                "__half2",
+                dict(q=BLOCK_Q, n=BLOCK_N, k8=BLOCK_C8 + 1, k2=4),
+            ),
+            TensorSpec(
+                "ConstSmemOutput",
+                "const uint4",
+                dict(q=BLOCK_Q, n=BLOCK_N, k8=BLOCK_C8 + 1),
+            ),
+            IndexSpec("OutputStoreIdx", dict(n=BLOCK_N, q=BLOCK_Q, k8=BLOCK_C8)),
+            FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k"),
+        ]
+
+        super().__init__(
+            kernel_name,
+            launch_params,
+            kernel_source_file="conv2d_gw8.cu",
+            specs=specs,
         )
 
     @staticmethod

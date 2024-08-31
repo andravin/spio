@@ -4,13 +4,16 @@ import cupy as cp
 
 from ..generators import generate
 from ..compiler import compile_kernel, load_kernel
-
+from .launch_params import LaunchParams
 from .code_directory import GenDirectory
+
 
 class Kernel:
     @property
     def kernel_source_file(self):
-        return f"{self.kernel_name}.cu"
+        if self._kernel_source_file is None:
+            return f"{self.kernel_name}.cu"
+        return self._kernel_source_file
 
     @property
     def compiler_args(self):
@@ -21,11 +24,12 @@ class Kernel:
             self.cubin_file.name,
         )
 
-    def __init__(self):
+    def __init__(self, kernel_name:str, launch_params:LaunchParams, kernel_source_file=None, specs=[]):
+        self._kernel_source_file = kernel_source_file
+        self.kernel_name = kernel_name
+        self.launch_params = launch_params
         self.module = None
         self.kernel = None
-
-    def generate(self, specs):
         self.cubin_file = NamedTemporaryFile(
             suffix=".cubin",
             prefix=f"spio_{self.kernel_name}_",
