@@ -10,15 +10,25 @@ class ConvGw8Function(torch.autograd.Function):
     @staticmethod
     @custom_fwd(cast_inputs=torch.float16)
     def forward(
-        ctx, input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1, kernel_config=None
+        ctx,
+        input,
+        weight,
+        bias=None,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        kernel_config=None,
     ):
-        params = Conv2dGw8Params.from_tensors(
-            input, weight, padding=padding
-        )
+        params = Conv2dGw8Params.from_tensors(input, weight, padding=padding)
         ctx.save_for_backward(input, weight, bias)
         ctx.params = params
-        outputs = params.empty_outputs(device=input.device)
-        output = outputs[0]
+        output = torch.empty(
+            params.output_shape,
+            device=input.device,
+            dtype=torch.float16,
+            memory_format=torch.channels_last,
+        )
         args = (output, input.detach(), weight.detach())
         kernel = Conv2dGw8Kernel.fprop_kernel(params, args, config=kernel_config)
         kernel(*args)

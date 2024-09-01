@@ -27,6 +27,9 @@ class Conv2dGw8WgradConfig:
 
 class Conv2dGw8WgradKernel(Kernel):
 
+    Params = Conv2dGw8Params
+    Config = Conv2dGw8WgradConfig
+
     _kernel_cache = KernelCache()
 
     @classmethod
@@ -49,6 +52,10 @@ class Conv2dGw8WgradKernel(Kernel):
     @classmethod
     def wgrad_kernel(cls, params: Conv2dGw8Params, args, config=None):
         return cls._kernel_cache.get(cls, params, args, config=config)
+
+    @classmethod
+    def get_kernel(cls, params: Conv2dGw8Params, args, config=None):
+        return cls.wgrad_kernel(params, args, config=config)
 
     def __init__(self, params, config=None):
         params.validate()

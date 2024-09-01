@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
+
 @dataclass(frozen=True)
 class Conv2dGw8Params:
     N: int
@@ -12,8 +13,6 @@ class Conv2dGw8Params:
     R: int = 3
     S: int = 3
     group_width: int = 8
-
-    reference = torch.nn.functional.conv2d
 
     @staticmethod
     def from_tensors(input, weight, padding=1):
@@ -83,6 +82,10 @@ class Conv2dGw8Params:
         return self.W + 2 * self.padding_w - self.S + 1
 
     @property
+    def kernel_size(self):
+        return (self.R, self.S)
+
+    @property
     def input_shape(self):
         return (self.N, self.C, self.H, self.W)
 
@@ -91,49 +94,21 @@ class Conv2dGw8Params:
         return (self.N, self.C, self.P, self.Q)
 
     @property
-    def kernel_size(self):
-        return (self.R, self.S)
-
-    @property
     def weight_shape(self):
         return (self.C, self.group_width, self.R, self.S)
     
-    def random_inputs(self, training=False, device="cuda"):
-        inputs = torch.randn(self.input_shape, device="cuda", dtype=torch.float16).to(
-            memory_format=torch.channels_last
-        )
-        if training:
-            inputs.requires_grad = True
-        return [inputs]
+    @property
+    def wgrad_shape(self):
+        return self.weight_shape
     
-    def random_weights(self, training=False, device="cuda"):
-        weights = torch.randn(self.weight_shape, device="cuda", dtype=torch.float16).to(
-            memory_format=torch.channels_last
-        )
-        if training:
-            weights.requires_grad = True
-        return [weights]       
-
-    def random_args(self, training=False, device="cuda"):
-        return self.random_inputs(training, device) + self.random_weights(training, device)
+    @property
+    def deltas_shape(self):
+        return self.output_shape
+    
+    @property
+    def igrad_shape(self):
+        return self.input_shape
 
     @property
     def kwargs(self):
         return dict(stride=1, padding=self.padding, groups=self.groups)
-
-    def random_deltas(self, device="cuda"):
-        return [
-            torch.randn(self.output_shape, device=device, dtype=torch.float16).to(
-                memory_format=torch.channels_last,
-            )
-        ]
-
-    def empty_outputs(self, device="cuda"):
-        return [
-            torch.empty(
-                self.output_shape,
-                device=device,
-                dtype=torch.float16,
-                memory_format=torch.channels_last,
-            )
-        ]

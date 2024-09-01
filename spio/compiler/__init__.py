@@ -9,4 +9,4 @@ from .paths import (
 )
 from .compile import compile, nvcc_full_path
 from .compile_kernel import compile_kernel, load_kernel, compile_and_load_kernel
-from .compiler_pool import compile_kernels, lineinfo, debug
+from .compiler_pool import lineinfo, debug, compile_kernel_configs

@@ -1,3 +1,5 @@
 pytest
 numpy
 cupy-cuda12x
+frozendict
+torch

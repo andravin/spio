@@ -70,15 +70,14 @@ class Conv2dGw8Kernel(Kernel):
         cls, params: Conv2dGw8Params, args, config: Conv2dGw8Config = None
     ):
         return cls._dgrad_kernel_cache.get(cls, params, args, config=config, igrad=True)
-
+    
     @classmethod
-    def arrange_kernel_args(cls, outputs=[], inputs=[], weights=[]):
-        return outputs + inputs + weights
-
-    @classmethod
-    def arrange_torch_args(cls, inputs=[], weights=[]):
-        return inputs + weights
-
+    def get_kernel(cls, params: Conv2dGw8Params, args, config: Conv2dGw8Config = None, igrad=False):
+        if igrad:
+            return cls.dgrad_kernel(params, args, config=config)
+        else:
+            return cls.fprop_kernel(params, args, config=config)
+    
     def __init__(self, params, config=None, igrad=False):
         params.validate()
 
