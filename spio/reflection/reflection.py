@@ -54,6 +54,13 @@ class KernelReflection:
             memory_format=info.memory_format,
         )
 
+    def _ones(self, params: Any, name: str, info: ArgInfo, device: str):
+        return torch.ones(
+            self._shape(params, name), dtype=info.dtype, device=device
+        ).to(
+            memory_format=info.memory_format,
+        )
+
     def _randn(self, params: Any, name: str, info: ArgInfo, device: str):
         return torch.randn(
             self._shape(params, name), dtype=info.dtype, device=device

@@ -2,6 +2,8 @@ import torch
 import torch.amp
 from torch.cuda.amp import custom_fwd, custom_bwd
 
+import cupy
+
 from ..kernels import Conv2dGw8Kernel, Conv2dGw8WgradKernel, Conv2dGw8Params
 
 
@@ -29,7 +31,7 @@ class ConvGw8Function(torch.autograd.Function):
             dtype=torch.float16,
             memory_format=torch.channels_last,
         )
-        args = (output, input.detach(), weight.detach())
+        args = (output, input, weight)
         kernel = Conv2dGw8Kernel.fprop_kernel(params, args, config=kernel_config)
         kernel(*args)
         if bias is not None:
@@ -48,13 +50,13 @@ class ConvGw8Function(torch.autograd.Function):
 
         if ctx.needs_input_grad[0]:
             dgrad = torch.empty_like(input)
-            args = (dgrad, grad_output.detach(), weight.detach())
+            args = (dgrad, grad_output, weight)
             dgrad_kernel = Conv2dGw8Kernel.dgrad_kernel(params, args)
             dgrad_kernel(*args)
 
         if ctx.needs_input_grad[1]:
             wgrad = torch.zeros_like(weight)
-            args = wgrad, input.detach(), grad_output.detach()
+            args = (wgrad, input, grad_output)
             wgrad_kernel = Conv2dGw8WgradKernel.wgrad_kernel(params, args)
             wgrad_kernel(*args)
 

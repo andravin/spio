@@ -18,7 +18,7 @@ def run_kernel_test(kernel_cls, params, **kernel_kwargs):
         kernel(*kernel_args)
         output_name = reflection.output_names[0]
         output = args[output_name]
-        assert_all_close(output, torch_output, msg=str(params))
+        assert_all_close(output, torch_output, msg=str(kernel))
 
 
 def run_grad_kernel_test(kernel_cls, params, **kernel_kwargs):
@@ -52,7 +52,7 @@ def run_grad_kernel_test(kernel_cls, params, **kernel_kwargs):
         for grad_name in reflection.grad_input_names:
             grad = args[grad_name.name]
             ref_grad = ref_grads[grad_name.name]
-            assert_all_close(grad, ref_grad, msg=str(params))
+            assert_all_close(grad, ref_grad, msg=str(kernel))
 
 
 def run_function_test(function, params):

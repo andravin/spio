@@ -1,6 +1,7 @@
 from tempfile import NamedTemporaryFile
 
 import cupy as cp
+import torch
 
 from ..generators import generate
 from ..compiler import compile_kernel, load_kernel
@@ -24,10 +25,20 @@ class Kernel:
             self.cubin_file.name,
         )
 
-    def __init__(self, kernel_name:str, launch_params:LaunchParams, kernel_source_file=None, specs=[]):
+    def __init__(
+        self,
+        kernel_name: str,
+        launch_params: LaunchParams,
+        kernel_source_file=None,
+        specs=[],
+        params=None,
+        config=None,
+    ):
         self._kernel_source_file = kernel_source_file
         self.kernel_name = kernel_name
         self.launch_params = launch_params
+        self.params = params
+        self.config = config
         self.module = None
         self.kernel = None
         self.cubin_file = NamedTemporaryFile(
@@ -53,8 +64,18 @@ class Kernel:
         self.cubin_file = None
 
     def launch(self, *tensors):
-        cp_tensors = [cp.asarray(t) for t in tensors]
-        self.kernel(self.launch_params.grid, self.launch_params.block, cp_tensors)
+        try:
+            for idx, t in enumerate(tensors):
+                assert t.is_contiguous(
+                    memory_format=torch.channels_last
+                ), f"Tensor {idx} is not channels_last-contiguous"
+            cp_tensors = [cp.asarray(t.detach()) for t in tensors]
+            self.kernel(self.launch_params.grid, self.launch_params.block, cp_tensors)
+        except Exception as e:
+            raise ValueError(f"Error in kernel {self}") from e
 
     def __call__(self, *tensors):
         self.launch(*tensors)
+
+    def __repr__(self) -> str:
+        return f"{self.kernel_name} {self.params} {self.config}"

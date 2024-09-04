@@ -33,7 +33,8 @@ class Conv2dGw8(nn.Conv2d):
             groups=conv2d.groups,
             bias=conv2d.bias is not None,
             device=conv2d.weight.device,
-        )
+            dtype=torch.float16,
+        ).to(memory_format=torch.channels_last)
         module.weight.data.copy_(conv2d.weight)
         if conv2d.bias is not None:
             module.bias.data.copy_(conv2d.bias)

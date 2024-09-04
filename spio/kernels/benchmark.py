@@ -47,14 +47,14 @@ class BenchmarkResult:
         tflop_s = "TFLOP/s"
         eff_bw_gb_s = "Eff BW[GB/s]"
         idx = "Idx"
-        print(f"[{idx:4s}] {config:70s} {time:8s} {tflop_s:8s} {eff_bw_gb_s:8s}")
+        print(f"[{idx:5s}] {config:90s} {time:8s} {tflop_s:8s} {eff_bw_gb_s:8s}")
 
     def print(self, best=False):
         idx = str(self.kernel_idx)
         if best:
             idx = f"{idx} *"
         print(
-            f"[{idx:4s}] {str(self.config):70s} {self.time_ms:8.3f} {self.tflop_s:8.3f} {self.eff_bw_gb_s:8.3f}"
+            f"[{idx:5s}] {str(self.config):90s} {self.time_ms:8.3f} {self.tflop_s:8.3f} {self.eff_bw_gb_s:8.3f}"
         )
 
     def calculate_performance(self, gmacs: int, gbytes: int):

@@ -13,6 +13,11 @@ def test_kernel_conv2d_gw8():
         run_kernel_test(Conv2dGw8Kernel, params)
 
 
+def test_kernel_conv2d_gw8_wgrad_sanity():
+    params = Conv2dGw8Params(N=4, C=64, H=16, W=32, padding=1, R=3, S=3)
+    run_grad_kernel_test(Conv2dGw8WgradKernel, params)
+
+
 def test_kernel_conv2d_gw8_wgrad():
     for params in _get_test_params():
         run_grad_kernel_test(Conv2dGw8WgradKernel, params)
