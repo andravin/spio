@@ -67,13 +67,20 @@ class Conv2dGw8Kernel(Kernel):
 
     @classmethod
     def dgrad_kernel(
-        cls, params: Conv2dGw8Params, args, config: Conv2dGw8Config = None
+        cls,
+        params: Conv2dGw8Params,
+        args,
+        config: Conv2dGw8Config = None,
     ):
         return cls._dgrad_kernel_cache.get(cls, params, args, config=config, igrad=True)
 
     @classmethod
     def get_kernel(
-        cls, params: Conv2dGw8Params, args, config: Conv2dGw8Config = None, igrad=False
+        cls,
+        params: Conv2dGw8Params,
+        args,
+        config: Conv2dGw8Config = None,
+        igrad=False,
     ):
         if igrad:
             return cls.dgrad_kernel(params, args, config=config)

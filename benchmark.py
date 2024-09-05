@@ -35,6 +35,7 @@ parser.add_argument("--num-iters", type=int, default=100)
 parser.add_argument("--depth", type=int, default=1)
 parser.add_argument("--benchmark-torch", action="store_true")
 parser.add_argument("--skip-kernels", action="store_true")
+parser.add_argument("--device", type=str, default="cuda")
 args = parser.parse_args()
 
 # This is essential for torch kernel performance:
@@ -62,6 +63,7 @@ if not args.skip_kernels:
         configs=configs,
         warmup=args.warmup,
         num_iters=args.num_iters,
+        device=args.device,
         **args.kernel_kwargs,
     )
 
@@ -78,6 +80,7 @@ if args.benchmark_torch:
             params,
             warmup=args.warmup,
             num_iters=args.num_iters,
+            device=args.device,
         )
     else:
         torch_func = reflection.reference
@@ -89,4 +92,5 @@ if args.benchmark_torch:
             torch_args_lst,
             warmup=args.warmup,
             num_iters=args.num_iters,
+            device=args.device
         )

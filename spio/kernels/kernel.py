@@ -7,6 +7,7 @@ from ..generators import generate
 from ..compiler import compile_kernel, load_kernel
 from .launch_params import LaunchParams
 from .code_directory import GenDirectory
+from .kernel_util import get_first_device_in_args
 
 
 class Kernel:
@@ -63,19 +64,32 @@ class Kernel:
         )
         self.cubin_file = None
 
-    def launch(self, *tensors):
+    def launch(self, *args):
         try:
-            for idx, t in enumerate(tensors):
-                assert t.is_contiguous(
-                    memory_format=torch.channels_last
-                ), f"Tensor {idx} is not channels_last-contiguous"
-            cp_tensors = [cp.asarray(t.detach()) for t in tensors]
-            self.kernel(self.launch_params.grid, self.launch_params.block, cp_tensors)
+            device = get_first_device_in_args(args)
+            _check_args(args, device)
+            cp_args = _detach_cupy_tensors(args)
+            with torch.device(device):
+                self.kernel(self.launch_params.grid, self.launch_params.block, cp_args)
         except Exception as e:
             raise ValueError(f"Error in kernel {self}") from e
 
-    def __call__(self, *tensors):
-        self.launch(*tensors)
+    def __call__(self, *args):
+        self.launch(*args)
 
     def __repr__(self) -> str:
         return f"{self.kernel_name} {self.params} {self.config}"
+
+
+def _check_args(args, device):
+    """Ensure that all tensor arguments are on the same device and are channels_last contiguous."""
+    for arg in args:
+        if isinstance(arg, torch.Tensor):
+            assert arg.is_contiguous(
+                memory_format=torch.channels_last
+            ), f"Not all tensors arguments are channels_last contiguous: {args}"
+        assert device == arg.device, f"Not all tensor arguments are on the same device: {args}"
+
+
+def _detach_cupy_tensors(args):
+    return [cp.asarray(t.detach()) if isinstance(t, torch.Tensor) else t for t in args]

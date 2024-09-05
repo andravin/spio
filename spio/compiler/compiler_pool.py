@@ -18,7 +18,7 @@ debug = ContextVar("debug", default=default_debug)
 pool = Pool(workers)
 
 
-def compile_kernel_configs(kernel_cls, params, configs=None, **kernel_kwargs):
+def compile_kernel_configs(kernel_cls, params, configs=None, arch=None, **kernel_kwargs):
     """Compile multiple kernel configurations for a given kernel class.
 
     Use the given list of kernel configuratio objects, or enumerate all valid configurations if none are given.
@@ -27,12 +27,12 @@ def compile_kernel_configs(kernel_cls, params, configs=None, **kernel_kwargs):
         configs = list(kernel_cls.configs(params))
     kernels = [kernel_cls(params, config=config, **kernel_kwargs) for config in configs]
     compiler_args = [kernel.compiler_args for kernel in kernels]
-    _compile_kernels(compiler_args)
+    _compile_kernels(compiler_args, arch=arch)
     return kernels
 
 
-def _compile_kernels(compiler_args):
+def _compile_kernels(compiler_args, arch=None):
     """Compile multiple kernels in parallel."""
-    ck_with_args = partial(compile_kernel, lineinfo=lineinfo.get(), debug=debug.get())
+    ck_with_args = partial(compile_kernel, arch=arch, lineinfo=lineinfo.get(), debug=debug.get())
     async_result = pool.starmap_async(ck_with_args, compiler_args)
     return async_result.get()

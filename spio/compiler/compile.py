@@ -43,6 +43,7 @@ def compile(
     device_debug=False,
     lineinfo=False,
 ):
+    arch = _sm_from_arch(arch)
     nvcc = nvcc_full_path()
     includes = [f"-I{path}" for path in includes]
     args = [nvcc] + includes
@@ -64,3 +65,10 @@ def compile(
     r = subprocess.run(args)
     r.check_returncode()
     return r
+
+
+def _sm_from_arch(arch):
+    if isinstance(arch, tuple):
+        return f"sm_{arch[0]}{arch[1]}"
+    else:
+        return arch

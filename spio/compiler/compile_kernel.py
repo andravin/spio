@@ -2,7 +2,7 @@ from tempfile import NamedTemporaryFile
 from typing import Tuple
 
 import cupy as cp
-
+import torch
 from .paths import (
     spio_cubins_path,
     spio_include_path,
@@ -12,19 +12,22 @@ from .paths import (
 
 from .compile import compile
 
-ADA_ARCH = "sm_89"
-
 
 def compile_kernel(
     kernel_name=None,
     source_file_name=None,
     includes=[],
     output_file=None,
-    arch=ADA_ARCH,
+    arch=None,
     debug=False,
     lineinfo=False,
     test_kernel=False,
 ):
+    assert arch is not None, "Must specify GPU architecture for kernel compilation."
+    if arch[0] < 8:
+        raise ValueError(
+            "Minimum supported GPU compute capability is sm_80 (Ampere or newer)."
+        )
     kernel_path = spio_test_kernels_path() if test_kernel else spio_kernels_path()
     cuda_source_file = kernel_path / source_file_name
     includes = includes + [spio_include_path()]
@@ -51,11 +54,12 @@ def compile_and_load_kernel(
     source_file_name=None,
     includes=[],
     output_file=None,
-    arch=ADA_ARCH,
+    device=None,
     debug=False,
     lineinfo=False,
     test_kernel=False,
 ):
+    arch = torch.cuda.get_device_capability(device)
     if source_file_name is None:
         source_file_name = f"{kernel_name}.cu"
     with NamedTemporaryFile() as cubin_file:

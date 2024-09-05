@@ -7,7 +7,7 @@ import torch
 from ..compiler import compile_kernel_configs
 
 
-def benchmark_kernel(
+def _benchmark_kernel(
     kernel, args_lst, warmup: int = 10, num_iters: int = 10, kernel_kwargs={}
 ) -> float:
     total_iters = warmup + num_iters
@@ -63,31 +63,36 @@ class BenchmarkResult:
 
 
 def benchmark(
-    kernel_cls, params, kernel_args_lst, configs=None, warmup=10, num_iters=10, **kwargs
+    kernel_cls,
+    params,
+    kernel_args_lst,
+    configs=None,
+    warmup=10,
+    num_iters=10,
+    device="cuda",
+    **kwargs,
 ) -> BenchmarkResult:
-    best = BenchmarkResult(time_ms=float("inf"))
-    print(f"{kernel_cls.__name__}{kwargs} {params}")
-
+    arch = torch.cuda.get_device_capability(device)
     if configs is None:
         configs = list(kernel_cls.configs(params))
     kernels = compile_kernel_configs(
-        kernel_cls, params, configs=configs, **kwargs
+        kernel_cls, params, configs=configs, arch=arch, **kwargs
     )
-
     bytes = kernel_cls.bytes_read(params, **kwargs) + kernel_cls.bytes_written(
         params, **kwargs
     )
     macs = kernel_cls.macs(params, **kwargs)
     gmacs = macs / 1e9
     gbytes = bytes / 1e9
-
     num_args = len(kernel_args_lst)
 
+    print(f"Benchmarking {kernel_cls.__name__}{kwargs} {params}")
+    best = BenchmarkResult(time_ms=float("inf"))
     BenchmarkResult.header()
     for idx, (kernel, config) in enumerate(zip(kernels, configs)):
         kernel.load()
         r = BenchmarkResult(config=config, kernel_idx=idx, kernel=kernel)
-        r.time_ms = benchmark_kernel(
+        r.time_ms = _benchmark_kernel(
             kernel, kernel_args_lst, warmup=warmup, num_iters=num_iters
         )
         r.calculate_performance(gmacs, gbytes)
@@ -153,6 +158,7 @@ def benchmark_grad_reference(
     params,
     warmup=10,
     num_iters=10,
+    device="cuda",
 ):
     bytes = kernel_cls.bytes_read(params) + kernel_cls.bytes_written(params)
     macs = kernel_cls.macs(params)
@@ -164,6 +170,7 @@ def benchmark_grad_reference(
         params,
         warmup=warmup,
         num_iters=num_iters,
+        device=device,
     )
     result = BenchmarkResult(time_ms=time_ms)
     result.calculate_performance(gmacs, gbytes)
@@ -176,11 +183,12 @@ def _benchmark_grad_reference(
     params,
     warmup=10,
     num_iters=10,
+    device="cuda"
 ):
     name = get_full_name(reflection.reference)
     grad_input_name_str = "_".join([grad.name for grad in reflection.grad_input_names])
     print(f"{name} grad_{grad_input_name_str} {params}")
-    args = reflection.make_args(params, training=True)
+    args = reflection.make_args(params, device=device, training=True)
     reference_args = reflection.arrange_reference_args(args)
     grad_outputs = reflection.get_grad_output_args(args)
     grad_inputs = reflection.get_differentiable_input_args(args)

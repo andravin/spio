@@ -5,13 +5,14 @@ from ..util.close import assert_all_close
 from ..reflection import get_kernel_reflection, get_function_reflection
 
 
-def run_kernel_test(kernel_cls, params, **kernel_kwargs):
+def run_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
+    arch = torch.cuda.get_device_capability(device)
     reflection = get_kernel_reflection(kernel_cls, **kernel_kwargs)
-    args = reflection.make_args(params)
+    args = reflection.make_args(params, device=device)
     kernel_args = reflection.arrange_kernel_args(args)
     reference_args = reflection.arrange_reference_args(args)
     torch_output = reflection.reference(*reference_args, **params.kwargs)
-    kernels = compile_kernel_configs(kernel_cls, params, **reflection.kernel_kwargs)
+    kernels = compile_kernel_configs(kernel_cls, params, arch=arch, **reflection.kernel_kwargs)
     for kernel in kernels:
         kernel.load()
         reflection.zero_args(args)
@@ -21,9 +22,10 @@ def run_kernel_test(kernel_cls, params, **kernel_kwargs):
         assert_all_close(output, torch_output, msg=str(kernel))
 
 
-def run_grad_kernel_test(kernel_cls, params, **kernel_kwargs):
+def run_grad_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
+    arch = torch.cuda.get_device_capability(device)
     reflection = get_kernel_reflection(kernel_cls, **kernel_kwargs)
-    args = reflection.make_args(params, training=True)
+    args = reflection.make_args(params, device=device, training=True)
     reference_args = reflection.arrange_reference_args(args)
     grad_outputs = reflection.get_grad_output_args(args)
     function = reflection.reference
@@ -44,7 +46,7 @@ def run_grad_kernel_test(kernel_cls, params, **kernel_kwargs):
         for arg in reflection.arrange_kernel_args(args)
         if isinstance(arg, torch.Tensor)
     ]
-    kernels = compile_kernel_configs(kernel_cls, params, **kernel_kwargs)
+    kernels = compile_kernel_configs(kernel_cls, params, arch=arch, **kernel_kwargs)
     for kernel in kernels:
         kernel.load()
         reflection.zero_args(args)
@@ -55,9 +57,9 @@ def run_grad_kernel_test(kernel_cls, params, **kernel_kwargs):
             assert_all_close(grad, ref_grad, msg=str(kernel))
 
 
-def run_function_test(function, params):
+def run_function_test(function, params, device="cuda"):
     reflection = get_function_reflection(function)
-    args = reflection.make_args(params)
+    args = reflection.make_args(params, device=device)
     function_args = reflection.arrange_function_args(args)
     reference_args = reflection.arrange_reference_args(args)
     output = function(*function_args, **params.kwargs)
@@ -66,9 +68,9 @@ def run_function_test(function, params):
     assert_all_close(output, torch_outputs, msg=str(params))
 
 
-def run_grad_function_test(function, params):
+def run_grad_function_test(function, params, device="cuda"):
     reflection = get_function_reflection(function)
-    args = reflection.make_args(params, training=True)
+    args = reflection.make_args(params, device=device, training=True)
     function_args = reflection.arrange_function_args(args)
     reference_args = reflection.arrange_reference_args(args)
     output = function(*function_args, **params.kwargs)
