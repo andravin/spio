@@ -34,6 +34,7 @@ namespace spio
 
         __device__ unsigned *array() { return reinterpret_cast<unsigned *>(_data); }
         __device__ const unsigned *array() const { return reinterpret_cast<unsigned *>(_data); }
+
     private:
         __half2 _data[NUM_FRAGMENTS];
     };
@@ -44,7 +45,7 @@ namespace spio
     class _MMA_F32
     {
     public:
-        __device__ constexpr int size() const { return NUM_FRAGMENTS; }
+        static __device__ constexpr int size() { return NUM_FRAGMENTS; }
 
         __device__ float2 &fragment(int idx) { return _data[idx]; }
         __device__ float2 fragment(int idx) const { return _data[idx]; }
@@ -69,6 +70,23 @@ namespace spio
             for (int idx = 0; idx < NUM_FRAGMENTS; ++idx)
             {
                 _data[idx] = make_float2(0, 0);
+            }
+        }
+
+        __device__ void fill(float2 value)
+        {
+            for (int idx = 0; idx < NUM_FRAGMENTS; ++idx)
+            {
+                _data[idx] = value;
+            }
+        }
+
+        __device__ void add(float2 value)
+        {
+            for (int idx = 0; idx < NUM_FRAGMENTS; ++idx)
+            {
+                _data[idx].x += value.x;
+                _data[idx].y += value.y;
             }
         }
 

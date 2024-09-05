@@ -15,9 +15,9 @@ def transform(model):
                 if Conv2dGw8.match(module):
                     spio_module = Conv2dGw8.from_conv2d(module)
                     _replace_module(traced, n, spio_module)
-                    print(
-                        f"replace: target: {n.target} op:{n.op} module: {module} with {spio_module}"
-                    )
+                    # print(
+                    #     f"replace: target: {n.target} op:{n.op} module: {module} with {spio_module}"
+                    # )
     traced.recompile()
     traced.delete_all_unused_submodules()
     traced.recompile()
