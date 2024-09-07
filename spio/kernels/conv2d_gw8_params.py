@@ -13,15 +13,26 @@ class Conv2dGw8Params:
     R: int = 3
     S: int = 3
     group_width: int = 8
+    has_bias: bool = False
 
     @staticmethod
-    def from_tensors(input, weight, padding=1):
+    def from_tensors(input, weight, bias, padding=1):
         assert input.dtype == torch.float16
         assert weight.dtype == torch.float16
+        assert bias is None or (len(bias.shape) == 1 and bias.shape[0] == weight.shape[0])
         N, C, H, W = input.shape
         K, group_width, R, S = weight.shape
+        has_bias = bias is not None
         params = Conv2dGw8Params(
-            N=N, C=C, H=H, W=W, R=R, S=S, padding=padding, group_width=group_width
+            N=N,
+            C=C,
+            H=H,
+            W=W,
+            R=R,
+            S=S,
+            padding=padding,
+            group_width=group_width,
+            has_bias=has_bias,
         )
         params.validate()
         return params
@@ -96,19 +107,24 @@ class Conv2dGw8Params:
     @property
     def weight_shape(self):
         return (self.C, self.group_width, self.R, self.S)
-    
+
+    @property
+    def bias_shape(self):
+        return (self.C,)
+
     @property
     def wgrad_shape(self):
         return self.weight_shape
-    
+
     @property
     def deltas_shape(self):
         return self.output_shape
-    
+
     @property
     def igrad_shape(self):
         return self.input_shape
 
+    # TODO move this method to the Reflection class.
     @property
     def kwargs(self):
         return dict(stride=1, padding=self.padding, groups=self.groups)

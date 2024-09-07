@@ -84,13 +84,13 @@ class Kernel:
 def _check_args(args, device):
     """Ensure that all tensor arguments are on the same device and are channels_last contiguous."""
     for arg in args:
-        if isinstance(arg, torch.Tensor):
-            assert arg.is_contiguous(
+        if isinstance(arg, torch.Tensor) and arg.numel() > 0:
+            assert (len(arg.shape) != 4) or arg.is_contiguous(
                 memory_format=torch.channels_last
             ), f"Not all tensors arguments are channels_last contiguous: {args}"
-        assert (
-            device == arg.device
-        ), f"Not all tensor arguments are on the same device: {args}"
+            assert (
+                device == arg.device
+            ), f"Not all tensor arguments are on the same device: {args}"
 
 
 def _detach_cupy_tensors(args):

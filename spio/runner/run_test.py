@@ -41,11 +41,7 @@ def run_grad_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
         for idx, grad_input in enumerate(reflection.grad_input_names)
     }
 
-    kernel_args = [
-        arg.detach()
-        for arg in reflection.arrange_kernel_args(args)
-        if isinstance(arg, torch.Tensor)
-    ]
+    kernel_args = reflection.arrange_kernel_args(args)
     kernels = compile_kernel_configs(kernel_cls, params, arch=arch, **kernel_kwargs)
     for kernel in kernels:
         kernel.load()
@@ -76,7 +72,7 @@ def run_grad_function_test(function, params, device="cuda"):
     output = function(*function_args, **params.kwargs)
     float_args = [a.float() if a is not None else None for a in reference_args]
     torch_outputs = reflection.reference(*float_args, **params.kwargs)
-    deltas = reflection.make_deltas(params).values()
+    deltas = list(reflection.make_deltas(params).values())
     float_deltas = [delta.float() for delta in deltas]
     for idx, (arg, float_arg) in enumerate(zip(function_args, float_args)):
         if arg is not None:

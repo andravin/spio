@@ -109,6 +109,7 @@ class Conv2dGw8Kernel(Kernel):
 
         # Derived parameters
         C8 = C // 8
+        C2 = C // 2
         GROUPS = params.groups
 
         # Tiles
@@ -133,6 +134,8 @@ class Conv2dGw8Kernel(Kernel):
 
         kernel_name = "spio_conv2d_gw8_fprop" if not igrad else "spio_conv2d_gw8_dgrad"
 
+        kernel_has_bias = params.has_bias and not igrad
+
         specs = [
             MacroSpec(dict(SPIO_CONV_KERNEL=kernel_name)),
             ParamsSpec(
@@ -147,13 +150,15 @@ class Conv2dGw8Kernel(Kernel):
                     threads=THREADS,
                 ),
             ),
-            ParamsSpec("Mode", dict(igrad=igrad)),
+            ParamsSpec("Mode", dict(igrad=igrad, has_bias=kernel_has_bias)),
             IndexSpec(
                 "BlockIdx",
                 dict(n=BLOCKS_N, p=BLOCKS_P, q=BLOCKS_Q, c8=BLOCKS_C8),
             ),
             IndexSpec("InputIdx", dict(n=BLOCK_N, x=BLOCK_W, c8=BLOCK_C8)),
             TensorSpec("Input", "const uint4", dict(n=N, y=H, x=W, c8=C8)),
+            TensorSpec("Bias", "const __half2", dict(k8=C8, k2=4)),
+            IndexSpec("BiasIdx", dict(k8=BLOCK_C8, lane=32)),
             TensorSpec("Output", "uint4", dict(n=N, p=P, q=Q, k8=C8)),
             TensorSpec("Weights", "const uint4", dict(k=C, r=R, s=S)),
             TensorSpec("SmemWeights", "uint4", dict(k=BLOCK_C, r=R, s=S)),

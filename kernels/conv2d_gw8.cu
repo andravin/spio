@@ -18,6 +18,7 @@ namespace
         return a > b ? a : b;
     }
 
+    /// @brief igrad use the transpose of the weights.
     __device__ inline uint4 ld_weights_x4(const void *p)
     {
         if constexpr (Mode::igrad)
@@ -30,6 +31,7 @@ namespace
         }
     }
 
+    /// @brief igrad use the transpose of the weights.
     __device__ inline unsigned ld_weights_x1(const void *p)
     {
         if constexpr (Mode::igrad)
@@ -42,6 +44,7 @@ namespace
         }
     }
 
+    /// @brief igrad uses the transpose of the weights.
     __device__ inline unsigned get_weight(const WeightsReg &wgts, int r, int s)
     {
         if constexpr (Mode::igrad)
@@ -59,8 +62,9 @@ extern "C"
 {
     __global__ void SPIO_CONV_KERNEL(
         uint4 *__restrict__ dst,
-        const uint4 *__restrict__ src,
-        const uint4 *__restrict__ weights)
+        const uint4 *__restrict__ input_ptr,
+        const uint4 *__restrict__ weights_ptr,
+        const __half2 *__restrict__ bias_ptr)
     {
         //
         // Define the shared memory buffers.
@@ -86,7 +90,7 @@ extern "C"
         //
 
         // Weights to smem.
-        auto weight = Weights(weights).k(block_c);
+        auto weight = Weights(weights_ptr).k(block_c);
 
         // Weights-smem to registers.
         ConstSmemWeights smem_weights_load(smem_weights_buf);
@@ -96,7 +100,7 @@ extern "C"
         }
 
         // Input to smem.
-        Input input(src);
+        Input input(input_ptr);
         SmemInput smem_input_store(smem_input_buf);
         bool thread_loads_input;
         int zfill;
@@ -223,13 +227,24 @@ extern "C"
         {
             wgts.reg(rs) = ld_weights_x1(smem_weights_load.rs(rs).get());
         }
+
+        // Fetch the bias
+        float2 bias_f32 = make_float2(0, 0);
+        if constexpr (Mode::has_bias)
+        {
+            BiasIdx idx(threadIdx.x);
+            int lane_k2 = Acc::k2(idx.lane());
+            __half2 bias = *Bias(bias_ptr).k8(block_c8 + idx.k8()).k2(lane_k2);
+            bias_f32 = __half22float2(bias);
+        }
+
         //
         // Declare the accumulators.
         //
         Acc acc[Weights::R];
-        for (int p = 0; p < Weights::R; p++)
+        for (int p = 0; p < Weights::R; ++p)
         {
-            acc[p].zero();
+            acc[p].fill(bias_f32);
         }
 
         //
@@ -286,7 +301,7 @@ extern "C"
         // Store the first output row to shared memory.
         *smem_output_store_qn0 = acc[Weights::R - 1].to_half2(0);
         *smem_output_store_qn8 = acc[Weights::R - 1].to_half2(1);
-        acc[Weights::R - 1].zero();
+        acc[Weights::R - 1].fill(bias_f32);
 
         // If the first output row is inbounds store it to global memory
         __syncthreads();
@@ -341,13 +356,13 @@ extern "C"
                             mma_m16_n8_k8(acc[p % Weights::R].vec4(), in.reg2(), get_weight(wgts, r, s), acc[p % Weights::R].vec4());
                         }
                     }
-                    int store_p = iter + phase - Weights::R;
                     *smem_output_store_qn0 = acc[phase].to_half2(0);
                     *smem_output_store_qn8 = acc[phase].to_half2(1);
-                    acc[phase].zero();
+                    acc[phase].fill(bias_f32);
                     __syncthreads();
 
                     // If the current output row is inbounds store it.
+                    int store_p = iter + phase - Weights::R;
                     if (store_p < num_p && thread_stores_output)
                     {
                         *output = *smem_output_load;

@@ -22,7 +22,7 @@ class ConvGw8Function(torch.autograd.Function):
         groups=1,
         kernel_config=None,
     ):
-        params = Conv2dGw8Params.from_tensors(input, weight, padding=padding)
+        params = Conv2dGw8Params.from_tensors(input, weight, bias, padding=padding)
         ctx.save_for_backward(input, weight, bias)
         ctx.params = params
         output = torch.empty(
@@ -31,11 +31,11 @@ class ConvGw8Function(torch.autograd.Function):
             dtype=torch.float16,
             memory_format=torch.channels_last,
         )
-        args = (output, input, weight)
+        if bias is None:
+            bias = _none(input.device)
+        args = (output, input, weight, bias)
         kernel = Conv2dGw8Kernel.fprop_kernel(params, args, config=kernel_config)
         kernel(*args)
-        if bias is not None:
-            output += bias.view(-1, 1, 1)
         return output
 
     @staticmethod
@@ -50,7 +50,7 @@ class ConvGw8Function(torch.autograd.Function):
 
         if ctx.needs_input_grad[0]:
             dgrad = torch.empty_like(input)
-            args = (dgrad, grad_output, weight)
+            args = (dgrad, grad_output, weight, _none(input.device))
             dgrad_kernel = Conv2dGw8Kernel.dgrad_kernel(params, args)
             dgrad_kernel(*args)
 
@@ -70,3 +70,11 @@ class ConvGw8Function(torch.autograd.Function):
 
 def conv2d_gw8(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1):
     return ConvGw8Function.apply(input, weight, bias, stride, padding, dilation, groups)
+
+
+def _none(device):
+    """Return an empty tensor.
+
+    CuPy does not support None arguments, so we use this function to pass an empty tensor instead.
+    """
+    return torch.tensor([], device=device, dtype=torch.float16, requires_grad=False)

@@ -6,6 +6,7 @@ import torch
 from frozendict import frozendict
 
 
+# TODO combine initialize properties into a single field (empty, zero, one, none)
 @dataclass
 class ArgInfo:
     dtype: torch.dtype
@@ -15,6 +16,8 @@ class ArgInfo:
     zero: bool = False
     memory_format: torch.memory_format = torch.channels_last
     grad_of: str = None
+    one: bool = False
+    none: bool = False
 
 
 @dataclass
@@ -39,6 +42,9 @@ class KernelReflection:
     def _shape(self, params, name):
         return getattr(params, f"{name}_shape")
 
+    def _none(self):
+        return None
+
     def _empty(self, params: Any, name: str, info: ArgInfo, device: str):
         return torch.empty(
             self._shape(params, name),
@@ -48,34 +54,33 @@ class KernelReflection:
         )
 
     def _zero(self, params: Any, name: str, info: ArgInfo, device: str):
-        return torch.zeros(
-            self._shape(params, name), dtype=info.dtype, device=device
-        ).to(
-            memory_format=info.memory_format,
-        )
+        t = torch.zeros(self._shape(params, name), dtype=info.dtype, device=device)
+        return _to(t, memory_format=info.memory_format)
 
     def _ones(self, params: Any, name: str, info: ArgInfo, device: str):
-        return torch.ones(
-            self._shape(params, name), dtype=info.dtype, device=device
-        ).to(
-            memory_format=info.memory_format,
-        )
+        t = torch.ones(self._shape(params, name), dtype=info.dtype, device=device)
+        return _to(t, memory_format=info.memory_format)
 
     def _randn(self, params: Any, name: str, info: ArgInfo, device: str):
-        return torch.randn(
-            self._shape(params, name), dtype=info.dtype, device=device
-        ).to(memory_format=info.memory_format)
+        shape = self._shape(params, name)
+        t = torch.randn(shape, dtype=info.dtype, device=device)
+        return _to(t, memory_format=info.memory_format)
 
     def make_args(self, params, training=False, device="cuda"):
         args = dict()
         for name, info in self.arginfo.items():
-            if info.empty:
+            has_arg = _has_arg(params, name)
+            if not has_arg or info.none:
+                tensor = self._none()
+            elif info.empty:
                 tensor = self._empty(params, name, info, device)
             elif info.zero:
                 tensor = self._zero(params, name, info, device)
+            elif info.one:
+                tensor = self._ones(params, name, info, device)
             else:
                 tensor = self._randn(params, name, info, device)
-            if info.requires_grad and training:
+            if info.requires_grad and training and has_arg:
                 tensor.requires_grad = True
             args[name] = tensor
         return args
@@ -91,10 +96,16 @@ class KernelReflection:
         return [args[name] for name in self.kernel_args]
 
     def arrange_function_args(self, args) -> List[torch.Tensor]:
-        return [args[name] for name in self.function_args]
+        return [
+            args[name] if args[name] is None or args[name].numel() > 0 else None
+            for name in self.function_args
+        ]
 
     def arrange_reference_args(self, args) -> List[torch.Tensor]:
-        return [args[name] for name in self.reference_args]
+        return [
+            args[name] if args[name] is None or args[name].numel() > 0 else None
+            for name in self.reference_args
+        ]
 
     def zero_args(self, args):
         for name, tensor in args.items():
@@ -187,3 +198,26 @@ def get_kernel_reflection(kernel_cls: Any, **kernel_kwargs) -> KernelReflection:
 
 def get_function_reflection(function: Any) -> KernelReflection:
     return reflection_function_registry[function]
+
+
+def _has_arg(params, name):
+    return getattr(params, f"has_{name}", True)
+
+
+def _to(tensor, memory_format=None):
+    """Normalize the memory format of a tensor.
+
+    channels_last is only supported for 4D tensors.
+    We leave 1D tensors unchanged.
+
+      Otherwise, we raise an error if the tensor is not 4D.
+    """
+    if tensor.dim() < 2:
+        # You didn't really mean it.
+        return tensor
+
+    if memory_format == torch.channels_last and tensor.dim() != 4:
+        # You meant it, but it's not supported.
+        raise ValueError("channels_last memory format is only supported for 4D tensors")
+
+    return tensor.to(memory_format=memory_format)
