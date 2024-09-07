@@ -3,7 +3,7 @@ import torch
 from spio.kernels import Conv2dGw8Kernel, Conv2dGw8WgradKernel
 from spio.functional import conv2d_gw8
 
-from .reflection import KernelReflection, ArgInfo, register_reflection
+from .reflection import KernelReflection, ArgInfo, register_reflection, Init
 
 
 def register_conv2d_gw8_reflections():
@@ -12,10 +12,10 @@ def register_conv2d_gw8_reflections():
             kernel_cls=Conv2dGw8Kernel,
             function=conv2d_gw8,
             arginfo=dict(
-                output=ArgInfo(torch.float16, output=True, empty=True),
+                output=ArgInfo(torch.float16, output=True, init=Init.EMPTY),
                 input=ArgInfo(torch.float16, requires_grad=True),
                 weight=ArgInfo(torch.float16, requires_grad=True),
-                bias=ArgInfo(torch.float16, requires_grad=True, memory_format=None),
+                bias=ArgInfo(torch.float16, requires_grad=True),
             ),
             kernel_args=["output", "input", "weight", "bias"],
             function_args=["input", "weight", "bias"],
@@ -32,12 +32,12 @@ def register_conv2d_gw8_reflections():
             arginfo=dict(
                 input=ArgInfo(torch.float16, requires_grad=True),
                 weight=ArgInfo(torch.float16, requires_grad=True),
-                bias=ArgInfo(torch.float16, requires_grad=True, memory_format=None),
-                output=ArgInfo(torch.float16, output=True, empty=True),
-                deltas=ArgInfo(torch.float16, grad_of="output"),
-                wgrad=ArgInfo(torch.float16, zero=True, grad_of="weight"),
+                bias=ArgInfo(torch.float16, requires_grad=True),
+                output=ArgInfo(torch.float16, output=True, init=Init.EMPTY),
+                grad_output=ArgInfo(torch.float16, grad_of="output"),
+                grad_weight=ArgInfo(torch.float16, init=Init.ZERO, grad_of="weight"),
             ),
-            kernel_args=["wgrad", "input", "deltas"],
+            kernel_args=["grad_weight", "input", "grad_output"],
             function_args=None,
             reference=torch.nn.functional.conv2d,
             reference_args=["input", "weight", "bias"],
@@ -52,13 +52,13 @@ def register_conv2d_gw8_reflections():
             arginfo=dict(
                 input=ArgInfo(torch.float16, requires_grad=True),
                 weight=ArgInfo(torch.float16, requires_grad=True),
-                bias=ArgInfo(torch.float16, requires_grad=True, memory_format=None),
-                output=ArgInfo(torch.float16, output=True, empty=True),
-                deltas=ArgInfo(torch.float16, grad_of="output"),
-                igrad=ArgInfo(torch.float16, empty=True, grad_of="input"),
-                none=ArgInfo(torch.float16, none=True),
+                bias=ArgInfo(torch.float16, requires_grad=True),
+                output=ArgInfo(torch.float16, output=True, init=Init.EMPTY),
+                grad_output=ArgInfo(torch.float16, grad_of="output"),
+                grad_input=ArgInfo(torch.float16, init=Init.EMPTY, grad_of="input"),
+                none=ArgInfo(torch.float16, init=Init.NONE),
             ),
-            kernel_args=["igrad", "deltas", "weight", "none"],
+            kernel_args=["grad_input", "grad_output", "weight", "none"],
             reference=torch.nn.functional.conv2d,
             reference_args=["input", "weight", "bias"],
         )

@@ -1,33 +1,73 @@
+"""
+This module provides a reflection system for kernels and functions.
+
+The reflection system is used to define the arguments and properties of a kernel or function.
+Tests and benchmarks use the reflection system to generate arguments for the kernel or function.
+"""
+
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Tuple
 from collections import defaultdict
+from enum import Enum
 
 import torch
 from frozendict import frozendict
 
 
-# TODO combine initialize properties into a single field (empty, zero, one, none)
+class Init(Enum):
+    """Initialization types for arguments."""
+
+    ZERO = 0
+    ONE = 1
+    NONE = 2
+    EMPTY = 3
+    RANDOM = 4
+
+
 @dataclass
 class ArgInfo:
+    """Information about an argument to a kernel or function."""
+
     dtype: torch.dtype
     requires_grad: bool = False
     output: bool = False
-    empty: bool = False
-    zero: bool = False
+    init: Init = Init.RANDOM
     memory_format: torch.memory_format = torch.channels_last
     grad_of: str = None
-    one: bool = False
-    none: bool = False
+
+    @property
+    def zero(self):
+        return self.init == Init.ZERO
+
+    @property
+    def one(self):
+        return self.init == Init.ONE
+
+    @property
+    def none(self):
+        return self.init == Init.NONE
+
+    @property
+    def empty(self):
+        return self.init == Init.EMPTY
+
+    @property
+    def random(self):
+        return self.init == Init.RANDOM
 
 
 @dataclass
 class GradName:
+    """Encode the relationship between a gradient argument and the argument it is the gradient of."""
+
     name: str
     grad_of: str
 
 
 @dataclass
 class KernelReflection:
+    """Reflection information for a kernel or function."""
+
     kernel_cls: Any
     arginfo: Dict[str, ArgInfo]
     kernel_args: List[str]
@@ -40,6 +80,9 @@ class KernelReflection:
     kernel_kwargs: defaultdict[frozendict] = field(default_factory=frozendict)
 
     def _shape(self, params, name):
+        arginfo = self.arginfo[name]
+        if arginfo.grad_of is not None:
+            name = arginfo.grad_of
         return getattr(params, f"{name}_shape")
 
     def _none(self):
@@ -78,14 +121,16 @@ class KernelReflection:
                 tensor = self._zero(params, name, info, device)
             elif info.one:
                 tensor = self._ones(params, name, info, device)
-            else:
+            elif info.random:
                 tensor = self._randn(params, name, info, device)
+            else:
+                raise ValueError(f"Invalid init value for argument {name}: {info.init}")
             if info.requires_grad and training and has_arg:
                 tensor.requires_grad = True
             args[name] = tensor
         return args
 
-    def make_deltas(self, params, device="cuda"):
+    def make_grad_outputs(self, params, device="cuda"):
         args = dict()
         for name, info in self.arginfo.items():
             if info.output:

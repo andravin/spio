@@ -72,13 +72,13 @@ def run_grad_function_test(function, params, device="cuda"):
     output = function(*function_args, **params.kwargs)
     float_args = [a.float() if a is not None else None for a in reference_args]
     torch_outputs = reflection.reference(*float_args, **params.kwargs)
-    deltas = list(reflection.make_deltas(params).values())
-    float_deltas = [delta.float() for delta in deltas]
+    grad_outputs = list(reflection.make_grad_outputs(params).values())
+    float_grad_outputs = [grad_output.float() for grad_output in grad_outputs]
     for idx, (arg, float_arg) in enumerate(zip(function_args, float_args)):
         if arg is not None:
             not_last = idx < len(args) - 1
-            grad = torch.autograd.grad(output, arg, *deltas, retain_graph=not_last)
+            grad = torch.autograd.grad(output, arg, *grad_outputs, retain_graph=not_last)
             torch_grad = torch.autograd.grad(
-                torch_outputs, float_arg, *float_deltas, retain_graph=not_last
+                torch_outputs, float_arg, *float_grad_outputs, retain_graph=not_last
             )
             assert_all_close(grad[0], torch_grad[0], msg=str(params))

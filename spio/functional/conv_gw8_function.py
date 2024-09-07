@@ -49,23 +49,27 @@ class ConvGw8Function(torch.autograd.Function):
         assert weight.dtype == torch.float16
 
         if ctx.needs_input_grad[0]:
-            dgrad = torch.empty_like(input)
-            args = (dgrad, grad_output, weight, _none(input.device))
-            dgrad_kernel = Conv2dGw8Kernel.dgrad_kernel(params, args)
-            dgrad_kernel(*args)
+            grad_input = torch.empty_like(input)
+            args = (grad_input, grad_output, weight, _none(input.device))
+            grad_input_kernel = Conv2dGw8Kernel.grad_input_kernel(params, args)
+            grad_input_kernel(*args)
+        else:
+            grad_input = None
 
         if ctx.needs_input_grad[1]:
-            wgrad = torch.zeros_like(weight)
-            args = (wgrad, input, grad_output)
-            wgrad_kernel = Conv2dGw8WgradKernel.wgrad_kernel(params, args)
-            wgrad_kernel(*args)
+            grad_weight = torch.zeros_like(weight)
+            args = (grad_weight, input, grad_output)
+            grad_weight_kernel = Conv2dGw8WgradKernel.grad_weight_kernel(params, args)
+            grad_weight_kernel(*args)
+        else:
+            grad_weight = None
 
         if bias is not None and ctx.needs_input_grad[2]:
-            bgrad = grad_output.sum(dim=(0, 2, 3))
+            grad_bias = grad_output.sum(dim=(0, 2, 3))
         else:
-            bgrad = None
+            grad_bias = None
 
-        return dgrad, wgrad, bgrad, None, None, None, None
+        return grad_input, grad_weight, grad_bias, None, None, None, None
 
 
 def conv2d_gw8(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1):

@@ -112,18 +112,6 @@ class Conv2dGw8Params:
     def bias_shape(self):
         return (self.C,)
 
-    @property
-    def wgrad_shape(self):
-        return self.weight_shape
-
-    @property
-    def deltas_shape(self):
-        return self.output_shape
-
-    @property
-    def igrad_shape(self):
-        return self.input_shape
-
     # TODO move this method to the Reflection class.
     @property
     def kwargs(self):

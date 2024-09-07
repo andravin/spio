@@ -66,7 +66,7 @@ class Conv2dGw8Kernel(Kernel):
         )
 
     @classmethod
-    def dgrad_kernel(
+    def grad_input_kernel(
         cls,
         params: Conv2dGw8Params,
         args,
@@ -83,7 +83,7 @@ class Conv2dGw8Kernel(Kernel):
         igrad=False,
     ):
         if igrad:
-            return cls.dgrad_kernel(params, args, config=config)
+            return cls.grad_input_kernel(params, args, config=config)
         else:
             return cls.fprop_kernel(params, args, config=config)
 

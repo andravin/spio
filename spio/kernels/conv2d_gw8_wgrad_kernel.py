@@ -89,12 +89,12 @@ class Conv2dGw8WgradKernel(Kernel):
         ]
 
     @classmethod
-    def wgrad_kernel(cls, params: Conv2dGw8Params, args, config=None):
+    def grad_weight_kernel(cls, params: Conv2dGw8Params, args, config=None):
         return cls._kernel_cache.get(cls, params, args, config=config)
 
     @classmethod
     def get_kernel(cls, params: Conv2dGw8Params, args, config=None):
-        return cls.wgrad_kernel(params, args, config=config)
+        return cls.grad_weight_kernel(params, args, config=config)
 
     def __init__(self, params, config=None):
         params.validate()
@@ -241,12 +241,12 @@ class Conv2dGw8WgradKernel(Kernel):
             config=config,
         )
 
-    def __call__(self, wgrad, inputs, deltas):
+    def __call__(self, wgrad, inputs, grad_output):
         # Zero out the wgrad tensor.
         assert inputs.dtype == torch.float16
-        assert deltas.dtype == torch.float16
+        assert grad_output.dtype == torch.float16
         wgrad_f32 = torch.zeros_like(wgrad, dtype=torch.float32)
-        self.launch(wgrad_f32, inputs, deltas)
+        self.launch(wgrad_f32, inputs, grad_output)
         wgrad.copy_(wgrad_f32)
 
     @staticmethod
