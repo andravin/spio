@@ -13,13 +13,38 @@ class BenchmarkResult:
     config: Any = None
     kernel_idx: int = None
     time_ms: float = None
-    tflop_s: float = None
-    eff_bw_gb_s: float = None
+    name: str = None
+
+    def __post_init__(self):
+        """Calculate derived fields.
+
+        Kernel gmacs and gbytes are calculated from the kernel_cls and params
+        and are used to calculate performance."""
+        if self.kernel_kwargs is None:
+            self.kernel_kwargs = {}
+        if self.kernel_cls is not None:
+            macs = self.kernel_cls.macs(self.params, **self.kernel_kwargs)
+            bytes_read = self.kernel_cls.bytes_read(self.params, **self.kernel_kwargs)
+            bytes_written = self.kernel_cls.bytes_written(
+                self.params, **self.kernel_kwargs
+            )
+            bytes = bytes_read + bytes_written
+            self.gmacs = macs / 1e9
+            self.gbytes = bytes / 1e9
+        if self.name is None:
+            if self.kernel_cls is not None:
+                self.name = self.kernel_cls.__name__
+            else:
+                self.name = "Unknown"
 
     @property
     def time_s(self):
         return self.time_ms / 1e3
 
-    def calculate_performance(self, gmacs: int, gbytes: int):
-        self.tflop_s = gmacs / self.time_ms
-        self.eff_bw_gb_s = gbytes / self.time_s
+    @property
+    def tflop_s(self):
+        return self.gmacs / self.time_ms
+
+    @property
+    def eff_bw_gb_s(self):
+        return self.gbytes / self.time_s

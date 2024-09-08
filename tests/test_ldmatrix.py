@@ -4,14 +4,14 @@ The ldmatrix instructions load matrix fragments from shared memory into register
 The matrix fragments can be used with the tensor core matrix multiply instructions in mma.cuh.
 """
 
-import cupy as cp
+import torch
 
 from spio.compiler import compile_and_load_kernel
 
 
 def _row(lane: int) -> int:
     """Return the row loaded by the register in the given lane."""
-    return lane / 4
+    return lane // 4
 
 
 def _col(lane: int) -> int:
@@ -25,10 +25,10 @@ def test_ldmatrix_x1_kernel():
         kernel_name="ldmatrix_x1", source_file_name="ldmatrix.cu", test_kernel=True
     )
 
-    a = cp.arange(8 * 8, dtype=cp.float16).reshape(8, 8)
-    b = cp.zeros((64,), dtype=cp.float16)
+    a = torch.arange(8 * 8, dtype=torch.float16, device="cuda").reshape(8, 8)
+    b = torch.zeros((64,), dtype=torch.float16, device="cuda")
 
-    ldmatrix_kernel((1,), (32,), (b, a))
+    ldmatrix_kernel.launch((1, 1, 1), (32, 1, 1), (b, a))
 
     for lane in range(32):
         row = _row(lane)
@@ -44,10 +44,10 @@ def test_ldmatrix_x2_kernel():
         kernel_name="ldmatrix_x2", source_file_name="ldmatrix.cu", test_kernel=True
     )
 
-    a = cp.arange(16 * 8, dtype=cp.float16).reshape(16, 8)
-    b = cp.zeros((16 * 8,), dtype=cp.float16)
+    a = torch.arange(16 * 8, dtype=torch.float16, device="cuda").reshape(16, 8)
+    b = torch.zeros((16 * 8,), dtype=torch.float16, device="cuda")
 
-    ldmatrix_x2_kernel((1,), (32,), (b, a))
+    ldmatrix_x2_kernel.launch((1, 1, 1), (32, 1, 1), (b, a))
 
     for lane in range(32):
         row = _row(lane)
@@ -64,10 +64,10 @@ def test_ldmatrix_x4_kernel():
         kernel_name="ldmatrix_x4", source_file_name="ldmatrix.cu", test_kernel=True
     )
 
-    a = cp.arange(64 * 8, dtype=cp.float16).reshape(64, 8)
-    b = cp.zeros((64 * 8,), dtype=cp.float16)
+    a = torch.arange(64 * 8, dtype=torch.float16, device="cuda").reshape(64, 8)
+    b = torch.zeros((64 * 8,), dtype=torch.float16, device="cuda")
 
-    ldmatrix_x4_kernel((1,), (32,), (b, a))
+    ldmatrix_x4_kernel.launch((1, 1, 1), (32, 1, 1), (b, a))
 
     for lane in range(32):
         row = _row(lane)
@@ -81,13 +81,15 @@ def test_ldmatrix_x4_kernel():
 def test_ldmatrix_x1_trans_kernel():
     """Compile and run an ldmatrix_x1_trans test kernel."""
     module, ldmatrix_x1_trans_kernel = compile_and_load_kernel(
-        kernel_name="ldmatrix_x1_trans", source_file_name="ldmatrix.cu", test_kernel=True
+        kernel_name="ldmatrix_x1_trans",
+        source_file_name="ldmatrix.cu",
+        test_kernel=True,
     )
 
-    a = cp.arange(8 * 8, dtype=cp.float16).reshape(8, 8)
-    b = cp.zeros((64,), dtype=cp.float16)
+    a = torch.arange(8 * 8, dtype=torch.float16, device="cuda").reshape(8, 8)
+    b = torch.zeros((64,), dtype=torch.float16, device="cuda")
 
-    ldmatrix_x1_trans_kernel((1,), (32,), (b, a))
+    ldmatrix_x1_trans_kernel.launch((1, 1, 1), (32, 1, 1), (b, a))
 
     for lane in range(32):
         row = _row(lane)
@@ -100,13 +102,15 @@ def test_ldmatrix_x1_trans_kernel():
 def test_ldmatrix_x2_trans_kernel():
     """Compile and run an ldmatrix_x2 test kernel."""
     module, ldmatrix_x2_trans_kernel = compile_and_load_kernel(
-        kernel_name="ldmatrix_x2_trans", source_file_name="ldmatrix.cu", test_kernel=True
+        kernel_name="ldmatrix_x2_trans",
+        source_file_name="ldmatrix.cu",
+        test_kernel=True,
     )
 
-    a = cp.arange(16 * 8, dtype=cp.float16).reshape(16, 8)
-    b = cp.zeros((16 * 8,), dtype=cp.float16)
+    a = torch.arange(16 * 8, dtype=torch.float16, device="cuda").reshape(16, 8)
+    b = torch.zeros((16 * 8,), dtype=torch.float16, device="cuda")
 
-    ldmatrix_x2_trans_kernel((1,), (32,), (b, a))
+    ldmatrix_x2_trans_kernel.launch((1, 1, 1), (32, 1, 1), (b, a))
 
     for lane in range(32):
         row = _row(lane)
@@ -120,13 +124,15 @@ def test_ldmatrix_x2_trans_kernel():
 def test_ldmatrix_x4_trans_kernel():
     """Compile and run an ldmatrix_x4_trans test kernel."""
     module, ldmatrix_x4_trans_kernel = compile_and_load_kernel(
-        kernel_name="ldmatrix_x4_trans", source_file_name="ldmatrix.cu", test_kernel=True
+        kernel_name="ldmatrix_x4_trans",
+        source_file_name="ldmatrix.cu",
+        test_kernel=True,
     )
 
-    a = cp.arange(64 * 8, dtype=cp.float16).reshape(64, 8)
-    b = cp.zeros((64 * 8,), dtype=cp.float16)
+    a = torch.arange(64 * 8, dtype=torch.float16, device="cuda").reshape(64, 8)
+    b = torch.zeros((64 * 8,), dtype=torch.float16, device="cuda")
 
-    ldmatrix_x4_trans_kernel((1,), (32,), (b, a))
+    ldmatrix_x4_trans_kernel.launch((1, 1, 1), (32, 1, 1), (b, a))
 
     for lane in range(32):
         row = _row(lane)

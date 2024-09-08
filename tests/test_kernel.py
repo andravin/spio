@@ -1,6 +1,5 @@
 """Unit tests that compile and test CUDA kernels that use tensor cores."""
 
-import cupy as cp
 import torch
 from torch import nn
 
@@ -13,23 +12,18 @@ from spio.generators import (
 )
 from spio.compiler import compile_and_load_kernel
 from spio.kernels import GenDirectory
-from spio.util import divup
-
-
-def _set_printoptions():
-    """Set the CuPy printoptions to show full matrices."""
-    cp.set_printoptions(linewidth=200, threshold=sys.maxsize)
+from spio.util import divup, assert_all_close
 
 
 def test_add_kernel():
     """Compile and run a simple CUDA kernel."""
     module, add_kernel = compile_and_load_kernel(kernel_name="add", test_kernel=True)
 
-    x1 = cp.arange(25, dtype=cp.float32).reshape(5, 5)
-    x2 = cp.arange(25, dtype=cp.float32).reshape(5, 5)
-    y = cp.zeros((5, 5), dtype=cp.float32)
-    add_kernel((5,), (5,), (x1, x2, y))  # grid, block and arguments
-    cp.testing.assert_array_equal(x1 + x2, y)
+    x1 = torch.arange(25, dtype=torch.float32, device="cuda").reshape(5, 5)
+    x2 = torch.arange(25, dtype=torch.float32, device="cuda").reshape(5, 5)
+    y = torch.zeros((5, 5), dtype=torch.float32, device="cuda")
+    add_kernel.launch((5, 1, 1), (5, 1, 1), (x1, x2, y))  # grid, block and arguments
+    assert_all_close(y, x1 + x2)
 
 
 def test_mma_m16_n8_k8_kernel():
@@ -38,52 +32,55 @@ def test_mma_m16_n8_k8_kernel():
         kernel_name="mma_m16_n8_k8", source_file_name="mma.cu", test_kernel=True
     )
 
-    A = cp.zeros((16, 8), dtype=cp.float16)
+    A = torch.zeros((16, 8), dtype=torch.float16, device="cuda")
 
     for i in range(16):
         for k in range(8):
             A[i, k] = (i * 8 + k) % 17
 
-    B = cp.zeros((8, 8), dtype=cp.float16)
+    B = torch.zeros((8, 8), dtype=torch.float16, device="cuda")
     for k in range(8):
         for j in range(8):
             B[k, j] = (k * 8 + j) % 19
 
-    C = cp.zeros((16, 8), dtype=cp.float32)
+    C = torch.zeros((16, 8), dtype=torch.float32, device="cuda")
 
-    B_trans = cp.ascontiguousarray(cp.transpose(B))
-    mma_kernel((1,), (32,), (C, A, B_trans))
+    B_trans = torch.transpose(B, 0, 1).contiguous()
+    mma_kernel.launch((1, 1, 1), (32, 1, 1), (C, A, B_trans))
 
-    C_ref = cp.matmul(A.astype(cp.float32), B.astype(cp.float32))
+    C_ref = torch.matmul(A.float(), B.float())
 
-    cp.testing.assert_array_equal(C_ref, C)
+    assert_all_close(C, C_ref)
 
 
 def test_mma_m16_n8_k16_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k16."""
     module, mma_kernel = compile_and_load_kernel(
-        kernel_name="mma_m16_n8_k16", source_file_name="mma.cu", debug=True, test_kernel=True
+        kernel_name="mma_m16_n8_k16",
+        source_file_name="mma.cu",
+        debug=True,
+        test_kernel=True,
     )
 
-    A = cp.zeros((16, 16), dtype=cp.float16)
+    A = torch.zeros((16, 16), dtype=torch.float16, device="cuda")
 
     for i in range(16):
         for k in range(16):
             A[i, k] = (i * 16 + k) % 17
 
-    B = cp.zeros((16, 8), dtype=cp.float16)
+    B = torch.zeros((16, 8), dtype=torch.float16, device="cuda")
     for k in range(16):
         for j in range(8):
             B[k, j] = (k * 8 + j) % 19
 
-    C = cp.zeros((16, 8), dtype=cp.float32)
+    C = torch.zeros((16, 8), dtype=torch.float32, device="cuda")
 
-    B_trans = cp.ascontiguousarray(cp.transpose(B))
-    mma_kernel((1,), (32,), (C, A, B_trans))
+    B_trans = torch.transpose(B, 0, 1).contiguous()
+    mma_kernel.launch((1, 1, 1), (32, 1, 1), (C, A, B_trans))
 
-    C_ref = cp.matmul(A.astype(cp.float32), B.astype(cp.float32))
+    C_ref = torch.matmul(A.float(), B.float())
 
-    cp.testing.assert_array_equal(C_ref, C)
+    assert_all_close(C, C_ref)
 
 
 def test_conv_group_4_16w_4h_64c():
@@ -228,21 +225,14 @@ def test_conv_group_4_16w_4h_64c():
             memory_format=torch.channels_last
         )
 
-        cp_outputs = cp.asarray(outputs)
-        cp_inputs = cp.asarray(inputs)
-        cp_weights = cp.asarray(conv.weight.detach().type(torch.float16))
-
-        conv_kernel(
-            (BLOCKS,),
-            (THREADS,),
-            (cp_outputs, cp_inputs, cp_weights),
+        conv_kernel.launch(
+            (BLOCKS, 1, 1),
+            (THREADS, 1, 1),
+            (outputs, inputs, conv.weight.detach().half()),
         )
 
         diff = ref_outputs - outputs
-        torch.testing.assert_close(ref_outputs, outputs)
-
-        # _set_printoptions()
-        # print(cp_loaded_input)
+        assert_all_close(outputs, ref_outputs)
 
 
 def test_memcpy_kernel():
@@ -299,12 +289,8 @@ def test_memcpy_kernel():
         memory_format=torch.channels_last
     )
 
-    cp_inputs = cp.asarray(inputs)
-    cp_outputs = cp.asarray(outputs)
+    memcpy_kernel.launch((BLOCKS, 1, 1), (THREADS, 1, 1), (outputs, inputs))
 
-    memcpy_kernel((BLOCKS,), (THREADS,), (cp_outputs, cp_inputs))
-
-    diff = outputs - inputs
     assert torch.equal(outputs, inputs)
 
 
@@ -395,8 +381,5 @@ def test_row_memcpy_kernel():
         memory_format=torch.channels_last
     )
 
-    cp_inputs = cp.asarray(inputs)
-    cp_outputs = cp.asarray(outputs)
-
-    kernel((BLOCKS,), (THREADS,), (cp_outputs, cp_inputs))
+    kernel.launch((BLOCKS, 1, 1), (THREADS, 1, 1), (outputs, inputs))
     assert torch.equal(outputs, inputs)

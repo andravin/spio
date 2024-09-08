@@ -84,14 +84,11 @@ if not args.skip_kernels:
     )
     print("Spio:")
     print(fmt.results(results, sort=True, header=True))
-    print(fmt.result(best_result, best=True))
 
 if args.benchmark_torch:
     if reflection.reference is None:
         print(f"No torch function defined for {args.kernel_class}.")
         sys.exit(1)
-    if not args.skip_kernels:
-        print()
     if reflection.is_grad:
         result = spio.kernels.benchmark_grad_reference(
             reflection,

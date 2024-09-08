@@ -3,6 +3,11 @@ import shutil
 from pathlib import Path
 import subprocess
 
+# from ..cuda.nvrtc import Program, version as nvrtc_version
+from ..cuda.nvrtc_ctypes import Program, version as nvrtc_version
+
+CUDA_RUNTIME_INCLUDE_PATH = "/home/andrew/.local/lib/python3.10/site-packages/nvidia/cuda_runtime/include"
+USE_NVRTC = True
 
 def nvcc_full_path():
     """Return the path to nvcc or raise FileNotFoundError if not found.
@@ -32,8 +37,51 @@ def nvcc_full_path():
     raise FileNotFoundError("Could not find nvcc.")
 
 
-def compile(
-    sources=[],
+def compile(sources, **kwargs):
+    if USE_NVRTC:
+        return compile_with_nvrtc(sources, **kwargs)
+    else:
+        return compile_with_nvcc(sources, **kwargs)
+
+
+
+def compile_with_nvrtc(
+    sources,
+    includes=[],
+    run=False,
+    cubin=False,
+    compile=False,
+    arch=None,
+    output_file=None,
+    device_debug=False,
+    lineinfo=False,
+): 
+    arch = _sm_from_arch(arch)
+    includes = includes + [CUDA_RUNTIME_INCLUDE_PATH]
+    options = []
+    if arch is not None:
+        options.append(f"-arch={arch}")
+    if device_debug:
+        options.append("-G")
+    if lineinfo:
+        options.append("-lineinfo")
+    options += [f"-I{path}" for path in includes]
+
+    with open(sources[0], "r") as f:
+        src = f.read()
+    program = Program(src, "spio.cu")
+    try:
+        program.compile(options)
+    except Exception as e:
+        raise ValueError(f"Compilation error log: {program.log()}") from e
+    cubin = program.cubin()    
+    with open(output_file, "wb") as f:
+        f.write(cubin)
+    return 0
+
+
+def compile_with_nvcc(
+    sources,
     includes=[],
     run=False,
     cubin=False,

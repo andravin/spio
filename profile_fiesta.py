@@ -3,7 +3,6 @@ import sys
 
 import torch
 from torch import nn
-import cupy
 
 import spio
 
@@ -13,7 +12,6 @@ WARMUP_ITERS = 10
 BENCHMARK_ITERS = 1
 TOTAL_ITERS = WARMUP_ITERS + BENCHMARK_ITERS
 CHANNELS = 64
-CUDA_PROFILE = False
 
 
 parser = argparse.ArgumentParser()
@@ -123,23 +121,16 @@ with torch.autocast(device_type="cuda", dtype=torch.float16):
         fwd_bwd(inputs[i])
     print(".. done.")
 
-    if CUDA_PROFILE:
-        # Run the benchmark with a CUDA profiler section.
-        cupy.cuda.runtime.profilerStart()
+    # Run the benchmark with PyTorch.
+    with torch.profiler.profile() as prof:
         for i in range(WARMUP_ITERS, TOTAL_ITERS):
             fwd_bwd(inputs[i])
-        cupy.cuda.runtime.profilerStop()
-    else:
-        # Run the benchmark with PyTorch.
-        with torch.profiler.profile() as prof:
-            for i in range(WARMUP_ITERS, TOTAL_ITERS):
-                fwd_bwd(inputs[i])
-                prof.step()
-        
-        filename = f"fiesta2_gw{args.group_width}_d{args.depth}_c{args.channels}_hw{args.resolution}-{memory_format_name}"
-        if args.compile:
-            filename += "_compiled"
-        if args.spio:
-            filename += "_spio"
-        filename += f".json"
-        prof.export_chrome_trace(filename)
+            prof.step()
+    
+    filename = f"fiesta2_gw{args.group_width}_d{args.depth}_c{args.channels}_hw{args.resolution}-{memory_format_name}"
+    if args.compile:
+        filename += "_compiled"
+    if args.spio:
+        filename += "_spio"
+    filename += f".json"
+    prof.export_chrome_trace(filename)

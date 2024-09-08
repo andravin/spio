@@ -22,7 +22,7 @@ def compile_cpp_tests(extra_cpp_test_files=[]):
     ]
     sources = [str(src_dir / src) for src in CPP_SOURCES] + extra_cpp_test_files
     includes = [str(include) for include in includes]
-    return spio.compiler.compile(sources=sources, includes=includes, run=True)
+    return spio.compiler.compile_with_nvcc(sources=sources, includes=includes, run=True)
 
 
 def test_cpp_tests():

@@ -2,8 +2,6 @@ import torch
 import torch.amp
 from torch.cuda.amp import custom_fwd, custom_bwd
 
-import cupy
-
 from ..kernels import Conv2dGw8Kernel, Conv2dGw8WgradKernel, Conv2dGw8Params
 
 
@@ -79,6 +77,6 @@ def conv2d_gw8(input, weight, bias=None, stride=1, padding=0, dilation=1, groups
 def _none(device):
     """Return an empty tensor.
 
-    CuPy does not support None arguments, so we use this function to pass an empty tensor instead.
+    This might not be necesary now that our spio.cuda.driver.Function.launch supports None arguments.
     """
     return torch.tensor([], device=device, dtype=torch.float16, requires_grad=False)

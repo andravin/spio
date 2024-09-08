@@ -9,7 +9,7 @@ from .benchmark_logger import benchmark_logger
 
 @dataclass(frozen=True)
 class _KernelKey:
-    device: str
+    device_ordinal: int
     params: object
 
 
@@ -20,7 +20,7 @@ class KernelCache:
     def get(self, kernel_cls, params, args, config=None, **kernel_kwargs):
         device = get_first_device_in_args(args)
         if config is None:
-            key = _KernelKey(device=device, params=params)
+            key = _KernelKey(device_ordinal=device.index, params=params)
             best_kernel = self._cache.get(key)
             if best_kernel is None:
                 best_result, best_kernel, results = benchmark(

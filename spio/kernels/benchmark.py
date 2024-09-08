@@ -6,6 +6,7 @@ import torch
 
 from ..compiler import compile_kernel_configs
 from .benchmark_result import BenchmarkResult
+from spio import cuda
 
 
 def _benchmark_kernel(
@@ -38,43 +39,59 @@ def benchmark(
     device="cuda",
     **kernel_kwargs,
 ) -> BenchmarkResult:
-    arch = torch.cuda.get_device_capability(device)
-    if configs is None:
-        configs = list(kernel_cls.configs(params))
-    kernels = compile_kernel_configs(
-        kernel_cls, params, configs=configs, arch=arch, **kernel_kwargs
-    )
-    bytes = kernel_cls.bytes_read(params, **kernel_kwargs) + kernel_cls.bytes_written(
-        params, **kernel_kwargs
-    )
-    macs = kernel_cls.macs(params, **kernel_kwargs)
-    gmacs = macs / 1e9
-    gbytes = bytes / 1e9
-    num_args = len(kernel_args_lst)
-    best_result = BenchmarkResult(time_ms=float("inf"))
-    best_kernel = None
-    device_name = torch.cuda.get_device_name(device)
-    results = []
-    for idx, (kernel, config) in enumerate(zip(kernels, configs)):
-        kernel.load()
-        time_ms = _benchmark_kernel(
-            kernel, kernel_args_lst, warmup=warmup, num_iters=num_iters
+    with torch.device(device) as device_obj:
+        device_ordinal = device_obj.index if device_obj.index is not None else 0
+        cuda.primary_context_guard.set_device(device_ordinal)
+        arch = torch.cuda.get_device_capability(device=device_obj)
+        if configs is None:
+            configs = list(kernel_cls.configs(params))
+        kernels = compile_kernel_configs(
+            kernel_cls, params, configs=configs, arch=arch, **kernel_kwargs
         )
-        result = BenchmarkResult(
-            kernel_cls=kernel_cls,
-            device_desc=device_name,
-            params=params,
-            config=config,
-            kernel_idx=idx,
-            kernel_kwargs=kernel_kwargs,
-            time_ms=time_ms,
-        )
-        result.calculate_performance(gmacs, gbytes)
-        if result.time_ms < best_result.time_ms:
-            best_result = result
-            best_kernel = kernel
-        results.append(result)
-    return (best_result, best_kernel, results)
+        num_args = len(kernel_args_lst)
+        best_result = BenchmarkResult(time_ms=float("inf"))
+        best_kernel = None
+        device_name = torch.cuda.get_device_name(device_obj)
+        results = []
+        for idx, (kernel, config) in enumerate(zip(kernels, configs)):
+            try:
+                # FIXME Unsafe to load kernels while cuda is running?
+                # FIXME but what is running?
+                # FIXME is there some garbage collection that torch is doing?
+                # vvvvvvvvvvvvvvvvvvvvvv
+                torch.cuda.synchronize()
+                # ^^^^^^^^^^^^^^^^^^^^^^
+                # FIXME race condition here that sometimes causes CUDA_ERROR_INVALID_CONTEXT.
+                # FIXME the above syncronization is a hack to fix it.
+                kernel.load(device_ordinal=device_ordinal)
+            except ValueError as e:
+                api_version = cuda.primary_context_guard.get_api_version()
+                driver_version = cuda.driver.get_driver_version()
+                raise ValueError(
+                    f"Error loading kernel {kernel} with config {config}: {e}; API version: {api_version} Driver version: {driver_version}"
+                ) from e
+
+            time_ms = _benchmark_kernel(
+                kernel, kernel_args_lst, warmup=warmup, num_iters=num_iters
+            )
+            result = BenchmarkResult(
+                kernel_cls=kernel_cls,
+                device_desc=device_name,
+                params=params,
+                config=config,
+                kernel_idx=idx,
+                kernel_kwargs=kernel_kwargs,
+                time_ms=time_ms,
+            )
+            if result.time_ms < best_result.time_ms:
+                if best_kernel is not None:
+                    best_kernel.unload()
+                best_result = result
+                best_kernel = kernel
+            else:
+                kernel.unload()
+            results.append(result)
+        return (best_result, best_kernel, results)
 
 
 def get_full_name(obj):
@@ -85,10 +102,6 @@ def benchmark_function(
     kernel_cls, function, params, function_args_lst, warmup=10, num_iters=10
 ):
     name = get_full_name(function)
-    bytes = kernel_cls.bytes_read(params) + kernel_cls.bytes_written(params)
-    macs = kernel_cls.macs(params)
-    gmacs = macs / 1e9
-    gbytes = bytes / 1e9
     time_ms = _benchmark_function(
         function,
         function_args_lst,
@@ -96,9 +109,9 @@ def benchmark_function(
         num_iters=num_iters,
         function_kwargs=params.kwargs,
     )
-    result = BenchmarkResult(time_ms=time_ms)
-    result.calculate_performance(gmacs, gbytes)
-    return result
+    return BenchmarkResult(
+        time_ms=time_ms, kernel_cls=kernel_cls, params=params, name=function.__name__
+    )
 
 
 def _benchmark_function(
@@ -130,10 +143,6 @@ def benchmark_grad_reference(
     num_iters=10,
     device="cuda",
 ):
-    bytes = kernel_cls.bytes_read(params) + kernel_cls.bytes_written(params)
-    macs = kernel_cls.macs(params)
-    gmacs = macs / 1e9
-    gbytes = bytes / 1e9
     time_ms = _benchmark_grad_reference(
         reflection,
         params,
@@ -141,9 +150,12 @@ def benchmark_grad_reference(
         num_iters=num_iters,
         device=device,
     )
-    result = BenchmarkResult(time_ms=time_ms)
-    result.calculate_performance(gmacs, gbytes)
-    return result
+    return BenchmarkResult(
+        time_ms=time_ms,
+        kernel_cls=kernel_cls,
+        params=params,
+        name=f"{reflection.reference.__name__}_grad",
+    )
 
 
 def _benchmark_grad_reference(

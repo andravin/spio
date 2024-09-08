@@ -162,7 +162,7 @@ namespace spio
         MMA_M16_K8_F16_A() = default;
         __device__ Vector &vector() { return *static_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *static_cast<const Vector *>(data()); }
-        MMA_M16_K8_F16_A(const Vector &v) { vector() = v; }
+        __device__ MMA_M16_K8_F16_A(const Vector &v) { vector() = v; }
     };
 
     /// @brief A matrix with float16 elements for M16_N8_K16 matrix multiplication.
@@ -173,7 +173,7 @@ namespace spio
         MMA_M16_K16_F16_A() = default;
         __device__ Vector &vector() { return *static_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *static_cast<const Vector *>(data()); }
-        MMA_M16_K16_F16_A(const Vector &v) { vector() = v; }
+        __device__ MMA_M16_K16_F16_A(const Vector &v) { vector() = v; }
     };
 
     class MMA_N8_K8_F16_B : public _MMA_M16_N8_F16_B<1>
@@ -183,7 +183,7 @@ namespace spio
         MMA_N8_K8_F16_B() = default;
         __device__ Vector &vector() { return *static_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *static_cast<const Vector *>(data()); }
-        MMA_N8_K8_F16_B(const Vector &v) { vector() = v; }
+        __device__ MMA_N8_K8_F16_B(const Vector &v) { vector() = v; }
     };
 
     /// @brief B matrix with float16 elements for M16_N8_K16 matrix multiplication.

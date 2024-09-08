@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from itertools import product
 from math import prod
 
-import cupy as cp
 import torch
 
 from ..generators import (

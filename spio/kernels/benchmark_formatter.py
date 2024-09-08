@@ -4,9 +4,9 @@ from .benchmark_result import BenchmarkResult
 
 
 class BenchmarkResultFormat:
-    def results(self, results: List[BenchmarkResult], sort=False, header=True):
+    def results(self, results: List[BenchmarkResult], sort=False, header=True, reverse=True):
         if sort:
-            results = sorted(results, key=lambda x: x.time_ms)
+            results = sorted(results, key=lambda x: x.time_ms, reverse=reverse)
         txt = ""
         if header:
             txt += self.header()
@@ -47,5 +47,4 @@ class BenchmarkResultFullFormat(BenchmarkResultFormat):
         idx = str(result.kernel_idx)
         if best:
             idx = f"{idx} *"
-        kernel_name = result.kernel_cls.__name__ if result.kernel_cls is not None else "None"
-        return f"{kernel_name:30s} {str(result.kernel_kwargs):20s} {str(result.device_desc):30s} {str(result.params):90s} {idx:5s} {str(result.config):90s} {result.time_ms:8.3f} {result.tflop_s:8.3f} {result.eff_bw_gb_s:8.3f}\n"
+        return f"{result.name:30s} {str(result.kernel_kwargs):20s} {str(result.device_desc):30s} {str(result.params):90s} {idx:5s} {str(result.config):90s} {result.time_ms:8.3f} {result.tflop_s:8.3f} {result.eff_bw_gb_s:8.3f}\n"

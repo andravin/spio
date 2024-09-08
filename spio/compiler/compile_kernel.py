@@ -1,8 +1,9 @@
 from tempfile import NamedTemporaryFile
 from typing import Tuple
 
-import cupy as cp
 import torch
+
+from ..cuda import cuda, primary_context_guard
 from .paths import (
     spio_cubins_path,
     spio_include_path,
@@ -43,10 +44,12 @@ def compile_kernel(
     )
 
 
-def load_kernel(kernel_name: str, cubin_file_name: str = None):
-    module = cp.RawModule(path=str(cubin_file_name))
-    kernel = module.get_function(kernel_name)
-    return (module, kernel)
+def load_kernel(kernel_name: str, cubin_file_name: str = None, device_ordinal: int = 0) -> Tuple[cuda.Module, cuda.Function]:
+    primary_context_guard.set_device(device_ordinal)
+    module = cuda.Module()
+    module.load(str(cubin_file_name))
+    function = module.get_function(kernel_name)
+    return (module, function)
 
 
 def compile_and_load_kernel(
@@ -54,12 +57,12 @@ def compile_and_load_kernel(
     source_file_name=None,
     includes=[],
     output_file=None,
-    device=None,
+    device_ordinal=0,
     debug=False,
     lineinfo=False,
     test_kernel=False,
 ):
-    arch = torch.cuda.get_device_capability(device)
+    arch = torch.cuda.get_device_capability(device_ordinal)
     if source_file_name is None:
         source_file_name = f"{kernel_name}.cu"
     with NamedTemporaryFile() as cubin_file:
@@ -73,4 +76,4 @@ def compile_and_load_kernel(
             arch=arch,
             test_kernel=test_kernel,
         )
-        return load_kernel(kernel_name, cubin_file.name)
+        return load_kernel(kernel_name, cubin_file.name, device_ordinal=device_ordinal)

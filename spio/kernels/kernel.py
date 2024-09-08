@@ -1,6 +1,5 @@
 from tempfile import NamedTemporaryFile
 
-import cupy as cp
 import torch
 
 from ..generators import generate
@@ -8,7 +7,7 @@ from ..compiler import compile_kernel, load_kernel
 from .launch_params import LaunchParams
 from .code_directory import GenDirectory
 from .kernel_util import get_first_device_in_args
-
+from ..cuda import primary_context_guard
 
 class Kernel:
     @property
@@ -58,19 +57,29 @@ class Kernel:
         self.gencode_dir = None
         return res
 
-    def load(self):
+    def load(self, device_ordinal=0):
         self.module, self.kernel = load_kernel(
-            kernel_name=self.kernel_name, cubin_file_name=self.cubin_file.name
+            kernel_name=self.kernel_name,
+            cubin_file_name=self.cubin_file.name,
+            device_ordinal=device_ordinal,
         )
         self.cubin_file = None
+
+    def unload(self):
+        if self.module is not None:
+            self.module.unload()
+            self.module = None
+        self.kernel = None
 
     def launch(self, *args):
         try:
             device = get_first_device_in_args(args)
             _check_args(args, device)
-            cp_args = _detach_cupy_tensors(args)
-            with torch.device(device):
-                self.kernel(self.launch_params.grid, self.launch_params.block, cp_args)
+            kernel_args = _kernel_args(args)
+            primary_context_guard.set_device(device.index)
+            self.kernel.launch(
+                self.launch_params.grid, self.launch_params.block, kernel_args
+            )
         except Exception as e:
             raise ValueError(f"Error in kernel {self}") from e
 
@@ -93,5 +102,5 @@ def _check_args(args, device):
             ), f"Not all tensor arguments are on the same device: {args}"
 
 
-def _detach_cupy_tensors(args):
-    return [cp.asarray(t.detach()) if isinstance(t, torch.Tensor) else t for t in args]
+def _kernel_args(args):
+    return [t.detach() if isinstance(t, torch.Tensor) else t for t in args]

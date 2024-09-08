@@ -3,9 +3,13 @@
 *.out
 *.cubin
 *.pyc
+*.so
 __pycache__/
 
 # PyTorch profiler results.
 trace*.json
 *fiesta*.json
 *.dat
+
+build/
+spio/cuda/driver.c
