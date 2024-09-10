@@ -11,7 +11,6 @@ from collections import defaultdict
 from enum import Enum
 
 import torch
-from frozendict import frozendict
 
 
 class Init(Enum):
@@ -77,7 +76,7 @@ class KernelReflection:
     reference_args: List[str] = None
     stacking: List[Tuple[str, str]] = None
     is_grad: bool = False
-    kernel_kwargs: defaultdict[frozendict] = field(default_factory=frozendict)
+    kernel_kwargs: Dict[str, Any] = field(default_factory=dict)
 
     def _shape(self, params, name):
         arginfo = self.arginfo[name]
@@ -222,13 +221,13 @@ reflection_function_registry = dict()
 @dataclass(frozen=True)
 class KernelKey:
     kernel_cls: Any
-    kernel_kwargs: defaultdict[frozendict] = field(default_factory=frozendict)
+    kernel_kwargs: Tuple[Tuple[str, Any]]
 
 
 def register_reflection(reflection: KernelReflection):
     kernel_key = KernelKey(
         kernel_cls=reflection.kernel_cls,
-        kernel_kwargs=frozendict(**reflection.kernel_kwargs),
+        kernel_kwargs=_dict_to_ordered_tuples(reflection.kernel_kwargs),
     )
     reflection_kernel_registry[kernel_key] = reflection
     reflection_function_registry[reflection.function] = reflection
@@ -236,7 +235,7 @@ def register_reflection(reflection: KernelReflection):
 
 def get_kernel_reflection(kernel_cls: Any, **kernel_kwargs) -> KernelReflection:
     kernel_key = KernelKey(
-        kernel_cls=kernel_cls, kernel_kwargs=frozendict(**kernel_kwargs)
+        kernel_cls=kernel_cls, kernel_kwargs=_dict_to_ordered_tuples(kernel_kwargs)
     )
     return reflection_kernel_registry[kernel_key]
 
@@ -266,3 +265,7 @@ def _to(tensor, memory_format=None):
         raise ValueError("channels_last memory format is only supported for 4D tensors")
 
     return tensor.to(memory_format=memory_format)
+
+
+def _dict_to_ordered_tuples(d: dict) -> list:
+    return tuple(sorted(d.items()))
