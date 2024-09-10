@@ -1,3 +1,1 @@
-from .kernels.benchmark_logger import benchmark_logger
-from .transform import transform
-
+from .transform import transform, scan_modules

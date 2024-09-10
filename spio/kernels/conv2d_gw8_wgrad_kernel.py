@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from itertools import product
-from math import prod
 
 import torch
 
@@ -16,6 +15,7 @@ from .kernel import Kernel
 from .kernel_cache import KernelCache
 from .launch_params import LaunchParams
 from .conv2d_gw8_params import Conv2dGw8Params
+from .conv2d_stats import Conv2dStats
 
 
 @dataclass(frozen=True)
@@ -31,10 +31,16 @@ class Conv2dGw8WgradKernel(Kernel):
 
     Params = Conv2dGw8Params
     Config = Conv2dGw8WgradConfig
+    Stats = Conv2dStats
+    output_names = ["grad_weight"]
 
     _kernel_cache = KernelCache()
 
     BLOCK_Q = 8
+
+    @classmethod
+    def get_kernel_name(cls):
+        return "spio_conv2d_gw8_wgrad"
 
     @classmethod
     def configs(cls, params: Conv2dGw8Params):
@@ -215,7 +221,9 @@ class Conv2dGw8WgradKernel(Kernel):
                 "SmemDeltaLoadIdx",
                 dict(k8=WARPS_C8, repeat=(32 * WARPS_S) // BLOCK_Q, q=BLOCK_Q),
             ),
-            TensorSpec("DeltaFrag", "spio::MMA_N8_K8_F16_B", dict(n=config.warp_n, r=R)),
+            TensorSpec(
+                "DeltaFrag", "spio::MMA_N8_K8_F16_B", dict(n=config.warp_n, r=R)
+            ),
             #
             # Accumulator
             #
@@ -232,7 +240,7 @@ class Conv2dGw8WgradKernel(Kernel):
         ] + SMEM_TENSORS
 
         super().__init__(
-            "spio_conv2d_gw8_wgrad",
+            self.get_kernel_name(),
             launch_params,
             specs=specs,
             kernel_source_file="conv2d_gw8_wgrad.cu",
@@ -240,24 +248,11 @@ class Conv2dGw8WgradKernel(Kernel):
             config=config,
         )
 
-    def __call__(self, wgrad, inputs, grad_output):
-        # Zero out the wgrad tensor.
+    def __call__(self, grad_weight, inputs, grad_output):
         assert inputs.dtype == torch.float16
         assert grad_output.dtype == torch.float16
-        wgrad_f32 = torch.zeros_like(wgrad, dtype=torch.float32)
+        # Initialize the grad_weight tensor to zero.
+        # The blocks of the kernel accumulate into this tensor.
+        wgrad_f32 = torch.zeros_like(grad_weight, dtype=torch.float32)
         self.launch(wgrad_f32, inputs, grad_output)
-        wgrad.copy_(wgrad_f32)
-
-    @staticmethod
-    def macs(params: Conv2dGw8Params):
-        return prod(params.output_shape) * prod(
-            (params.R, params.S, params.group_width)
-        )
-
-    @staticmethod
-    def bytes_read(params: Conv2dGw8Params):
-        return (prod(params.input_shape) + prod(params.output_shape)) * 2
-
-    @staticmethod
-    def bytes_written(params: Conv2dGw8Params):
-        return prod(params.weight_shape) * 2
+        grad_weight.copy_(wgrad_f32)

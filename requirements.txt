@@ -1,4 +1,12 @@
 --extra-index-url https://download.pytorch.org/whl/cu124
 Cython
 pytest
-torch
+
+# We need pytorch 2.4+ for custom_op support.
+torch>=2.4.0
+
+# Required for the kernels' performance model.
+pandas
+xgboost
+scikit-learn
+appdirs

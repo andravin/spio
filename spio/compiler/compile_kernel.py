@@ -3,7 +3,7 @@ from typing import Tuple
 
 import torch
 
-from ..cuda import cuda, primary_context_guard
+from ..cuda import driver, primary_context_guard
 from .paths import (
     spio_cubins_path,
     spio_include_path,
@@ -44,9 +44,9 @@ def compile_kernel(
     )
 
 
-def load_kernel(kernel_name: str, cubin_file_name: str = None, device_ordinal: int = 0) -> Tuple[cuda.Module, cuda.Function]:
+def load_kernel(kernel_name: str, cubin_file_name: str = None, device_ordinal: int = 0) -> Tuple[driver.Module, driver.Function]:
     primary_context_guard.set_device(device_ordinal)
-    module = cuda.Module()
+    module = driver.Module()
     module.load(str(cubin_file_name))
     function = module.get_function(kernel_name)
     return (module, function)

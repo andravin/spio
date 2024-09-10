@@ -89,9 +89,6 @@ extern "C"
         // Define tile mappings
         //
 
-        // Weights to smem.
-        auto weight = Weights(weights_ptr).k(block_c);
-
         // Weights-smem to registers.
         ConstSmemWeights smem_weights_load(smem_weights_buf);
         {
@@ -163,12 +160,17 @@ extern "C"
         //
         // Copy weights to smem asynchronously.
         //
+        auto weight = Weights(weights_ptr).k(block_c);
         for (int idx = threadIdx.x; idx < SmemWeights::size; idx += Block::threads)
         {
+            Weights::Index weight_idx(idx);
+            int k = block_c + weight_idx.k();
+            int zfill = k < Weights::K ? 0 : sizeof(Weights::data_type);            
             __pipeline_memcpy_async(
                 smem_weights_buf + idx,
                 weight.get() + idx,
-                16);
+                16,
+                zfill);
         }
         __pipeline_commit();
 

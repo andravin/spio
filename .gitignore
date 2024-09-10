@@ -9,8 +9,15 @@ __pycache__/
 
 # PyTorch profiler results.
 trace*.json
-*fiesta*.json
+profile_*.json
+spio_functional_*.json
+torch_*.json
+train_*.json
+inference_*.json
 *.dat
+*.ssv
+*.ubj
+
 
 build/
 spio/cuda/driver.c

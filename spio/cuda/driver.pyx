@@ -17,11 +17,12 @@ cdef class Function:
     cdef set_c_function(self, cdriver.CUfunction c_function):
         self._c_function = c_function
 
-    def launch(self, grid, block, args, shared=0, stream=0):
+    def launch(self, grid, block, args):
         cdef cdriver.CUdeviceptr arg_ptrs[16]
         cdef int arg_ints[16]
         cdef float arg_floats[16]
         cdef void *kernel_params[16]
+
         for idx, arg in enumerate(args):
             if hasattr(arg, '__cuda_array_interface__'):
                 data_ptr = arg.__cuda_array_interface__['data'][0]
@@ -45,10 +46,10 @@ cdef class Function:
             self._c_function,
             grid[0], grid[1], grid[2],
             block[0], block[1], block[2],
-            shared,
+            0, # shared memory size
             NULL, # stream
             kernel_params,
-            NULL
+            NULL # extra
         ))
 
 cdef class Module:

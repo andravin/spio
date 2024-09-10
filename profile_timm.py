@@ -37,12 +37,13 @@ parser.add_argument("--spio", action="store_true")
 parser.add_argument("--model-kwargs", nargs="*", default={}, action=ParseKwargs)
 parser.add_argument("--no-profile", action="store_true")
 parser.add_argument("--enable-logger", action="store_true")
+parser.add_argument("--scan-modules", action="store_true")
 
 args = parser.parse_args()
 
 torch.backends.cudnn.benchmark = True
 
-spio.benchmark_logger.configure(
+spio.log.benchmark_logger.configure(
     full_format=True,
     best=False,
     header_once=True,
@@ -87,6 +88,13 @@ if args.summary:
     )
     sys.exit(0)
 
+if args.scan_modules:
+    with torch.autocast(device_type="cuda", dtype=torch.float16):
+        params_lst = spio.scan_modules(model, inputs[0])
+        for params in params_lst:
+            print(params)
+        sys.exit(0)
+
 if args.torchcompile:
     model = torch.compile(model)
 
@@ -113,9 +121,9 @@ else:
 
     trace_file_name = get_trace_file_name(args, datestamp)
     prof.export_chrome_trace(trace_file_name)
-    print("Wrote trace to:", trace_file_name)
+    print("Wrote trace to ", trace_file_name)
 
     data_file_name = get_trace_file_name(args, datestamp, ext=".dat")
     with open(data_file_name, "w") as f:
         f.write(prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=-1))
-    print("Wrote data to:", data_file_name)
+    print("Wrote data to ", data_file_name)

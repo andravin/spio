@@ -17,6 +17,7 @@ from .kernel import Kernel
 from .kernel_cache import KernelCache
 from .launch_params import LaunchParams
 from .conv2d_gw8_params import Conv2dGw8Params
+from .conv2d_stats import Conv2dStats
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class Conv2dGw8Kernel(Kernel):
 
     Params = Conv2dGw8Params
     Config = Conv2dGw8Config
+    Stats = Conv2dStats
 
     _fprop_kernel_cache = KernelCache()
     _dgrad_kernel_cache = KernelCache()
@@ -72,6 +74,10 @@ class Conv2dGw8Kernel(Kernel):
         config: Conv2dGw8Config = None,
     ):
         return cls._dgrad_kernel_cache.get(cls, params, args, config=config, igrad=True)
+    
+    @classmethod
+    def get_kernel_name(cls, igrad=False):
+        return "spio_conv2d_gw8_fprop" if not igrad else "spio_conv2d_gw8_dgrad"
 
     @classmethod
     def get_kernel(
@@ -131,7 +137,7 @@ class Conv2dGw8Kernel(Kernel):
 
         launch_params = LaunchParams(grid=BLOCKS, block=THREADS)
 
-        kernel_name = "spio_conv2d_gw8_fprop" if not igrad else "spio_conv2d_gw8_dgrad"
+        kernel_name = self.get_kernel_name(igrad=igrad)
 
         kernel_has_bias = params.has_bias and not igrad
 
@@ -196,6 +202,8 @@ class Conv2dGw8Kernel(Kernel):
             FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k"),
         ]
 
+        self.igrad = igrad
+
         super().__init__(
             kernel_name,
             launch_params,
@@ -205,18 +213,9 @@ class Conv2dGw8Kernel(Kernel):
             config=config,
         )
 
-    @staticmethod
-    def macs(params: Conv2dGw8Params, igrad=False):
-        return prod(params.output_shape) * prod(
-            (params.R, params.S, params.group_width)
-        )
-
-    @staticmethod
-    def bytes_read(params: Conv2dGw8Params, igrad=False):
-        input = prod(params.output_shape) if igrad else prod(params.input_shape)
-        return (input + prod(params.weight_shape)) * 2
-
-    @staticmethod
-    def bytes_written(params: Conv2dGw8Params, igrad=False):
-        output = prod(params.input_shape) if igrad else prod(params.output_shape)
-        return output * 2
+    @property
+    def output_names(self):
+        if self.igrad:
+            return ["grad_input"]
+        else:
+            return ["output"]

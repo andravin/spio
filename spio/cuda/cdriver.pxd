@@ -45,6 +45,10 @@ cdef extern from "cuda.h":
         CU_POINTER_ATTRIBUTE_SYNC_MEMOPS = 6
         CU_POINTER_ATTRIBUTE_BUFFER_ID = 7
 
+    ctypedef enum CUstream_flags:
+        CU_STREAM_DEFAULT = 0
+        CU_STREAM_NON_BLOCKING = 1
+
     cdef struct CUctx_st:
         pass
     
@@ -71,6 +75,9 @@ cdef extern from "cuda.h":
     CUresult cuDeviceGet(CUdevice *device, int ordinal)
     CUresult cuDevicePrimaryCtxRetain(CUcontext *pctx, CUdevice dev)
     CUresult cuDevicePrimaryCtxRelease(CUdevice dev)
+
+    CUresult cuStreamCreate(CUstream *pStream, unsigned int Flags)
+    CUresult cuStreamDestroy(CUstream hStream)
 
     CUresult cuGetErrorString(CUresult error, const char **pStr)    
 

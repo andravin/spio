@@ -1,19 +1,18 @@
 from dataclasses import dataclass
 from typing import Any, Dict
 
-
 @dataclass
 class BenchmarkResult:
     """Dataclass that encapsulates the results of a benchmark run of a kernel configuration."""
-
-    kernel_cls: Any = None
     kernel_kwargs: Dict[str, Any] = None
     device_desc: str = None
+    arch: str = None
     params: Any = None
     config: Any = None
     kernel_idx: int = None
     time_ms: float = None
     name: str = None
+    stats: Any = None
 
     def __post_init__(self):
         """Calculate derived fields.
@@ -22,20 +21,11 @@ class BenchmarkResult:
         and are used to calculate performance."""
         if self.kernel_kwargs is None:
             self.kernel_kwargs = {}
-        if self.kernel_cls is not None:
-            macs = self.kernel_cls.macs(self.params, **self.kernel_kwargs)
-            bytes_read = self.kernel_cls.bytes_read(self.params, **self.kernel_kwargs)
-            bytes_written = self.kernel_cls.bytes_written(
-                self.params, **self.kernel_kwargs
-            )
-            bytes = bytes_read + bytes_written
-            self.gmacs = macs / 1e9
-            self.gbytes = bytes / 1e9
+        if self.stats is not None:
+            self.gmacs = self.stats.macs / 1e9
+            self.gbytes = (self.stats.bytes_read + self.stats.bytes_written) / 1e9
         if self.name is None:
-            if self.kernel_cls is not None:
-                self.name = self.kernel_cls.__name__
-            else:
-                self.name = "Unknown"
+            self.name = "Unknown"
 
     @property
     def time_s(self):

@@ -8,51 +8,10 @@ Tests and benchmarks use the reflection system to generate arguments for the ker
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Tuple
 from collections import defaultdict
-from enum import Enum
 
 import torch
 
-
-class Init(Enum):
-    """Initialization types for arguments."""
-
-    ZERO = 0
-    ONE = 1
-    NONE = 2
-    EMPTY = 3
-    RANDOM = 4
-
-
-@dataclass
-class ArgInfo:
-    """Information about an argument to a kernel or function."""
-
-    dtype: torch.dtype
-    requires_grad: bool = False
-    output: bool = False
-    init: Init = Init.RANDOM
-    memory_format: torch.memory_format = torch.channels_last
-    grad_of: str = None
-
-    @property
-    def zero(self):
-        return self.init == Init.ZERO
-
-    @property
-    def one(self):
-        return self.init == Init.ONE
-
-    @property
-    def none(self):
-        return self.init == Init.NONE
-
-    @property
-    def empty(self):
-        return self.init == Init.EMPTY
-
-    @property
-    def random(self):
-        return self.init == Init.RANDOM
+from .arg_info import ArgInfo, Init
 
 
 @dataclass
@@ -64,104 +23,100 @@ class GradName:
 
 
 @dataclass
-class KernelReflection:
-    """Reflection information for a kernel or function."""
+class Reflection:
+    """Reflection information for a kernel or function.
 
-    kernel_cls: Any
+    The reflection system is used to define the arguments and properties of a kernel, function, or layer.
+    Tests and benchmarks use the reflection system to generate arguments.
+    """
+
     arginfo: Dict[str, ArgInfo]
-    kernel_args: List[str]
+
+    kernel_cls: Any = None
+
     function: staticmethod = None
-    function_args: List[str] = None
-    reference: staticmethod = None
-    reference_args: List[str] = None
+
+    layer_cls: Any = None
+
+    args: List[str] = field(default_factory=list)
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+
+    kernel_outputs: List[str] = field(default_factory=list)
+
     stacking: List[Tuple[str, str]] = None
-    is_grad: bool = False
-    kernel_kwargs: Dict[str, Any] = field(default_factory=dict)
 
-    def _shape(self, params, name):
-        arginfo = self.arginfo[name]
-        if arginfo.grad_of is not None:
-            name = arginfo.grad_of
-        return getattr(params, f"{name}_shape")
+    reference: staticmethod = None
 
-    def _none(self):
-        return None
+    stats: Any = None
 
-    def _empty(self, params: Any, name: str, info: ArgInfo, device: str):
-        return torch.empty(
-            self._shape(params, name),
-            dtype=info.dtype,
-            device=device,
-            memory_format=info.memory_format,
-        )
+    params: Any = None
 
-    def _zero(self, params: Any, name: str, info: ArgInfo, device: str):
-        t = torch.zeros(self._shape(params, name), dtype=info.dtype, device=device)
-        return _to(t, memory_format=info.memory_format)
+    prefix_op_constructor: staticmethod = None
 
-    def _ones(self, params: Any, name: str, info: ArgInfo, device: str):
-        t = torch.ones(self._shape(params, name), dtype=info.dtype, device=device)
-        return _to(t, memory_format=info.memory_format)
+    get_function_kwargs: staticmethod = None
 
-    def _randn(self, params: Any, name: str, info: ArgInfo, device: str):
-        shape = self._shape(params, name)
-        t = torch.randn(shape, dtype=info.dtype, device=device)
-        return _to(t, memory_format=info.memory_format)
+    from_layer: staticmethod = None
+
+    memory_format = torch.channels_last
+
+    def __post_init__(self):
+        for name, arg in self.arginfo.items():
+            if arg.grad_of is not None:
+                assert arg.grad_of in self.arginfo
+            arg.name = name
 
     def make_args(self, params, training=False, device="cuda"):
         args = dict()
         for name, info in self.arginfo.items():
-            has_arg = _has_arg(params, name)
-            if not has_arg or info.none:
-                tensor = self._none()
-            elif info.empty:
-                tensor = self._empty(params, name, info, device)
-            elif info.zero:
-                tensor = self._zero(params, name, info, device)
-            elif info.one:
-                tensor = self._ones(params, name, info, device)
-            elif info.random:
-                tensor = self._randn(params, name, info, device)
-            else:
-                raise ValueError(f"Invalid init value for argument {name}: {info.init}")
-            if info.requires_grad and training and has_arg:
-                tensor.requires_grad = True
-            args[name] = tensor
+            args[name] = info.make_arg(params, training=training, device=device)
         return args
 
     def make_grad_outputs(self, params, device="cuda"):
         args = dict()
         for name, info in self.arginfo.items():
             if info.output:
-                args[name] = self._randn(params, name, info, device)
+                args[f"grad_{name}"] = info._randn(params, device)
         return args
 
-    def arrange_kernel_args(self, args) -> List[torch.Tensor]:
-        return [args[name] for name in self.kernel_args]
-
-    def arrange_function_args(self, args) -> List[torch.Tensor]:
+    def arrange_args(self, args) -> List[torch.Tensor]:
         return [
             args[name] if args[name] is None or args[name].numel() > 0 else None
-            for name in self.function_args
+            for name in self.args
         ]
 
-    def arrange_reference_args(self, args) -> List[torch.Tensor]:
-        return [
-            args[name] if args[name] is None or args[name].numel() > 0 else None
-            for name in self.reference_args
-        ]
-
-    def zero_args(self, args):
+    def init_args(self, args):
         for name, tensor in args.items():
             info = self.arginfo[name]
-            if info.zero:
+            info.initialize(tensor)
+
+    def init_zeros(self, args):
+        for name, tensor in args.items():
+            info = self.arginfo[name]
+            if info.init == Init.ZERO:
                 tensor.zero_()
 
     def get_grad_output_args(self, args):
         return [args[grad.name] for grad in self.grad_output_names]
 
     def get_differentiable_input_args(self, args):
-        return [args[grad.grad_of] for grad in self.grad_input_names]
+        return [
+            args[name]
+            for name in self.get_differentiable_input_names(args)
+            if args[name] is not None
+        ]
+
+    def get_differentiable_input_names(self):
+        return [
+            info.name
+            for info in self.arginfo.values()
+            if info.requires_grad and not info.output
+        ]
+
+    def get_arg_name_from_gradient(self, gradient_name):
+        for name, info in self.arginfo.items():
+            if info.name == gradient_name:
+                return info.grad_of
+        raise ValueError("No argument found for gradient name: " + gradient_name)
 
     @property
     def output_names(self) -> List[str]:
@@ -206,16 +161,29 @@ class KernelReflection:
 
     def arrange_stacked_args_for_function(self, args_lst):
         """TODO: modify this to work when the function has more than one input."""
-        function_args_lst = [self.arrange_function_args(args_lst[0])]
+        function_args_lst = [self.arrange_args(args_lst[0])]
         for args in args_lst[1:]:
-            function_args = self.arrange_function_args(args)
+            function_args = self.arrange_args(args)
             function_args_lst.append(function_args[1:])
         return function_args_lst
+
+    @property
+    def kernel_is_backprop(self):
+        """Return true if this reflection is for a backprop kernel.
+
+        A backprop kernel is a kernel that computes the gradient of a function.
+        A kernel is backprop kernel if any of its arguments start with "grad_".
+        """
+        return self.kernel_cls is not None and any(
+            [arg.startswith("grad_") for arg in self.args]
+        )
 
 
 reflection_kernel_registry = dict()
 
 reflection_function_registry = dict()
+
+reflection_layer_registry = dict()
 
 
 @dataclass(frozen=True)
@@ -224,48 +192,43 @@ class KernelKey:
     kernel_kwargs: Tuple[Tuple[str, Any]]
 
 
-def register_reflection(reflection: KernelReflection):
-    kernel_key = KernelKey(
-        kernel_cls=reflection.kernel_cls,
-        kernel_kwargs=_dict_to_ordered_tuples(reflection.kernel_kwargs),
-    )
-    reflection_kernel_registry[kernel_key] = reflection
-    reflection_function_registry[reflection.function] = reflection
+def register_reflection(reflection: Reflection):
+    if _more_than_one_not_none(
+        reflection.kernel_cls, reflection.function, reflection.layer_cls
+    ):
+        raise ValueError(
+            f"Reflection must have exactly one of kernel_cls, layer_cls, or function: {reflection}"
+        )
+    if reflection.kernel_cls is not None:
+        kernel_key = KernelKey(
+            kernel_cls=reflection.kernel_cls,
+            kernel_kwargs=_dict_to_ordered_tuples(reflection.kwargs),
+        )
+        reflection_kernel_registry[kernel_key] = reflection
+    elif reflection.function is not None:
+        reflection_function_registry[reflection.function] = reflection
+    elif reflection.layer_cls is not None:
+        reflection_layer_registry[reflection.layer_cls] = reflection
 
 
-def get_kernel_reflection(kernel_cls: Any, **kernel_kwargs) -> KernelReflection:
+def get_kernel_reflection(kernel_cls: Any, **kernel_kwargs) -> Reflection:
     kernel_key = KernelKey(
         kernel_cls=kernel_cls, kernel_kwargs=_dict_to_ordered_tuples(kernel_kwargs)
     )
     return reflection_kernel_registry[kernel_key]
 
 
-def get_function_reflection(function: Any) -> KernelReflection:
+def get_function_reflection(function: Any) -> Reflection:
     return reflection_function_registry[function]
 
 
-def _has_arg(params, name):
-    return getattr(params, f"has_{name}", True)
-
-
-def _to(tensor, memory_format=None):
-    """Normalize the memory format of a tensor.
-
-    channels_last is only supported for 4D tensors.
-    We leave 1D tensors unchanged.
-
-      Otherwise, we raise an error if the tensor is not 4D.
-    """
-    if tensor.dim() < 2:
-        # You didn't really mean it.
-        return tensor
-
-    if memory_format == torch.channels_last and tensor.dim() != 4:
-        # You meant it, but it's not supported.
-        raise ValueError("channels_last memory format is only supported for 4D tensors")
-
-    return tensor.to(memory_format=memory_format)
+def get_layer_reflection(layer_cls: Any) -> Reflection:
+    return reflection_layer_registry[layer_cls]
 
 
 def _dict_to_ordered_tuples(d: dict) -> list:
     return tuple(sorted(d.items()))
+
+
+def _more_than_one_not_none(*args):
+    return sum(arg is not None for arg in args) != 1

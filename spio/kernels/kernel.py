@@ -8,6 +8,8 @@ from .launch_params import LaunchParams
 from .code_directory import GenDirectory
 from .kernel_util import get_first_device_in_args
 from ..cuda import primary_context_guard
+from .stats import Stats
+
 
 class Kernel:
     @property
@@ -40,7 +42,7 @@ class Kernel:
         self.params = params
         self.config = config
         self.module = None
-        self.kernel = None
+        self.function = None
         self.cubin_file = NamedTemporaryFile(
             suffix=".cubin",
             prefix=f"spio_{self.kernel_name}_",
@@ -58,7 +60,7 @@ class Kernel:
         return res
 
     def load(self, device_ordinal=0):
-        self.module, self.kernel = load_kernel(
+        self.module, self.function = load_kernel(
             kernel_name=self.kernel_name,
             cubin_file_name=self.cubin_file.name,
             device_ordinal=device_ordinal,
@@ -69,7 +71,7 @@ class Kernel:
         if self.module is not None:
             self.module.unload()
             self.module = None
-        self.kernel = None
+        self.function = None
 
     def launch(self, *args):
         try:
@@ -77,17 +79,27 @@ class Kernel:
             _check_args(args, device)
             kernel_args = _kernel_args(args)
             primary_context_guard.set_device(device.index)
-            self.kernel.launch(
+            self.function.launch(
                 self.launch_params.grid, self.launch_params.block, kernel_args
             )
         except Exception as e:
             raise ValueError(f"Error in kernel {self}") from e
+
+    @property
+    def stats(self):
+        return self.Stats(params=self.params, unit=2, output_names=self.output_names)
 
     def __call__(self, *args):
         self.launch(*args)
 
     def __repr__(self) -> str:
         return f"{self.kernel_name} {self.params} {self.config}"
+
+    @property
+    def is_backprop(self):
+        return any(
+            [output_name.startswith("grad_") for output_name in self.output_names]
+        )
 
 
 def _check_args(args, device):

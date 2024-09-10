@@ -2,11 +2,16 @@ import torch
 from torch import nn
 
 from ..functional import conv2d_gw8
+from ..kernels import Conv2dGw8Params
 
 
 class Conv2dGw8(nn.Conv2d):
+    Params = Conv2dGw8Params
+
     @staticmethod
     def match(conv2d: nn.Conv2d):
+        if not isinstance(conv2d, nn.Conv2d):
+            return False
         group_width = conv2d.in_channels // conv2d.groups
         R, S = conv2d.kernel_size
         return (
@@ -21,7 +26,7 @@ class Conv2dGw8(nn.Conv2d):
         )
 
     @staticmethod
-    def from_conv2d(conv2d: nn.Conv2d):
+    def from_torch_module(conv2d: nn.Conv2d):
         if not Conv2dGw8.match(conv2d):
             raise ValueError(f"Conv2d {conv2d} does not match Conv2dGw8")
         module = Conv2dGw8(
@@ -41,11 +46,19 @@ class Conv2dGw8(nn.Conv2d):
         return module
 
     def forward(self, x):
+        padding = self.padding
+        if isinstance(padding, int):
+            padding_y = padding
+            padding_x = padding
+        else:
+            padding_y, padding_x = padding
+
         return conv2d_gw8(
             x,
             self.weight,
             self.bias,
-            stride=self.stride,
-            padding=self.padding,
+            stride=1,
+            padding_y=padding_y,
+            padding_x=padding_x,
             groups=self.groups,
         )
