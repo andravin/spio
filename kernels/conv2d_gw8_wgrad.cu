@@ -262,12 +262,16 @@ extern "C"
                 WgradStoreIdx idx(iter);
                 auto smem_wgrad_load_iter = smem_wgrad_load.k8(idx.k8()).s(idx.s()).c(idx.c());
                 auto wgrad_iter = global_wgrad.k(idx.k8() * 8).r(R - 1 - r).s(idx.s()).c(idx.c());
+                int k = block_c + idx.k8() * 8;
 #pragma unroll 4
                 for (int k2 = 0; k2 < 4; ++k2)
                 {
-                    float2 wgrad_f2 = *smem_wgrad_load_iter.k2(k2);
-                    atomicAdd(wgrad_iter.k(k2 * 2 + 0).get(), wgrad_f2.x);
-                    atomicAdd(wgrad_iter.k(k2 * 2 + 1).get(), wgrad_f2.y);
+                    if (k + k2 * 2 < Wgrad::K)
+                    {
+                        float2 wgrad_f2 = *smem_wgrad_load_iter.k2(k2);
+                        atomicAdd(wgrad_iter.k(k2 * 2 + 0).get(), wgrad_f2.x);
+                        atomicAdd(wgrad_iter.k(k2 * 2 + 1).get(), wgrad_f2.y);
+                    }
                 }
             }
         }
