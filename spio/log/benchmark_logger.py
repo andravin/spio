@@ -1,10 +1,6 @@
-import os
-
 from .benchmark_formatter import BenchmarkResultCompactFormat, BenchmarkResultFullFormat
 from .benchmark_result import BenchmarkResult
-
-TRUTHS = ["true", "1", "yes", "y", "t"]
-default_enable_logger = os.environ.get("SPIO_LOGGER", "False").lower() in TRUTHS
+from .logger import logger_enabled
 
 
 class BenchmarkLogger:
@@ -47,4 +43,4 @@ class BenchmarkLogger:
             self.once = False
 
 
-benchmark_logger = BenchmarkLogger(enable=default_enable_logger)
+benchmark_logger = BenchmarkLogger(enable=logger_enabled)
