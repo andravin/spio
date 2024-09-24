@@ -32,7 +32,8 @@ Install the package from source using pip:
 pip install .
 ```
 
-## Run the tests
+Because you installed from source, you can run the tests:
+
 ```bash
 pytest tests/
 ```
