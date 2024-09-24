@@ -35,7 +35,9 @@ def compile_kernel_configs(
         configs = list(kernel_cls.configs(params))
     kernels = [kernel_cls(params, config=config, **kernel_kwargs) for config in configs]
     compiler_args = [kernel.compiler_args for kernel in kernels]
-    _compile_kernels(compiler_args, arch=arch)
+    cubins = _compile_kernels(compiler_args, arch=arch)
+    for kernel, cubin in zip(kernels, cubins):
+        kernel.cubin = cubin
     return kernels
 
 

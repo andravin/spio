@@ -1,4 +1,3 @@
-from tempfile import NamedTemporaryFile
 from typing import Tuple
 
 import torch
@@ -17,7 +16,6 @@ def compile_kernel(
     kernel_name=None,
     source_file_name=None,
     includes=[],
-    output_file=None,
     header_dict=None,
     arch=None,
     debug=False,
@@ -41,7 +39,6 @@ def compile_kernel(
         compile=True,
         cubin=True,
         arch=arch,
-        output_file=output_file,
         device_debug=debug,
         lineinfo=lineinfo,
         header_dict=header_dict,
@@ -49,11 +46,11 @@ def compile_kernel(
 
 
 def load_kernel(
-    kernel_name: str, cubin_file_name: str = None, device_ordinal: int = 0
+    kernel_name: str, cubin: str = None, device_ordinal: int = 0
 ) -> Tuple[driver.Module, driver.Function]:
     primary_context_guard.set_device(device_ordinal)
     module = driver.Module()
-    module.load(str(cubin_file_name))
+    module.load_data(cubin)
     function = module.get_function(kernel_name)
     return (module, function)
 
@@ -62,7 +59,6 @@ def compile_and_load_kernel(
     kernel_name=None,
     source_file_name=None,
     includes=[],
-    output_file=None,
     device_ordinal=0,
     debug=False,
     lineinfo=False,
@@ -72,16 +68,14 @@ def compile_and_load_kernel(
     arch = torch.cuda.get_device_capability(device_ordinal)
     if source_file_name is None:
         source_file_name = f"{kernel_name}.cu"
-    with NamedTemporaryFile() as cubin_file:
-        r = compile_kernel(
+    cubin = compile_kernel(
             kernel_name=kernel_name,
             source_file_name=source_file_name,
             header_dict=header_dict,
             debug=debug,
             lineinfo=lineinfo,
             includes=includes,
-            output_file=cubin_file.name,
             arch=arch,
             test_kernel=test_kernel,
         )
-        return load_kernel(kernel_name, cubin_file.name, device_ordinal=device_ordinal)
+    return load_kernel(kernel_name, cubin, device_ordinal=device_ordinal)

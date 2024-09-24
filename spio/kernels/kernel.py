@@ -1,5 +1,3 @@
-from tempfile import NamedTemporaryFile
-
 import torch
 
 from ..generators import generate
@@ -23,7 +21,6 @@ class Kernel:
             self.kernel_name,
             self.kernel_source_file,
             None,
-            self.cubin_file.name,
             {"parameters.h": self.parameters_header},
         )
 
@@ -43,22 +40,19 @@ class Kernel:
         self.config = config
         self.module = None
         self.function = None
-        self.cubin_file = NamedTemporaryFile(
-            suffix=".cubin",
-            prefix=f"spio_{self.kernel_name}_",
-        )
         self.parameters_header = generate(specs)
 
     def compile(self):
-        return compile_kernel(*self.compiler_args)
+        self.cubin = compile_kernel(*self.compiler_args)
 
     def load(self, device_ordinal=0):
         self.module, self.function = load_kernel(
             kernel_name=self.kernel_name,
-            cubin_file_name=self.cubin_file.name,
+            cubin=self.cubin,
             device_ordinal=device_ordinal,
         )
-        self.cubin_file = None
+        self.cubin = None
+        self.parameters_header = None
 
     def unload(self):
         if self.module is not None:

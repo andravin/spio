@@ -20,7 +20,6 @@ def compile(
     cubin=False,
     compile=False,
     arch=None,
-    output_file=None,
     device_debug=False,
     lineinfo=False,
     header_dict=None,
@@ -50,7 +49,4 @@ def compile(
         program.compile(options)
     except Exception as e:
         raise ValueError(f"Compilation error log: {program.log()}") from e
-    cubin = program.cubin()
-    with open(output_file, "wb") as f:
-        f.write(cubin)
-    return 0
+    return program.cubin()
