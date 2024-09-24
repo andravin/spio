@@ -2,12 +2,20 @@ import os
 import shutil
 from pathlib import Path
 import subprocess
+import importlib.resources
 
-# from ..cuda.nvrtc import Program, version as nvrtc_version
 from ..cuda.nvrtc_ctypes import Program, version as nvrtc_version
 
-CUDA_RUNTIME_INCLUDE_PATH = "/home/andrew/.local/lib/python3.10/site-packages/nvidia/cuda_runtime/include"
+
+def _find_cuda_runtime_include_dir() -> str:
+    with importlib.resources.path("nvidia.cuda_runtime", "include") as path:
+        return str(path)
+
+
+CUDA_RUNTIME_INCLUDE_PATH = _find_cuda_runtime_include_dir()
+
 USE_NVRTC = True
+
 
 def nvcc_full_path():
     """Return the path to nvcc or raise FileNotFoundError if not found.
@@ -44,7 +52,6 @@ def compile(sources, **kwargs):
         return compile_with_nvcc(sources, **kwargs)
 
 
-
 def compile_with_nvrtc(
     sources,
     includes=[],
@@ -55,7 +62,7 @@ def compile_with_nvrtc(
     output_file=None,
     device_debug=False,
     lineinfo=False,
-): 
+):
     arch = _sm_from_arch(arch)
     includes = includes + [CUDA_RUNTIME_INCLUDE_PATH]
     options = []
@@ -74,7 +81,7 @@ def compile_with_nvrtc(
         program.compile(options)
     except Exception as e:
         raise ValueError(f"Compilation error log: {program.log()}") from e
-    cubin = program.cubin()    
+    cubin = program.cubin()
     with open(output_file, "wb") as f:
         f.write(cubin)
     return 0
