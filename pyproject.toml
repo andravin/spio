@@ -1,14 +1,3 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "spio"
-authors = [{ name = "Andrew Lavin", email = "alavin@acm.org" }]
-version = "0.0.1"
-description = "Efficient kernels for training convolutional neural networks with Python"
-classifiers = ["Programming Language :: Python :: 3.7", "License :: OSI Approved :: Apache Software License","Operating System :: OS Independent"]
-
-[project.urls]
-Homepage = "https://github.com/andravin/spio"
-Issues = "https://github.com/andravin/spio/issues"
+requires = ["setuptools>=42", "wheel", "Cython", "nvidia-cuda-runtime-cu12"]
+build-backend = "setuptools.build_meta"

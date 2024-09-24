@@ -15,12 +15,11 @@ CPP_SOURCES = ["test_index.cpp"]
 
 
 def compile_cpp_tests(extra_cpp_test_files=[]):
-    src_dir = spio.compiler.spio_cpp_tests_src_path()
     includes = [
         spio.compiler.spio_include_path(),
-        spio.compiler.spio_cpp_tests_src_path(),
+        spio.compiler.spio_test_include_path(),
     ]
-    sources = [str(src_dir / src) for src in CPP_SOURCES] + extra_cpp_test_files
+    sources = [spio.compiler.spio_test_src_path(src) for src in CPP_SOURCES] + extra_cpp_test_files
     includes = [str(include) for include in includes]
     return spio.compiler.compile_with_nvcc(sources=sources, includes=includes, run=True)
 

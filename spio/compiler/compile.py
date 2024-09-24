@@ -91,6 +91,7 @@ def compile_with_nvcc(
     device_debug=False,
     lineinfo=False,
 ):
+    """Deprecated. Use compile_with_nvrtc instead."""
     arch = _sm_from_arch(arch)
     nvcc = nvcc_full_path()
     includes = [f"-I{path}" for path in includes]

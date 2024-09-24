@@ -5,10 +5,9 @@ import torch
 
 from ..cuda import driver, primary_context_guard
 from .paths import (
-    spio_cubins_path,
+    spio_src_path,
+    spio_test_src_path,
     spio_include_path,
-    spio_kernels_path,
-    spio_test_kernels_path,
 )
 
 from .compile import compile
@@ -29,8 +28,10 @@ def compile_kernel(
         raise ValueError(
             "Minimum supported GPU compute capability is sm_80 (Ampere or newer)."
         )
-    kernel_path = spio_test_kernels_path() if test_kernel else spio_kernels_path()
-    cuda_source_file = kernel_path / source_file_name
+    if test_kernel:
+        cuda_source_file = spio_test_src_path(source_file_name)
+    else:
+        cuda_source_file = spio_src_path(source_file_name)
     includes = includes + [spio_include_path()]
     return compile(
         [cuda_source_file],
@@ -44,7 +45,9 @@ def compile_kernel(
     )
 
 
-def load_kernel(kernel_name: str, cubin_file_name: str = None, device_ordinal: int = 0) -> Tuple[driver.Module, driver.Function]:
+def load_kernel(
+    kernel_name: str, cubin_file_name: str = None, device_ordinal: int = 0
+) -> Tuple[driver.Module, driver.Function]:
     primary_context_guard.set_device(device_ordinal)
     module = driver.Module()
     module.load(str(cubin_file_name))

@@ -6,6 +6,7 @@
 *.so
 __pycache__/
 .venv/
+.fooenv/
 
 # PyTorch profiler results.
 trace*.json
@@ -21,3 +22,5 @@ inference_*.json
 
 build/
 spio/cuda/driver.c
+
+spio.egg-info/

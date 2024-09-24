@@ -3,19 +3,15 @@ import sys
 import ctypes
 from typing import List
 from enum import Enum
+import importlib.resources
 
 NVRTC_LIB = "libnvrtc.so.12"
 
 
 # Find the path to the NVRTC shared library.
-def _find_libnvrtc_in_sys_path():
-    lib_path = None
-    for path in sys.path:
-        try_path = os.path.join(path, "nvidia", "cuda_nvrtc", "lib", NVRTC_LIB)
-        if os.path.exists(try_path):
-            lib_path = try_path
-            break
-    return lib_path
+def _find_libnvrtc_in_sys_path() -> str:
+    with importlib.resources.path("nvidia.cuda_nvrtc.lib", NVRTC_LIB) as path:
+        return str(path)
 
 
 # Define the types.
@@ -78,12 +74,12 @@ def _define_nvrtc_types(nvrtc):
     nvrtc.nvrtcGetProgramLog.restype = ctypes.c_int
     nvrtc.nvrtcGetProgramLog.argtypes = [nvrtc_Program, ctypes.c_char_p]
 
-
-lib_path = _find_libnvrtc_in_sys_path()
-if lib_path is None:
+try:
+    lib_path = _find_libnvrtc_in_sys_path()
+except FileNotFoundError as e:
     raise Exception(
         f"Could not find {NVRTC_LIB}. Did you install PyTorch with CUDA support?"
-    )
+    ) from e
 nvrtc = ctypes.CDLL(lib_path)
 _define_nvrtc_types(nvrtc)
 
