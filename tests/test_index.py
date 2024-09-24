@@ -8,6 +8,8 @@ work in both C++ and CUDA programs.
 from subprocess import CalledProcessError
 from tempfile import NamedTemporaryFile
 
+import pytest
+
 import spio.generators
 import spio.compiler
 
@@ -24,6 +26,7 @@ def compile_cpp_tests(extra_cpp_test_files=[]):
     return spio.compiler.compile_with_nvcc(sources=sources, includes=includes, run=True)
 
 
+@pytest.mark.skip(reason="NVCC support not requried by default.")
 def test_cpp_tests():
     """Run all C++ unit tests."""
     test_source = _test_generate_index()
