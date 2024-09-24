@@ -5,7 +5,6 @@ import torch
 from ..generators import generate
 from ..compiler import compile_kernel, load_kernel
 from .launch_params import LaunchParams
-from .code_directory import GenDirectory
 from .kernel_util import get_first_device_in_args
 from ..cuda import primary_context_guard
 from .stats import Stats
@@ -23,8 +22,9 @@ class Kernel:
         return (
             self.kernel_name,
             self.kernel_source_file,
-            [self.gencode_dir.name],
+            None,
             self.cubin_file.name,
+            {"parameters.h": self.parameters_header},
         )
 
     def __init__(
@@ -47,17 +47,10 @@ class Kernel:
             suffix=".cubin",
             prefix=f"spio_{self.kernel_name}_",
         )
-        self.gencode_dir = GenDirectory()
-        generate(
-            specs,
-            self.gencode_dir.path / "parameters.h",
-        )
+        self.parameters_header = generate(specs)
 
     def compile(self):
-        res = compile_kernel(*self.compiler_args)
-        self.gencode_dir.cleanup()
-        self.gencode_dir = None
-        return res
+        return compile_kernel(*self.compiler_args)
 
     def load(self, device_ordinal=0):
         self.module, self.function = load_kernel(

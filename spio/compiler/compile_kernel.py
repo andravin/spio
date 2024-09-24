@@ -18,6 +18,7 @@ def compile_kernel(
     source_file_name=None,
     includes=[],
     output_file=None,
+    header_dict=None,
     arch=None,
     debug=False,
     lineinfo=False,
@@ -32,16 +33,18 @@ def compile_kernel(
         cuda_source_file = spio_test_src_path(source_file_name)
     else:
         cuda_source_file = spio_src_path(source_file_name)
-    includes = includes + [spio_include_path()]
+    all_includes = includes if includes is not None else []
+    all_includes = all_includes + [spio_include_path()]
     return compile(
         [cuda_source_file],
-        includes=includes,
+        includes=all_includes,
         compile=True,
         cubin=True,
         arch=arch,
         output_file=output_file,
         device_debug=debug,
         lineinfo=lineinfo,
+        header_dict=header_dict,
     )
 
 
@@ -64,6 +67,7 @@ def compile_and_load_kernel(
     debug=False,
     lineinfo=False,
     test_kernel=False,
+    header_dict=None,
 ):
     arch = torch.cuda.get_device_capability(device_ordinal)
     if source_file_name is None:
@@ -72,6 +76,7 @@ def compile_and_load_kernel(
         r = compile_kernel(
             kernel_name=kernel_name,
             source_file_name=source_file_name,
+            header_dict=header_dict,
             debug=debug,
             lineinfo=lineinfo,
             includes=includes,

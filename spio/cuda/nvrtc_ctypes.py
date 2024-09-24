@@ -139,17 +139,19 @@ class Program:
         include_names: List[str] = [],
     ):
         self.program = nvrtc_Program()
-        headers = (ctypes.c_char_p * len(headers))(*headers)
-        include_names = (ctypes.c_char_p * len(include_names))(*include_names)
         num_headers = len(headers)
+        headers_arr = (ctypes.c_char_p * num_headers)()
+        headers_arr[:] = [header.encode("utf-8") for header in headers]
+        include_names_arr = (ctypes.c_char_p * len(include_names))()
+        include_names_arr[:] = [name.encode("utf-8") for name in include_names]
         _check(
             nvrtc.nvrtcCreateProgram(
                 ctypes.byref(self.program),
                 src.encode("utf-8"),
                 name.encode("utf-8"),
                 num_headers,
-                headers,
-                include_names,
+                headers_arr,
+                include_names_arr,
             )
         )
 

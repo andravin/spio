@@ -4,7 +4,6 @@ from itertools import product
 import torch
 
 from ..generators import (
-    generate,
     ParamsSpec,
     IndexSpec,
     TensorSpec,

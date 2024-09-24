@@ -23,6 +23,7 @@ def compile(
     output_file=None,
     device_debug=False,
     lineinfo=False,
+    header_dict=None,
 ):
     arch = sm_from_arch(arch)
     includes = includes + [CUDA_RUNTIME_INCLUDE_PATH]
@@ -35,9 +36,16 @@ def compile(
         options.append("-lineinfo")
     options += [f"-I{path}" for path in includes]
 
+    if header_dict is not None:
+        headers = list(header_dict.values())
+        include_names = list(header_dict.keys())
+    else:
+        headers = []
+        include_names = []
+
     with open(sources[0], "r") as f:
         src = f.read()
-    program = Program(src, "spio.cu")
+    program = Program(src, "spio.cu", headers=headers, include_names=include_names)
     try:
         program.compile(options)
     except Exception as e:

@@ -11,7 +11,6 @@ from spio.generators import (
     generate,
 )
 from spio.compiler import compile_and_load_kernel
-from spio.kernels import GenDirectory
 from spio.util import divup, assert_all_close
 
 
@@ -145,8 +144,7 @@ def test_conv_group_4_16w_4h_64c():
         with torch.inference_mode():
             ref_outputs = conv(inputs)
 
-    with GenDirectory() as include_dir:
-        generate(
+        my_header = generate(
             [
                 IndexSpec("BlockIdx", dict(n=N, c8=blocks_c8, p=blocks_p, q=blocks_q)),
                 TensorSpec("Input", "const uint4", dict(n=N, y=H, x=W, c8=C8)),
@@ -208,8 +206,7 @@ def test_conv_group_4_16w_4h_64c():
                         NUM_SMEM_INPUT_ROWS=NUM_SMEM_INPUT_ROWS,
                     ),
                 ),
-            ],
-            include_dir / "my_header.h",
+            ]
         )
 
         module, conv_kernel = compile_and_load_kernel(
@@ -217,8 +214,8 @@ def test_conv_group_4_16w_4h_64c():
             source_file_name="conv_group_4.cu",
             debug=debug,
             lineinfo=lineinfo,
-            includes=[include_dir],
             test_kernel=True,
+            header_dict={"my_header.h": my_header},
         )
 
         outputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float16).to(
@@ -257,29 +254,27 @@ def test_memcpy_kernel():
     X = N * C * H * W
     BLOCKS = divup(X, BLOCK_X)
 
-    with GenDirectory() as include_dir:
-        generate(
-            [
-                ParamsSpec(
-                    "MyParams",
-                    dict(
-                        ITERS=ITERS,
-                        BLOCK_X4=BLOCK_X4,
-                        X=X,
-                        THREADS=THREADS,
-                    ),
+    my_params_header = generate(
+        [
+            ParamsSpec(
+                "MyParams",
+                dict(
+                    ITERS=ITERS,
+                    BLOCK_X4=BLOCK_X4,
+                    X=X,
+                    THREADS=THREADS,
                 ),
-            ],
-            include_dir / "my_params.h",
-        )
+            ),
+        ]
+    )
 
-        module, memcpy_kernel = compile_and_load_kernel(
-            kernel_name="memcpy_simple",
-            debug=debug,
-            lineinfo=lineinfo,
-            includes=[include_dir],
-            test_kernel=True,
-        )
+    module, memcpy_kernel = compile_and_load_kernel(
+        kernel_name="memcpy_simple",
+        debug=debug,
+        lineinfo=lineinfo,
+        header_dict={"my_params.h": my_params_header},
+        test_kernel=True,
+    )
 
     inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float32).to(
         memory_format=torch.channels_last
@@ -329,49 +324,47 @@ def test_row_memcpy_kernel():
     WARPS = BLOCK_GROUPS
     THREADS = WARPS * 32
 
-    with GenDirectory() as include_dir:
-        generate(
-            [
-                ParamsSpec("Block", dict(p=BLOCK_P, q=BLOCK_Q, c4=BLOCK_C4, padding=1)),
-                IndexSpec(
-                    "BlockIdx",
-                    dict(n=BLOCKS_N, p=BLOCKS_P, q=BLOCKS_Q, c4=BLOCKS_C4),
-                ),
-                IndexSpec("InputIdx", dict(x=BLOCK_W, c4=BLOCK_C4)),
-                TensorSpec("Input", "const float4", dict(n=N, y=H, x=W, c4=C4)),
-                TensorSpec("Output", "float4", dict(n=N, p=H, q=W, c4=C4)),
-                TensorSpec(
-                    "SmemInput",
-                    "float4",
-                    dict(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1),
-                ),
-                TensorSpec(
-                    "ConstSmemInput",
-                    "const float2",
-                    dict(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1, c2=2),
-                ),
-                IndexSpec("SmemInputLoadIdx", dict(c4=BLOCK_C4, q=BLOCK_Q, c2=2)),
-                TensorSpec(
-                    "SmemOutput",
-                    "float2",
-                    dict(q=BLOCK_Q, c4=BLOCK_C4 + 1, c2=2),
-                ),
-                TensorSpec(
-                    "ConstSmemOutput",
-                    "const float4",
-                    dict(q=BLOCK_Q, c4=BLOCK_C4 + 1),
-                ),
-            ],
-            include_dir / "parameters.h",
-        )
+    parameters_header = generate(
+        [
+            ParamsSpec("Block", dict(p=BLOCK_P, q=BLOCK_Q, c4=BLOCK_C4, padding=1)),
+            IndexSpec(
+                "BlockIdx",
+                dict(n=BLOCKS_N, p=BLOCKS_P, q=BLOCKS_Q, c4=BLOCKS_C4),
+            ),
+            IndexSpec("InputIdx", dict(x=BLOCK_W, c4=BLOCK_C4)),
+            TensorSpec("Input", "const float4", dict(n=N, y=H, x=W, c4=C4)),
+            TensorSpec("Output", "float4", dict(n=N, p=H, q=W, c4=C4)),
+            TensorSpec(
+                "SmemInput",
+                "float4",
+                dict(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1),
+            ),
+            TensorSpec(
+                "ConstSmemInput",
+                "const float2",
+                dict(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1, c2=2),
+            ),
+            IndexSpec("SmemInputLoadIdx", dict(c4=BLOCK_C4, q=BLOCK_Q, c2=2)),
+            TensorSpec(
+                "SmemOutput",
+                "float2",
+                dict(q=BLOCK_Q, c4=BLOCK_C4 + 1, c2=2),
+            ),
+            TensorSpec(
+                "ConstSmemOutput",
+                "const float4",
+                dict(q=BLOCK_Q, c4=BLOCK_C4 + 1),
+            ),
+        ]
+    )
 
-        module, kernel = compile_and_load_kernel(
-            kernel_name="row_memcpy",
-            debug=debug,
-            lineinfo=lineinfo,
-            includes=[include_dir],
-            test_kernel=True,
-        )
+    module, kernel = compile_and_load_kernel(
+        kernel_name="row_memcpy",
+        debug=debug,
+        lineinfo=lineinfo,
+        header_dict={"parameters.h": parameters_header},
+        test_kernel=True,
+    )
 
     inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float32).to(
         memory_format=torch.channels_last

@@ -5,7 +5,6 @@ from math import prod
 import torch
 
 from ..generators import (
-    generate,
     MacroSpec,
     ParamsSpec,
     IndexSpec,

@@ -1,6 +1,5 @@
 def generate(
     gen_specs,
-    header_file_name,
     namespace: str = None,
 ) -> None:
     code = _include_files()
@@ -12,8 +11,7 @@ def generate(
         code += "\n"
     if namespace is not None:
         code += _end_namespace()
-    with open(header_file_name, "w") as file:
-        file.write(code)
+    return code
 
 
 def _include_files():
