@@ -7,6 +7,8 @@ import timm
 from timm.utils import ParseKwargs
 
 import spio
+import spio.log
+import spio.transform
 
 
 def get_trace_file_name(args, datestamp, ext=".json"):
@@ -69,7 +71,12 @@ inputs = [
 model.to(device="cuda", memory_format=memory_format)
 
 if args.summary:
-    import torchinfo
+    try:
+        import torchinfo
+    except ImportError as e:
+        raise ImportError(
+            "torchinfo is required for --summary. Please install it using 'pip install torchinfo'."
+        ) from e
 
     torchinfo.summary(
         model,
