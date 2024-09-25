@@ -114,7 +114,7 @@ def fwd_bwd(inp):
 with torch.autocast(device_type="cuda", dtype=torch.float16):
 
     if args.spio:
-        model = spio.transform(model)
+        model = spio.transform.transform(model)
 
     print(f"Warming up {WARMUP_ITERS} iterations ..")
     for i in range(WARMUP_ITERS):

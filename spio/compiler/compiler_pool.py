@@ -9,10 +9,11 @@ from .compile_kernel import compile_kernel
 
 TRUTHS = ["true", "1", "yes", "y", "t"]
 LONG_TIMEOUT = 999
+DEFAULT_WORKERS = 4
 
 default_lineinfo = os.environ.get("SPIO_LINEINFO", "False").lower() in TRUTHS
 default_debug = os.environ.get("SPIO_DEBUG", "False").lower() in TRUTHS
-workers = int(os.environ.get("SPIO_WORKERS", "4"))
+workers = int(os.environ.get("SPIO_WORKERS", f"{DEFAULT_WORKERS}"))
 
 lineinfo = ContextVar("lineinfo", default=default_lineinfo)
 debug = ContextVar("debug", default=default_debug)
@@ -54,5 +55,5 @@ def _compile_kernels(compiler_args, arch=None):
         pool.join()
         raise e
     except Exception as e:
-        raise ValueError("Error compiling kernels") from e      
+        raise ValueError("Error compiling kernels") from e
     return res

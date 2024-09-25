@@ -5,7 +5,7 @@ from Cython.Build import cythonize
 
 
 try:
-    with importlib.resources.path("nvidia.cuda_runtime", "include") as path:
+    with importlib.resources.files("nvidia.cuda_runtime.include") as path:
         cuda_rt_include_dir = str(path)
 except FileNotFoundError as e:
     raise RuntimeError(
@@ -33,7 +33,6 @@ setup(
         "pytest",
         "pandas",
         "xgboost",
-        "scikit-learn",
         "appdirs",
     ],
     include_package_data=True,

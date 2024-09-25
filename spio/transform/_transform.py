@@ -1,8 +1,8 @@
 import torch
 from torch.fx import symbolic_trace
 
-from spio.kernels import Conv2dGw8Params
-from spio.layers import Conv2dGw8
+from ..kernels import Conv2dGw8Params
+from ..layers import Conv2dGw8
 
 
 spio_modules_classes = [Conv2dGw8]

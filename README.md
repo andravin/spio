@@ -12,6 +12,13 @@ pip install spio
 
 ## Installation from Source
 
+First, ensure you have a C compiler installed. On Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install build-essential
+```
+
 Clone the repository:
 
 ```bash

@@ -6,7 +6,6 @@ import time
 import torch
 import ast
 
-import spio
 import spio.functional
 import spio.kernels
 import spio.functional

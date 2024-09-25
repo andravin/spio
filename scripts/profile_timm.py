@@ -90,7 +90,7 @@ if args.summary:
 
 if args.scan_modules:
     with torch.autocast(device_type="cuda", dtype=torch.float16):
-        params_lst = spio.scan_modules(model, inputs[0])
+        params_lst = spio.transform.scan_modules(model, inputs[0])
         for params in params_lst:
             print(params)
         sys.exit(0)
@@ -99,7 +99,7 @@ if args.torchcompile:
     model = torch.compile(model)
 
 if args.spio:
-    model = spio.transform(model)
+    model = spio.transform.transform(model)
 
 if args.no_profile:
     with torch.autocast(device_type="cuda", dtype=torch.float16):

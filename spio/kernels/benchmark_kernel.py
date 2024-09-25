@@ -1,7 +1,8 @@
 import torch
 
+from .. import primary_context_guard
 from ..log import BenchmarkResult
-from ..cuda import primary_context_guard, driver
+from ..cuda.driver import get_driver_version
 from ..compiler import compile_kernel_configs
 from ..util import get_formatted_device_name, get_formatted_arch
 from .stats import Stats
@@ -72,7 +73,7 @@ def benchmark_kernel(
                 kernel.load(device_ordinal=device_ordinal)
             except ValueError as e:
                 api_version = primary_context_guard.get_api_version()
-                driver_version = driver.get_driver_version()
+                driver_version = get_driver_version()
                 raise ValueError(
                     f"Error loading kernel {kernel} with config {config}: {e}; API version: {api_version} Driver version: {driver_version}"
                 ) from e

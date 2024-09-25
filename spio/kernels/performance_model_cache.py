@@ -5,13 +5,13 @@ import xgboost as xgb
 import torch
 import appdirs
 
+from .. import primary_context_guard
 from ..util import (
     get_cache_dir,
     params_and_configs_to_dataframe,
     get_formatted_device_name,
     get_formatted_arch,
 )
-from ..cuda import primary_context_guard
 from ..compiler import compile_kernel_configs
 from .kernel import Kernel
 from ..log import logger_enabled

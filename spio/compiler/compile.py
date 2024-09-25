@@ -6,7 +6,7 @@ from .arch import sm_from_arch
 
 
 def _find_cuda_runtime_include_dir() -> str:
-    with importlib.resources.path("nvidia.cuda_runtime", "include") as path:
+    with importlib.resources.files("nvidia.cuda_runtime").joinpath("include") as path:
         return str(path)
 
 

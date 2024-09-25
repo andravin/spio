@@ -1,10 +1,10 @@
 import torch
 
+from .. import primary_context_guard
 from ..generators import generate
 from ..compiler import compile_kernel, load_kernel
 from .launch_params import LaunchParams
 from .kernel_util import get_first_device_in_args
-from ..cuda import primary_context_guard
 from .stats import Stats
 
 

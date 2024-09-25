@@ -10,7 +10,7 @@ NVRTC_LIB = "libnvrtc.so.12"
 
 # Find the path to the NVRTC shared library.
 def _find_libnvrtc_in_sys_path() -> str:
-    with importlib.resources.path("nvidia.cuda_nvrtc.lib", NVRTC_LIB) as path:
+    with importlib.resources.files("nvidia.cuda_nvrtc.lib").joinpath(NVRTC_LIB) as path:
         return str(path)
 
 

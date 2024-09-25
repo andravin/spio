@@ -2,8 +2,15 @@ import argparse
 
 import pandas as pd
 import xgboost as xgb
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
+
+try:
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import mean_squared_error
+except ImportError as e:
+    raise ImportError(
+        "scikit-learn is required to train the performance model. "
+        "Please install it using `pip install scikit-learn`."
+    ) from e
 
 from spio.kernels import (
     Conv2dGw8Params,

@@ -2,7 +2,8 @@ from typing import Tuple
 
 import torch
 
-from ..cuda import driver, primary_context_guard
+from .. import primary_context_guard
+from ..cuda.driver import Module, Function
 from .paths import (
     spio_src_path,
     spio_test_src_path,
@@ -47,9 +48,9 @@ def compile_kernel(
 
 def load_kernel(
     kernel_name: str, cubin: str = None, device_ordinal: int = 0
-) -> Tuple[driver.Module, driver.Function]:
+) -> Tuple[Module, Function]:
     primary_context_guard.set_device(device_ordinal)
-    module = driver.Module()
+    module = Module()
     module.load_data(cubin)
     function = module.get_function(kernel_name)
     return (module, function)

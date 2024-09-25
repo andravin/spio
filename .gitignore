@@ -21,6 +21,6 @@ inference_*.json
 
 
 build/
-spio/cuda/driver.c
+spio/driver.c
 
 spio.egg-info/
