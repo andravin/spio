@@ -1,8 +1,71 @@
-from typing import List
+from typing import List, Type
 from dataclasses import dataclass, asdict
 from functools import partial
+import importlib.resources
 
 import pandas as pd
+
+
+def load_parameter_set(params_cls: dataclass = None):
+    """Load the parameter set for the given parameter dataclass.
+
+    Paremeter sets are located in spio.data.<data_cls>.dat. They
+    are used to train performance models and generate test cases.
+
+    Parameters
+    ----------
+    params_cls : dataclass
+        The dataclass for the parameter set.
+
+    Returns
+    -------
+    List[dataclass]
+        A list of parameter sets for the given dataclass.
+    """
+    resource = f"{params_cls.__name__}.dat"
+    return load_dataclasses_from_resource(resource, [params_cls])
+
+
+def load_dataclasses_from_resource(
+    resource_name: str, dataclasses: List[Type[dataclass]] = None
+) -> List[dataclass]:
+    """Load a list of dataclasses from a resource file.
+
+    The resource file is located at spio.data.<resource_name>.dat.
+
+    Each line in the resource file should be a valid Python expression
+    corresponding to a dataclass instance. For example, the following
+    lines are valid expressions for a dataclass with fields
+    `a: int`, `b: str`, and `c: float`:
+
+    ```
+    Dataclass(a=1, b="hello", c=3.14)
+    Dataclass(a=2, b="world", c=2.71)
+    ```
+
+    Parameters
+    ----------
+    resource_name : str
+        The name of the resource file.
+    dataclasses : List[dataclass]
+        A list of dataclasses to use for parsing the expressions.
+
+    Returns
+    -------
+    List[dataclass]
+        A list of dataclass instances parsed from the resource file.
+    """
+    if dataclasses is None:
+        return []
+    dataclasses = {d.__name__: d for d in dataclasses}
+    params_lst = []
+    with importlib.resources.files("spio.data").joinpath(resource_name).open("r") as f:
+        for line in f:
+            if line:
+                params = parse_dataclass(line, dataclasses=dataclasses)
+                if params is not None:
+                    params_lst.append(params)
+    return params_lst
 
 
 def params_and_configs_to_dataframe(params, configs):
@@ -14,7 +77,9 @@ def params_and_configs_to_dataframe(params, configs):
     df_configs = df_configs.add_prefix("Config_")
     df_configs = _expand_dataframe_tuples(df_configs)
 
-    df = pd.concat([df_params] * len(df_configs), ignore_index=True).join(df_configs.reset_index(drop=True))
+    df = pd.concat([df_params] * len(df_configs), ignore_index=True).join(
+        df_configs.reset_index(drop=True)
+    )
 
     return df
 

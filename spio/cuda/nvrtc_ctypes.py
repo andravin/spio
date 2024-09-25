@@ -10,8 +10,7 @@ NVRTC_LIB = "libnvrtc.so.12"
 
 # Find the path to the NVRTC shared library.
 def _find_libnvrtc_in_sys_path() -> str:
-    with importlib.resources.files("nvidia.cuda_nvrtc.lib").joinpath(NVRTC_LIB) as path:
-        return str(path)
+    return str(importlib.resources.files("nvidia.cuda_nvrtc.lib").joinpath(NVRTC_LIB))
 
 
 # Define the types.
@@ -73,6 +72,7 @@ def _define_nvrtc_types(nvrtc):
 
     nvrtc.nvrtcGetProgramLog.restype = ctypes.c_int
     nvrtc.nvrtcGetProgramLog.argtypes = [nvrtc_Program, ctypes.c_char_p]
+
 
 try:
     lib_path = _find_libnvrtc_in_sys_path()

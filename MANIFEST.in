@@ -2,7 +2,7 @@ include LICENSE.txt
 include README.md
 include pyproject.toml
 
-recursive-include spio *.py *.pyx *.pxd *.cu *.h *.cuh
+recursive-include spio *.py *.pyx *.pxd *.cu *.h *.cuh *.dat
 
 # Exclude unnecessary files and directories
 exclude *.pyc
