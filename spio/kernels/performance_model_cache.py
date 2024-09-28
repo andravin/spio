@@ -124,14 +124,6 @@ class PerformanceModelCache:
 
         If the architecture is supported, then it must provide a performance model for every kernel.
         Additionally, there may be performance models for the device. We prefer device models if they exist.
-
-        Basic control flow:
-
-        1. Check if a performance model has been loaded for the given kernel and device.
-        2. If not, check if a model archive has been downloaded for the given device.
-        3. If not, ensure the release_info.json has been downloaded for the current release ..
-        4. .. and try to download the device or architecture model archive from the latest GitHub release.
-        5. Load the performance model from the archive and store it in the cache.
         """
 
         if arch not in supported_arch:
@@ -285,6 +277,10 @@ def _get_release_info():
     global _release_info
     if _release_info is None:
         _release_info = _load_release_info()
+        # If the release info is not up-to-date, download it.
+        if version.parse(_release_info['tag_name']) != version.parse(__version__):
+            _clear_cache()
+            _release_info = None
         if _release_info is None:
             _release_info = _download_release_info()
             _clear_cache()
