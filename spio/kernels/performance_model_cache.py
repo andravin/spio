@@ -1,8 +1,7 @@
 from pathlib import Path
 from dataclasses import dataclass
-import gzip
 import requests
-from typing import Type, List, Any, Dict
+from typing import Type, List, Any
 from packaging import version
 import tarfile
 import json
@@ -29,13 +28,13 @@ RELEASES_URL = "https://api.github.com/repos/andravin/spio/releases"
 
 CACHE_DIR = get_cache_dir()
 
-LOCK_FILE = str(Path(CACHE_DIR, "spio_download.lock"))
+LOCK_FILE = Path(CACHE_DIR, "spio_download.lock")
 
 GITHUB_TOKEN_FILE = Path(CACHE_DIR, "GITHUB_TOKEN")
 
 RELEASE_INFO_FILE = Path(CACHE_DIR, "release_info.json")
 
-_download_lock = FileLock(LOCK_FILE)
+_download_lock = FileLock(str(LOCK_FILE))
 
 _release_info = None
 
@@ -74,7 +73,7 @@ class PerformanceModelCache:
         # _PerformanceModelKey -> xgb.Booster
         self._model_cache = {}
 
-        # device -> archive name
+        # device name -> archive name
         self._archive_cache = {}
 
     def predict_best_kernel(
@@ -124,7 +123,7 @@ class PerformanceModelCache:
         downloaded from the GitHub release.
 
         If the architecture is supported, then it must provide a performance model for every kernel.
-        Additionally, there may be a performance models for the device. We prefer the device model if it exists.
+        Additionally, there may be performance models for the device. We prefer device models if they exist.
 
         Basic control flow:
 
