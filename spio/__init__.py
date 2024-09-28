@@ -1,4 +1,4 @@
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 # Import the CUDA and driver modules to ensure they are initialized
 # before accessing their contents.
 from .cuda.driver import init, PrimaryContextGuard
