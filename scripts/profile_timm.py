@@ -40,6 +40,7 @@ parser.add_argument("--model-kwargs", nargs="*", default={}, action=ParseKwargs)
 parser.add_argument("--no-profile", action="store_true")
 parser.add_argument("--enable-logger", action="store_true")
 parser.add_argument("--scan-modules", action="store_true")
+parser.add_argument("--bench", type=str, default="train", help="train or inference benchmark mode")
 
 args = parser.parse_args()
 
@@ -116,13 +117,21 @@ else:
     schedule = torch.profiler.schedule(
         wait=WAIT_ITERS, warmup=args.warmup_iters, active=args.benchmark_iters, repeat=1
     )
+    if args.bench == "train":
+        with torch.profiler.profile(schedule=schedule) as prof:
+            for i in range(total_iters):
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    out = model(inputs[i % NUM_INPUTS]).sum()
+                out.backward()
+                prof.step()
+    else:
+        with torch.no_grad():
+            with torch.profiler.profile(schedule=schedule) as prof:
+                for i in range(total_iters):
+                    with torch.autocast(device_type="cuda", dtype=torch.float16):
+                        model(inputs[i % NUM_INPUTS]).sum()
+                    prof.step()
 
-    with torch.profiler.profile(schedule=schedule) as prof:
-        for i in range(total_iters):
-            with torch.autocast(device_type="cuda", dtype=torch.float16):
-                out = model(inputs[i % NUM_INPUTS]).sum()
-            out.backward()
-            prof.step()
 
     datestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
