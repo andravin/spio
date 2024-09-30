@@ -278,7 +278,9 @@ def _get_release_info():
     if _release_info is None:
         _release_info = _load_release_info()
         # If the release info is not up-to-date, download it.
-        if version.parse(_release_info['tag_name']) != version.parse(__version__):
+        if (
+            _release_info is not None and version.parse(_release_info["tag_name"])
+        ) != version.parse(__version__):
             _clear_cache()
             _release_info = None
         if _release_info is None:
