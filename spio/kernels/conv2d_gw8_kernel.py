@@ -55,41 +55,20 @@ class Conv2dGw8Kernel(Kernel):
         )
 
     @classmethod
-    def fprop_kernel(
-        cls,
-        params: Conv2dGw8Params,
-        args,
-        config: Conv2dGw8Config = None,
-    ):
-        return cls._fprop_kernel_cache.get(
-            cls, params, args, config=config, igrad=False
-        )
+    def get_kernel_cache(cls, igrad=False):
+        return cls._dgrad_kernel_cache if igrad else cls._fprop_kernel_cache
 
     @classmethod
-    def grad_input_kernel(
-        cls,
-        params: Conv2dGw8Params,
-        args,
-        config: Conv2dGw8Config = None,
-    ):
-        return cls._dgrad_kernel_cache.get(cls, params, args, config=config, igrad=True)
-    
+    def fprop_kernel(cls, params: Conv2dGw8Params, device):
+        return cls._fprop_kernel_cache.get(cls, params, device, igrad=False)
+
     @classmethod
-    def get_kernel_name(cls, igrad=False):
+    def grad_input_kernel(cls, params: Conv2dGw8Params, device):
+        return cls._dgrad_kernel_cache.get(cls, params, device, igrad=True)
+
+    @classmethod
+    def get_kernel_base_name(cls, igrad=False) -> str:
         return "spio_conv2d_gw8_fprop" if not igrad else "spio_conv2d_gw8_dgrad"
-
-    @classmethod
-    def get_kernel(
-        cls,
-        params: Conv2dGw8Params,
-        args,
-        config: Conv2dGw8Config = None,
-        igrad=False,
-    ):
-        if igrad:
-            return cls.grad_input_kernel(params, args, config=config)
-        else:
-            return cls.fprop_kernel(params, args, config=config)
 
     def __init__(self, params, config=None, igrad=False):
         params.validate()
@@ -136,7 +115,7 @@ class Conv2dGw8Kernel(Kernel):
 
         launch_params = LaunchParams(grid=BLOCKS, block=THREADS)
 
-        kernel_name = self.get_kernel_name(igrad=igrad)
+        kernel_name = self.get_kernel_name(params=params, igrad=igrad)
 
         kernel_has_bias = params.has_bias and not igrad
 

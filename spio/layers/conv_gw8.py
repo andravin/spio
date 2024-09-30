@@ -9,20 +9,20 @@ class Conv2dGw8(nn.Conv2d):
     Params = Conv2dGw8Params
 
     @staticmethod
-    def match(conv2d: nn.Conv2d):
-        if not isinstance(conv2d, nn.Conv2d):
+    def match(module: nn.Module):
+        if not isinstance(module, nn.Conv2d) or isinstance(module, Conv2dGw8):
             return False
-        group_width = conv2d.in_channels // conv2d.groups
-        R, S = conv2d.kernel_size
+        group_width = module.in_channels // module.groups
+        R, S = module.kernel_size
         return (
             group_width == 8
             and R >= 1
             and R <= 5
             and S >= 1
             and S <= 5
-            and conv2d.in_channels == conv2d.out_channels
-            and conv2d.stride == (1, 1)
-            and conv2d.dilation == (1, 1)
+            and module.in_channels == module.out_channels
+            and module.stride == (1, 1)
+            and module.dilation == (1, 1)
         )
 
     @staticmethod

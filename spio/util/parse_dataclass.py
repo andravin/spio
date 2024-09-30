@@ -70,6 +70,10 @@ def load_dataclasses_from_resource(
 
 def params_and_configs_to_dataframe(params, configs):
     df_params = pd.DataFrame([params])
+    # FIXME These fields from Conv2dGw8Params are really constants.
+    # FIXME Perhaps there should be an "ignore_fields" argument.
+    df_params.drop("group_width", axis=1, inplace=True) 
+    df_params.drop("stride", axis=1, inplace=True) 
     df_params = df_params.add_prefix("Params_")
     df_params = _expand_dataframe_tuples(df_params)
 

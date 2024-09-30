@@ -6,7 +6,7 @@ import torch
 
 from ..reflection import get_function_reflection
 from ..kernels import Stats
-from ..util import IntervalTimer
+from ..util import IntervalTimer, get_full_name_with_underscores
 
 
 def profile_function_training(
@@ -48,7 +48,7 @@ def profile_function_training(
 
     datestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    name = _get_full_name_with_underscores(function)
+    name = get_full_name_with_underscores(function)
     trace_file_name = _get_profile_file_name(name, datestamp, prefix="train")
     data_file_name = _get_profile_file_name(name, datestamp, ext=".dat", prefix="train")
     prof.export_chrome_trace(trace_file_name)
@@ -97,7 +97,7 @@ def profile_function_inference(
             prof.step()
 
     datestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    name = _get_full_name_with_underscores(function)
+    name = get_full_name_with_underscores(function)
     trace_file_name = _get_profile_file_name(name, datestamp, prefix="inference")
     data_file_name = _get_profile_file_name(
         name, datestamp, ext=".dat", prefix="inference"
@@ -108,15 +108,6 @@ def profile_function_inference(
         f.write(table)
 
     return data_file_name, trace_file_name
-
-
-def _get_full_name_with_underscores(obj):
-    full_name = _get_full_name(obj)
-    return full_name.replace(".", "_")
-
-
-def _get_full_name(obj):
-    return f"{obj.__module__}.{obj.__name__}"
 
 
 def _get_profile_file_name(

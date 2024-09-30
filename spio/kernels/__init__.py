@@ -7,3 +7,4 @@ from .performance_model_cache import (
     get_device_performance_model_file_name,
     PERFORMANCE_MODEL_EXTENSION,
 )
+from .kernel_params_logger import KernelParamsLogger, log_kernel_params, KernelParams

@@ -7,6 +7,7 @@ from ..reflection import (
     get_function_reflection,
     get_layer_reflection,
 )
+from ..transform._transform import _transform as spio_transform
 
 
 def run_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
@@ -113,26 +114,34 @@ def run_grad_function_test(function, params, device="cuda"):
             assert_all_close(grad[0], reference_grad[0], msg=str(params))
 
 
-def run_layer_test(layer_cls, params, device="cuda"):
+def run_layer_test(layer_cls, params, device="cuda", torchcompile=False, torchcompile_mode=None):
     reflection = get_layer_reflection(layer_cls)
     args = reflection.make_args(params, device=device)
     layer_args = reflection.arrange_args(args)
     layer_kwargs = reflection.get_function_kwargs(params)
     dtype = layer_args[0].dtype
 
-    reference_layer = reflection.reference
-    reference_reflection = get_layer_reflection(reference_layer)
+    reference_layer_cls = reflection.reference
+    reference_reflection = get_layer_reflection(reference_layer_cls)
     reference_args = reference_reflection.arrange_args(args)
     reference_kwargs = reference_reflection.get_function_kwargs(params)
 
-    reference_layer = reference_layer(**reference_kwargs).to(
+    reference_layer = reference_layer_cls(**reference_kwargs).to(
         device=device, memory_format=reference_reflection.memory_format, dtype=dtype
     )
 
-    layer = reflection.from_layer(reference_layer).to(
-        device=device, memory_format=reflection.memory_format
-    )
+    reference_model = torch.nn.Sequential(reference_layer)
 
-    output = layer(*layer_args)
-    reference_output = reference_layer(*reference_args)
+    layer, num_spio_modules = spio_transform(reference_model)
+    assert num_spio_modules == 1, f"Expected 1 Spio module, matched {num_spio_modules}"
+
+    if torchcompile:
+        layer = torch.compile(layer, mode=torchcompile_mode)
+
+    with torch.autocast(device_type=device, dtype=torch.float16):
+        output = layer(*layer_args)
+
+    with torch.autocast(device_type=device, dtype=torch.float16):
+        reference_output = reference_model(*reference_args)
+
     assert_all_close(output, reference_output, msg=str(params))

@@ -53,7 +53,7 @@ def conv2d_gw8(
     if bias is None:
         bias = _none(input.device)
     args = (output, input, weight, bias)
-    kernel = Conv2dGw8Kernel.fprop_kernel(params, args)
+    kernel = Conv2dGw8Kernel.fprop_kernel(params, input.device)
     kernel(*args)
     return output
 
@@ -95,22 +95,26 @@ def conv2d_gw8_backward_op(
     )
 
     if needs_weight_grad:
-        grad_weight = torch.empty_like(weight)
+        # The grad_weight kernel requires that the grad_weight tensor is initialized to zero.
+        # Its data-type is torch.float32.
+        grad_weight = torch.zeros_like(weight, dtype=torch.float32)
         args = (grad_weight, input, grad_output)
-        grad_weight_kernel = Conv2dGw8WgradKernel.grad_weight_kernel(params, args)
+        grad_weight_kernel = Conv2dGw8WgradKernel.grad_weight_kernel(params, input.device)
         grad_weight_kernel(*args)
     else:
         grad_weight = None
 
     if needs_bias_grad:
-        grad_bias = grad_output.sum(dim=(0, 2, 3))
+        # Grad_bias also uses torch.float32.
+        # TODO: Incorporate grad_bias into the grad_weight_kernel.
+        grad_bias = grad_output.sum(dim=(0, 2, 3), dtype=torch.float32)
     else:
         grad_bias = None
 
     if needs_input_grad:
         grad_input = torch.empty_like(input)
         args = (grad_input, grad_output, weight, _none(input.device))
-        grad_input_kernel = Conv2dGw8Kernel.grad_input_kernel(params, args)
+        grad_input_kernel = Conv2dGw8Kernel.grad_input_kernel(params, input.device)
         grad_input_kernel(*args)
     else:
         grad_input = None
@@ -154,6 +158,7 @@ def _(
 @torch.amp.custom_bwd(device_type="cuda")
 def conv2d_gw8_backward(ctx, grad_output):
     input, weight, bias = ctx.saved_tensors
+
     padding_y = ctx.padding_y
     padding_x = ctx.padding_x
 
@@ -172,12 +177,21 @@ def conv2d_gw8_backward(ctx, grad_output):
         needs_weight_grad,
         needs_bias_grad,
     )
+
     return grad_input, grad_weight, grad_bias, None, None, None, None, None
 
 
 @_custom_setup_context(device_type="cuda")
 def conv2d_gw8_setup_context(ctx, inputs, output):
     input, weight, bias, stride, padding_y, padding_x, *_ = inputs
+
+    # Ensure that the weight tensor is in float16.
+    # This is necessary because our _custom_setup_context does not actually cast the inputs.
+    input = input.to(torch.float16)
+    weight = weight.to(torch.float16)
+    if bias is not None:
+        bias = bias.to(torch.float16)
+
     ctx.save_for_backward(input, weight, bias)
     ctx.padding_y = padding_y
     ctx.padding_x = padding_x

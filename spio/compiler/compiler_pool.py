@@ -31,15 +31,24 @@ def compile_kernel_configs(
     """Compile multiple kernel configurations for a given kernel class.
 
     Use the given list of kernel configuratio objects, or enumerate all valid configurations if none are given.
+
+    The returned Kernnel objects will have their cubin attribute set to the compiled binary.
+    You must call the kernel's load method to load the binary into a device
+    after which you can call the kernel's launch method to execute it.
     """
     if configs is None:
         configs = list(kernel_cls.configs(params))
     kernels = [kernel_cls(params, config=config, **kernel_kwargs) for config in configs]
+    compile_kernels(kernels, arch=arch)
+    return kernels
+
+
+def compile_kernels(kernels, arch=None) -> None:
+    """Compile multiple kernel objects."""
     compiler_args = [kernel.compiler_args for kernel in kernels]
     cubins = _compile_kernels(compiler_args, arch=arch)
     for kernel, cubin in zip(kernels, cubins):
         kernel.cubin = cubin
-    return kernels
 
 
 def _compile_kernels(compiler_args, arch=None):

@@ -4,6 +4,7 @@ from itertools import product
 import torch
 
 from ..generators import (
+    MacroSpec,
     ParamsSpec,
     IndexSpec,
     TensorSpec,
@@ -38,7 +39,7 @@ class Conv2dGw8WgradKernel(Kernel):
     BLOCK_Q = 8
 
     @classmethod
-    def get_kernel_name(cls):
+    def get_kernel_base_name(cls):
         return "spio_conv2d_gw8_wgrad"
 
     @classmethod
@@ -93,12 +94,12 @@ class Conv2dGw8WgradKernel(Kernel):
         ]
 
     @classmethod
-    def grad_weight_kernel(cls, params: Conv2dGw8Params, args, config=None):
-        return cls._kernel_cache.get(cls, params, args, config=config)
+    def get_kernel_cache(cls):
+        return cls._kernel_cache
 
     @classmethod
-    def get_kernel(cls, params: Conv2dGw8Params, args, config=None):
-        return cls.grad_weight_kernel(params, args, config=config)
+    def grad_weight_kernel(cls, params: Conv2dGw8Params, device):
+        return cls._kernel_cache.get(cls, params, device)
 
     def __init__(self, params, config=None):
         params.validate()
@@ -162,7 +163,10 @@ class Conv2dGw8WgradKernel(Kernel):
 
         launch_params = LaunchParams(grid=BLOCKS, block=THREADS)
 
+        kernel_name = self.get_kernel_name(params=params)
+
         specs = [
+            MacroSpec(dict(SPIO_CONV_WGRAD_KERNEL=kernel_name)),
             #
             # Block parameters.
             #
@@ -239,19 +243,10 @@ class Conv2dGw8WgradKernel(Kernel):
         ] + SMEM_TENSORS
 
         super().__init__(
-            self.get_kernel_name(),
+            self.get_kernel_name(params=params),
             launch_params,
             specs=specs,
             kernel_source_file="conv2d_gw8_wgrad.cu",
             params=params,
             config=config,
         )
-
-    def __call__(self, grad_weight, inputs, grad_output):
-        assert inputs.dtype == torch.float16
-        assert grad_output.dtype == torch.float16
-        # Initialize the grad_weight tensor to zero.
-        # The blocks of the kernel accumulate into this tensor.
-        wgrad_f32 = torch.zeros_like(grad_weight, dtype=torch.float32)
-        self.launch(wgrad_f32, inputs, grad_output)
-        grad_weight.copy_(wgrad_f32)

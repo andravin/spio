@@ -45,22 +45,35 @@ class Kernel:
     def compile(self):
         self.cubin = compile_kernel(*self.compiler_args)
 
-    def load(self, device_ordinal=0):
+    def load(self, device_ordinal=0, clear_cubin=True):
+        """Load the compile kernel binary into a device.
+        
+        Args:
+            device_ordinal (int, optional): The device ordinal to load the kernel onto. Defaults to 0.
+            clear_cubin (bool, optional): Whether to clear the kernel binary after loading. Defaults to True.
+        """
         self.module, self.function = load_kernel(
             kernel_name=self.kernel_name,
             cubin=self.cubin,
             device_ordinal=device_ordinal,
         )
-        self.cubin = None
+        if clear_cubin:
+            self.cubin = None
         self.parameters_header = None
 
     def unload(self):
+        """Unload the kernel from the device.
+        
+        If you previously called the load method with clear_cubin=False,
+        you can load the kernel again without recompiling it.
+        """
         if self.module is not None:
             self.module.unload()
             self.module = None
         self.function = None
 
     def launch(self, *args):
+        """Launch the kernel with the given arguments."""
         try:
             device = get_first_device_in_args(args)
             _check_args(args, device)
@@ -71,6 +84,16 @@ class Kernel:
             )
         except Exception as e:
             raise ValueError(f"Error in kernel {self}") from e
+        
+    @classmethod
+    def get_kernel_name(cls, params=None, **kwargs) -> str:
+        """Return the full kernel name for the given parameters.
+        
+        The full name includes the base name and the encoded parameters.
+        """
+        base_name = cls.get_kernel_base_name(**kwargs)
+        details = params.encode()
+        return f"{base_name}__{details}"
 
     @property
     def stats(self):

@@ -3,14 +3,21 @@ from torch.fx import symbolic_trace
 
 from ..kernels import Conv2dGw8Params
 from ..layers import Conv2dGw8
-
+from ..log import logger_enabled
+from ..util import get_full_name
 
 spio_modules_classes = [Conv2dGw8]
 
 
 def transform(model):
     """Transforms a PyTorch model by replacing matching modules with their Spio counterparts."""
+    return _transform(model)[0]
+
+
+def _transform(model):
+    """Return the transformed spio model and the number of modules replaced."""
     traced = symbolic_trace(model)
+    num_replacements = 0
     modules_dict = dict(model.named_modules())
     for n in traced.graph.nodes:
         if n.op == "call_module" and n.target in modules_dict:
@@ -19,12 +26,17 @@ def transform(model):
                 if spio_module_class.match(module):
                     spio_module = spio_module_class.from_torch_module(module)
                     _replace_module(traced, n, spio_module)
+                    if logger_enabled:
+                        before = get_full_name(module.__class__)
+                        after = get_full_name(spio_module.__class__)
+                        print(f"spio: replaced a {before} module with a {after} module.")
+                    num_replacements += 1
                     break
     traced.recompile()
     traced.delete_all_unused_submodules()
     traced.recompile()
 
-    return traced
+    return traced, num_replacements
 
 
 def scan_modules(model, *args):

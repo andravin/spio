@@ -31,6 +31,7 @@ parser.add_argument("--model", type=str, default="convnext_base")
 parser.add_argument("--pretrained", action="store_true")
 parser.add_argument("--channels-last", action="store_true")
 parser.add_argument("--torchcompile", action="store_true")
+parser.add_argument("--torchcompile-mode", type=str, default=None)
 parser.add_argument("--batch-size", type=int, default=128)
 parser.add_argument("--warmup-iters", type=int, default=10)
 parser.add_argument("--benchmark-iters", type=int, default=10)
@@ -103,11 +104,11 @@ if args.scan_modules:
             print(params)
         sys.exit(0)
 
-if args.torchcompile:
-    model = torch.compile(model)
-
 if args.spio:
     model = spio.transform.transform(model)
+
+if args.torchcompile:
+    model = torch.compile(model, mode=args.torchcompile_mode)
 
 if args.no_profile:
     with torch.autocast(device_type="cuda", dtype=torch.float16):

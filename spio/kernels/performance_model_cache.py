@@ -7,18 +7,19 @@ import tarfile
 import json
 
 import xgboost as xgb
-import torch
 from filelock import FileLock
 
-from .. import primary_context_guard, __version__, supported_arch
+from .. import __version__, supported_arch
 from ..util import (
     get_cache_dir,
     params_and_configs_to_dataframe,
     get_formatted_device_name,
     get_formatted_arch,
 )
-from ..compiler import compile_kernel_configs
+
 from .kernel import Kernel
+from ..log import logger_enabled
+
 
 PERFORMANCE_MODEL_EXTENSION = ".ubj"
 
@@ -77,13 +78,13 @@ class PerformanceModelCache:
         self._archive_cache = {}
 
     def predict_best_kernel(
-        self, kernel_cls: Type[Kernel], params: List[Any], device: str, **kernel_kwargs
+        self, kernel_cls: Type[Kernel], params: Any, device: str, **kernel_kwargs
     ) -> Kernel:
         """Return the best kernel for the given kernel class and layer parameters.
 
         Returns None if no performance model is available for the given kernel and device.
         """
-        kernel_name = kernel_cls.get_kernel_name(**kernel_kwargs)
+        kernel_name = kernel_cls.get_kernel_base_name(**kernel_kwargs)
         device_name = get_formatted_device_name(device)
         arch = get_formatted_arch(device)
         performance_model = self._get_performance_model(kernel_name, device_name, arch)
@@ -91,22 +92,7 @@ class PerformanceModelCache:
             return None
 
         configs = list(kernel_cls.configs(params))
-        best_config = _predict_best_config(performance_model, params, configs)
-        if best_config is None:
-            return None
-
-        with torch.device(device) as device_obj:
-            device_ordinal = device_obj.index if device_obj.index is not None else 0
-            arch = torch.cuda.get_device_capability(device=device_obj)
-            primary_context_guard.set_device(device_ordinal)
-            configs = [best_config]
-            kernels = compile_kernel_configs(
-                kernel_cls, params, configs=configs, arch=arch, **kernel_kwargs
-            )
-            best_kernel = kernels[0]
-            device_ordinal = device_obj.index if device_obj.index is not None else 0
-            best_kernel.load(device_ordinal=device_ordinal)
-            return best_kernel
+        return _predict_best_config(performance_model, params, configs)
 
     def _get_performance_model(
         self, kernel_name: str, device: str, arch: str
@@ -149,6 +135,10 @@ class PerformanceModelCache:
             model = xgb.Booster()
             model.load_model(model_data)
             self._model_cache[device_model_cache_key] = model
+            if logger_enabled:
+                print(
+                    f"spio: loaded a performance model for {kernel_name} on {device}:{arch} from {archive_name}."
+                )
 
         assert (
             model is not None
@@ -201,7 +191,7 @@ def _get_model_name_from_archive(
 
 
 def _predict_best_config(
-    performance_model: xgb.Booster, params: List[Any], configs: List[Any]
+    performance_model: xgb.Booster, params: Any, configs: List[Any]
 ):
     """Return the best configuration for the given parameters.
 

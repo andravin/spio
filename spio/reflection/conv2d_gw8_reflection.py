@@ -101,7 +101,7 @@ def register_conv2d_gw8_reflections():
                 output=ArgInfo(dtype=torch.float16, output=True, init=Init.EMPTY),
                 grad_output=ArgInfo(dtype=torch.float16, grad_of="output"),
                 grad_weight=ArgInfo(
-                    dtype=torch.float16, init=Init.ZERO, grad_of="weight"
+                    dtype=torch.float32, init=Init.ZERO, grad_of="weight"
                 ),
             ),
             args=["grad_weight", "input", "grad_output"],

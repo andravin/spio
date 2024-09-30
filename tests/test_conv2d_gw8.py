@@ -147,3 +147,5 @@ def test_functional_conv2d_gw8_grad(params: Conv2dGw8Params):
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_conv2d_gw8_layer(params: Conv2dGw8Params):
     run_layer_test(Conv2dGw8, params)
+    run_layer_test(Conv2dGw8, params, torchcompile=True, torchcompile_mode=None)
+    run_layer_test(Conv2dGw8, params, torchcompile=True, torchcompile_mode="reduce-overhead")

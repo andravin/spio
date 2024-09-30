@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import re
 
 import torch
 
@@ -28,9 +29,35 @@ class Conv2dGw8Params:
     R: int = 3
     S: int = 3
     has_bias: bool = False
+    group_width: int = 8
+    stride: int = 1
 
-    group_width = 8
-    stride = 1
+    def encode(self) -> str:
+        """Return a string representation of the parameters."""
+        bias_str = "b" if self.has_bias else "nb"
+        return f"{self.N}n_{self.C}c_{self.H}h_{self.W}w_{self.padding_h}py_{self.padding_w}px_{self.R}r_{self.S}s_{bias_str}"
+
+    @classmethod
+    def decode(cls, string: str) -> "Conv2dGw8Params":
+        """Return a Conv2dGw8Params instance from a string representation."""
+        matches = re.match(
+            r"(\d+)n_(\d+)c_(\d+)h_(\d+)w_(\d+)py_(\d+)px_(\d+)r_(\d+)s_(b|nb)", string
+        )
+        if matches is None:
+            raise ValueError("Invalid string representation.")
+        groups = matches.groups()
+        N, C, H, W, padding_h, padding_w, R, S = map(int, groups[:8])
+        has_bias = groups[8] == "b"
+        return cls(
+            N=N,
+            C=C,
+            H=H,
+            W=W,
+            padding=(padding_h, padding_w),
+            R=R,
+            S=S,
+            has_bias=has_bias,
+        )
 
     @staticmethod
     def from_tensors(input, weight, bias, padding=1):
@@ -44,8 +71,6 @@ class Conv2dGw8Params:
             bias (torch.Tensor or None): The bias tensor or None.
             padding (int or tuple): Padding for height and width.
         """
-        assert input.dtype == torch.float16
-        assert weight.dtype == torch.float16
         assert bias is None or (
             len(bias.shape) == 1 and bias.shape[0] == weight.shape[0]
         )

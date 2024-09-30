@@ -17,7 +17,7 @@ train_*.json
 inference_*.json
 *.ssv
 *.ubj
-
+results/
 
 build/
 driver.c
