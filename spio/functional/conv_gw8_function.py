@@ -3,7 +3,6 @@ import functools
 
 import torch
 import torch.amp
-from torch.cuda.amp import custom_fwd, custom_bwd
 
 from ..kernels import Conv2dGw8Kernel, Conv2dGw8WgradKernel, Conv2dGw8Params
 
