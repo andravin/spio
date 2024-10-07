@@ -28,8 +28,8 @@ def _transform(model):
                     _replace_module(traced, n, spio_module)
                     if logger_enabled:
                         before = get_full_name(module.__class__)
-                        after = get_full_name(spio_module.__class__)
-                        print(f"spio: replaced a {before} module with a {after} module.")
+                        after = spio_module.__class__.__module__ + "." + str(spio_module)
+                        print(f"spio: replaced a {before} module with {after}")
                     num_replacements += 1
                     break
     traced.recompile()
