@@ -32,8 +32,8 @@ from spio.data import preprocess_data_string
 
 GROUP_WIDTH = 8
 CHANNELS_LAST = True
-WARMUP_ITERS = 10
-BENCHMARK_ITERS = 10
+WARMUP_ITERS = 5
+BENCHMARK_ITERS = 5
 TOTAL_ITERS = WARMUP_ITERS + BENCHMARK_ITERS
 CHANNELS = 64
 
@@ -252,11 +252,12 @@ def main():
 
     torch.backends.cudnn.benchmark = True
 
+    if args.output_dir is None:
+        args.output_dir = "."
+    args.output_dir = Path(args.output_dir) / get_dir_name(args)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+
     if args.batch_start is not None and args.batch_end is not None:
-        if args.output_dir is None:
-            args.output_dir = "."
-        args.output_dir = Path(args.output_dir) / get_dir_name(args)
-        args.output_dir.mkdir(parents=True, exist_ok=True)
         for batch_size in range(args.batch_start, args.batch_end, args.batch_step):
             args.batch_size = batch_size
             run_benchmark(args, batch_size)
@@ -338,9 +339,8 @@ def run_benchmark(args, batch_size: int = None):
         model = torch.compile(model)
 
     if args.benchmark_configs:
-        benchmark_configs(
-            model, inputs, args, get_benchmark_model_output_file_name(args)
-        )
+        output_path = args.output_dir / get_benchmark_model_output_file_name(args)
+        benchmark_configs(model, inputs, args, output_path)
         sys.exit(0)
 
     # Run the benchmark with PyTorch.
@@ -399,7 +399,9 @@ def run_benchmark(args, batch_size: int = None):
         print(f"Averages saved to {data_file_name}")
 
 
-def benchmark_configs(model, inputs, args, data_file_name, max_random_samples=1000):
+def benchmark_configs(
+    model, inputs, args, data_path: Path, max_random_samples: int = 1000
+):
     # Run the model to trace the kernel parameters.
     # TODO Create a kernels-trace mode for KernelParamsLogger that simply selects the first config for each kernel.
     # TODO This will enable KernelCache to work without a performance model.
@@ -437,7 +439,7 @@ def benchmark_configs(model, inputs, args, data_file_name, max_random_samples=10
         kernels_to_compile.extend(kernel_lst[:num_samples])
     compile_kernels(kernels_to_compile, arch=arch)
 
-    with open(data_file_name, "w") as f:
+    with data_path.open("w") as f:
 
         f.write(f"Kernel;Params;Config;KernelKwargs;CUDA_time_avg_ms\n")
 
@@ -523,10 +525,17 @@ def benchmark_configs(model, inputs, args, data_file_name, max_random_samples=10
 
 
 def get_dir_name(args):
-    file_name = get_file_name_details(args, no_bs=True)
-    date_stamp = get_date_stamp()
     device_name = get_formatted_device_name(f"cuda:{args.device}")
-    return f"bench__{device_name}__{file_name}__{date_stamp}"
+    if args.timm_model is not None:
+        model_name = args.timm_model
+        kwargs_str = "__".join(
+            [f"{key}__{value}" for key, value in args.timm_model_kwargs.items()]
+        )
+        return f"modelbench___{device_name}___{model_name}___{kwargs_str}"
+    else:
+        file_name = get_file_name_details(args, no_bs=True)
+        date_stamp = get_date_stamp()
+        return f"bench__{device_name}__{file_name}__{date_stamp}"
 
 
 def get_file_name_details(args, no_bs=False):
@@ -544,41 +553,27 @@ def get_file_name_details(args, no_bs=False):
 def get_benchmark_model_output_file_name(args):
     """Automatically generate a file name for the model benchmark results."""
     if args.timm_model is not None:
-        model_name = args.timm_model
-        kwargs_str = "__".join(
-            [f"{key}__{value}" for key, value in args.timm_model_kwargs.items()]
-        )
-        backend = "spio" if args.spio else "torch"
-        details = f"{model_name}___{kwargs_str}___bs{args.batch_size}___{backend}"
         date_stamp = get_date_stamp()
-        device_name = get_formatted_device_name(f"cuda:{args.device}")
-        return f"modelbench___{device_name}___{details}___{date_stamp}.ssv"
+        return f"model_bench_{args.batch_size}__{date_stamp}.ssv"
     else:
         raise NotImplementedError(
             "TODO: Implement output file name for block profiling results"
         )
 
 
-def decode_benchmark_model_output_file_name(file_name):
-    """Decode the name of a results file from a model benchmark.
+def decode_benchmark_model_dir_name(dir_name):
+    """Decode the name of a results directory from a model benchmark.
 
     Returns the components of the name as a dictionary.
     """
-    parts = file_name.split("___")
+    parts = dir_name.split("___")
     if parts[0] != "modelbench":
         raise ValueError(
-            f"Invalid model benchmark file name: {file_name}. Expected 'modelbench__*.ssv"
+            f"Invalid model benchmark file name: {dir_name}. Expected 'modelbench__*.ssv"
         )
     device_name = parts[1]
     model_name = parts[2]
     kwargs_str = parts[3]
-    bs = int(parts[4])
-    backend = parts[5]
-    date_stamp, ext = parts[6].split(".")
-    if ext != "ssv":
-        raise ValueError(
-            f"Invalid model benchmark file name: {file_name}. Expected extension .ssv"
-        )
     kwargs_parts = kwargs_str.split("__")
     model_kwargs = {
         key: value for key, value in zip(kwargs_parts[::2], kwargs_parts[1::2])
@@ -587,9 +582,6 @@ def decode_benchmark_model_output_file_name(file_name):
         device=device_name,
         model_name=model_name,
         model_kwargs=model_kwargs,
-        backend=backend,
-        date_stamp=date_stamp,
-        batch_size=bs,
     )
 
 
