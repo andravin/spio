@@ -252,14 +252,11 @@ def main():
 
     torch.backends.cudnn.benchmark = True
 
-    if args.output_dir is None:
-        args.output_dir = "."
-
-    args.output_dir = Path(args.output_dir) / get_dir_name(args)
-
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-
     if args.batch_start is not None and args.batch_end is not None:
+        if args.output_dir is None:
+            args.output_dir = "."
+        args.output_dir = Path(args.output_dir) / get_dir_name(args)
+        args.output_dir.mkdir(parents=True, exist_ok=True)
         for batch_size in range(args.batch_start, args.batch_end, args.batch_step):
             args.batch_size = batch_size
             run_benchmark(args, batch_size)
@@ -341,7 +338,9 @@ def run_benchmark(args, batch_size: int = None):
         model = torch.compile(model)
 
     if args.benchmark_configs:
-        benchmark_configs(model, inputs, args, "my_benchmark_results.ssv")
+        benchmark_configs(
+            model, inputs, args, get_benchmark_model_output_file_name(args)
+        )
         sys.exit(0)
 
     # Run the benchmark with PyTorch.
@@ -401,6 +400,9 @@ def run_benchmark(args, batch_size: int = None):
 
 
 def benchmark_configs(model, inputs, args, data_file_name, max_random_samples=1000):
+    # Run the model to trace the kernel parameters.
+    # TODO Create a kernels-trace mode for KernelParamsLogger that simply selects the first config for each kernel.
+    # TODO This will enable KernelCache to work without a performance model.
     with KernelParamsLogger() as logger:
         with torch.autocast(device_type="cuda", dtype=torch.float16):
             out = model(inputs[0])
@@ -408,32 +410,36 @@ def benchmark_configs(model, inputs, args, data_file_name, max_random_samples=10
         logged_kernel_params = logger.get_logged_params()
         unique_kernel_params = set(logged_kernel_params)
 
-        # For each unique KernelParams, compile all kernel configurations.
-        # Store the kernels in a table KernelParams -> List[Kernel].
-        kernel_table = dict()
-        for kernel_params in unique_kernel_params:
-            kernel_cls = kernel_params.kernel_cls
-            params = kernel_params.params
-            device = kernel_params.device
-            arch = torch.cuda.get_device_capability(device=device)
-            configs = kernel_params.kernel_cls.configs(kernel_params.params)
-            kernel_kwargs = dict(kernel_params.kernel_kwargs)
-            kernel_table[kernel_params] = [
-                kernel_cls(params, config=config, **kernel_kwargs) for config in configs
-            ]
+    # For each unique KernelParams, compile all kernel configurations.
+    # Store the kernels in a table KernelParams -> List[Kernel].
+    kernel_table = dict()
+    for kernel_params in unique_kernel_params:
+        kernel_cls = kernel_params.kernel_cls
+        params = kernel_params.params
+        device = kernel_params.device
+        arch = torch.cuda.get_device_capability(device=device)
+        configs = kernel_params.kernel_cls.configs(kernel_params.params)
+        kernel_kwargs = dict(kernel_params.kernel_kwargs)
+        kernel_table[kernel_params] = [
+            kernel_cls(params, config=config, **kernel_kwargs) for config in configs
+        ]
 
-        # Choose a random subset of kernel configurations to benchmark.
-        # Set the number of samples to the minimum of the number of configurations for each KernelParams.
-        max_choices = min(len(kernel_lst) for kernel_lst in kernel_table.values())
-        num_samples = min(max_choices, max_random_samples)
+    # Choose a random subset of kernel configurations to benchmark.
+    # Set the number of samples to the minimum of the number of configurations for each KernelParams.
+    max_choices = min(len(kernel_lst) for kernel_lst in kernel_table.values())
+    num_samples = min(max_choices, max_random_samples)
 
-        for kernel_params, kernel_lst in kernel_table.items():
-            random.shuffle(kernel_lst)
+    for kernel_params, kernel_lst in kernel_table.items():
+        random.shuffle(kernel_lst)
 
-        kernels_to_compile = []
-        for kernel_lst in kernel_table.values():
-            kernels_to_compile.extend(kernel_lst[:num_samples])
-        compile_kernels(kernels_to_compile, arch=arch)
+    kernels_to_compile = []
+    for kernel_lst in kernel_table.values():
+        kernels_to_compile.extend(kernel_lst[:num_samples])
+    compile_kernels(kernels_to_compile, arch=arch)
+
+    with open(data_file_name, "w") as f:
+
+        f.write(f"Kernel;Params;Config;KernelKwargs;CUDA_time_avg_ms\n")
 
         for idx in range(num_samples):
             # Select a random combination of kernel configurations without replacement.
@@ -502,22 +508,18 @@ def benchmark_configs(model, inputs, args, data_file_name, max_random_samples=10
             df = pd.read_csv(data_io, sep=";")
 
             # Extract the kernel timings from the benchmark results.
-            with open(data_file_name, "a") as f:
-                for kernel_params, kernel in kernel_choices.items():
-                    kernel_name = kernel.kernel_name
-                    avg_time_ms = df.loc[
-                        df["Name"] == kernel_name, "CUDA_time_av"
-                    ].values[0]
-                    params = kernel.params
-                    config = kernel.config
-                    kernel_kwargs = str(kernel_params.kernel_kwargs)
-                    out_str = (
-                        f"{kernel_name};{params};{config};{kernel_kwargs};{avg_time_ms}"
-                    )
-                    f.write(out_str + "\n")
-
-        # TODO Also create a kernels-trace mode for KernelParamsLogger that simply select the first config for each kernel.
-        # TODO This will enable KernelCache to work with KernelParamsLogger when no performance models exist.
+            for kernel_params, kernel in kernel_choices.items():
+                kernel_name = kernel.kernel_name
+                avg_time_ms = df.loc[df["Name"] == kernel_name, "CUDA_time_av"].values[
+                    0
+                ]
+                params = kernel.params
+                config = kernel.config
+                kernel_kwargs = str(kernel_params.kernel_kwargs)
+                out_str = (
+                    f"{kernel_name};{params};{config};{kernel_kwargs};{avg_time_ms}"
+                )
+                f.write(out_str + "\n")
 
 
 def get_dir_name(args):
@@ -537,6 +539,58 @@ def get_file_name_details(args, no_bs=False):
     if args.with_stack:
         filename += "_stack"
     return filename
+
+
+def get_benchmark_model_output_file_name(args):
+    """Automatically generate a file name for the model benchmark results."""
+    if args.timm_model is not None:
+        model_name = args.timm_model
+        kwargs_str = "__".join(
+            [f"{key}__{value}" for key, value in args.timm_model_kwargs.items()]
+        )
+        backend = "spio" if args.spio else "torch"
+        details = f"{model_name}___{kwargs_str}___bs{args.batch_size}___{backend}"
+        date_stamp = get_date_stamp()
+        device_name = get_formatted_device_name(f"cuda:{args.device}")
+        return f"modelbench___{device_name}___{details}___{date_stamp}.ssv"
+    else:
+        raise NotImplementedError(
+            "TODO: Implement output file name for block profiling results"
+        )
+
+
+def decode_benchmark_model_output_file_name(file_name):
+    """Decode the name of a results file from a model benchmark.
+
+    Returns the components of the name as a dictionary.
+    """
+    parts = file_name.split("___")
+    if parts[0] != "modelbench":
+        raise ValueError(
+            f"Invalid model benchmark file name: {file_name}. Expected 'modelbench__*.ssv"
+        )
+    device_name = parts[1]
+    model_name = parts[2]
+    kwargs_str = parts[3]
+    bs = int(parts[4])
+    backend = parts[5]
+    date_stamp, ext = parts[6].split(".")
+    if ext != "ssv":
+        raise ValueError(
+            f"Invalid model benchmark file name: {file_name}. Expected extension .ssv"
+        )
+    kwargs_parts = kwargs_str.split("__")
+    model_kwargs = {
+        key: value for key, value in zip(kwargs_parts[::2], kwargs_parts[1::2])
+    }
+    return dict(
+        device=device_name,
+        model_name=model_name,
+        model_kwargs=model_kwargs,
+        backend=backend,
+        date_stamp=date_stamp,
+        batch_size=bs,
+    )
 
 
 def get_batch_size_file_name_details(args):
