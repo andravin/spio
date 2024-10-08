@@ -14,6 +14,7 @@ from spio.kernels import Conv2dGw8Kernel, Conv2dGw8WgradKernel
 
 MAX_BANDWIDTH_GB_S = 3000
 
+
 def main():
     parser = ArgumentParser()
     parser.add_argument(
@@ -43,16 +44,30 @@ def main():
     wgrad_kernel_name = "spio_conv2d_gw8_wgrad"
     spio_kernel_labels = ["Spio Fprop", "Spio Dgrad", "Spio Wgrad"]
 
-    df_fprop = df[df["Name"] == fprop_kernel_name]
-    df_dgrad = df[df["Name"] == dgrad_kernel_name]
-    df_wgrad = df[df["Name"] == wgrad_kernel_name]
+    # Extract the "Kernel" column and split to get the root names
+    df["RootName"] = df["Name"].str.split("__").str[0]
+
+    # Group the DataFrame by the root names
+    grouped = df.groupby("RootName")
+
+    # Create a dictionary to store each group as a separate DataFrame
+    dataframes = {
+        root_name: group.drop(columns=["Name", "RootName"])
+        for root_name, group in grouped
+    }
+
+    kernels = dataframes.keys()
+
+    df_fprop = dataframes[fprop_kernel_name]
+    df_dgrad = dataframes[dgrad_kernel_name]
+    df_wgrad = dataframes[wgrad_kernel_name]
 
     dirname_params = extract_parameters_from_dirname(args.spio_data_dir)
     params = conv2d_gw8_kernel_params_from_dirname_params(dirname_params)
 
     add_eff_bandwidth_gb_s(df_fprop, params, Conv2dGw8Kernel.Stats, "output")
     add_eff_bandwidth_gb_s(df_dgrad, params, Conv2dGw8Kernel.Stats, "grad_input")
-    add_eff_bandwidth_gb_s(df_wgrad, params, Conv2dGw8Kernel.Stats, "grad_weight")                                                     
+    add_eff_bandwidth_gb_s(df_wgrad, params, Conv2dGw8Kernel.Stats, "grad_weight")
 
     plot_eff_bw(
         df_fprop,
@@ -70,9 +85,6 @@ def main():
         )
         torch_params_are_depthwise = torch_params.group_width == 1
 
-        assert params == replace(
-            torch_params, group_width=params.group_width
-        ), f"Parameters mismatch: {params} != {torch_params}"
         assert (
             dirname_params["block_name"] == torch_dirname_params["block_name"]
         ), f"Block name mismatch: {dirname_params['block_name']} != {torch_dirname_params['block_name']}"
@@ -91,11 +103,17 @@ def main():
             for kernel_name in spio_kernel_labels
         ]
         if torch_params_are_depthwise:
-            torch_kernel_labels = [label + " (Depthwise)" for label in torch_kernel_labels]
+            torch_kernel_labels = [
+                label + " (Depthwise)" for label in torch_kernel_labels
+            ]
 
         add_eff_bandwidth_gb_s(fprop_df, torch_params, Conv2dGw8Kernel.Stats, "output")
-        add_eff_bandwidth_gb_s(dgrad_df, torch_params, Conv2dGw8Kernel.Stats, "grad_input")
-        add_eff_bandwidth_gb_s(wgrad_df, torch_params, Conv2dGw8Kernel.Stats, "grad_weight")
+        add_eff_bandwidth_gb_s(
+            dgrad_df, torch_params, Conv2dGw8Kernel.Stats, "grad_input"
+        )
+        add_eff_bandwidth_gb_s(
+            wgrad_df, torch_params, Conv2dGw8Kernel.Stats, "grad_weight"
+        )
 
         plot_eff_bw(
             fprop_df,
@@ -116,9 +134,8 @@ def main():
     )
     plt.legend()
 
-
     fig_file_name = f"batch_size_vs_eff_bandwidth__{device_name}__{block_name}_{params.C}c_{params.R}r_{params.S}s_{params.group_width}gw"
-    if torch_params_are_depthwise:
+    if args.torch_data_dir is not None and torch_params_are_depthwise:
         fig_file_name += "__torch_depthwise"
     fig_file_name += ".png"
 
@@ -126,9 +143,13 @@ def main():
     print(f"Saved figure to {fig_file_name}")
 
     plt.clf()
-    plot_latency_microseconds(df_fprop, df_dgrad, df_wgrad, spio_kernel_labels, linestyle="-")
+    plot_latency_microseconds(
+        df_fprop, df_dgrad, df_wgrad, spio_kernel_labels, linestyle="-"
+    )
     if args.torch_data_dir is not None:
-        plot_latency_microseconds(fprop_df, dgrad_df, wgrad_df, torch_kernel_labels, linestyle="--")
+        plot_latency_microseconds(
+            fprop_df, dgrad_df, wgrad_df, torch_kernel_labels, linestyle="--"
+        )
 
     plt.xlabel("Batch Size")
     plt.ylabel("Latency (microseconds)")
@@ -140,13 +161,11 @@ def main():
     plt.legend()
 
     fig_file_name = f"batch_size_vs_latency__{device_name}__{block_name}_{params.C}c_{params.R}r_{params.S}s_{params.group_width}gw"
-    if torch_params_are_depthwise:
+    if args.torch_data_dir is not None and torch_params_are_depthwise:
         fig_file_name += "__torch_depthwise"
     fig_file_name += ".png"
     plt.savefig(fig_file_name)
     print(f"Saved figure to {fig_file_name}")
-
-
 
 
 def find_torch_grouped_conv_kernels(df, kernel_iters, depthwise=False):
@@ -167,6 +186,7 @@ def find_torch_grouped_conv_kernels(df, kernel_iters, depthwise=False):
     dw_fprop_kernels = [
         "void conv2d_c1_k1_nhwc_kernel_specialized<__half, __half, __half, float, float, 5, 1, 8, 3, true>(float, cudnnTensorStruct, __half const*, cudnnFilterStruct, __half const*, cudnnConvolutionStruct, float, cudnnTensorStruct, __half*, C1K1NhwcParams, int)",
         "void conv2d_c1_k1_nhwc_kernel_specialized<__half, __half, __half, float, float, 3, 1, 8, 3, true>(float, cudnnTensorStruct, __half const*, cudnnFilterStruct, __half const*, cudnnConvolutionStruct, float, cudnnTensorStruct, __half*, C1K1NhwcParams, int)",
+        "void conv2d_c1_k1_nhwc_kernel_specialized<__half, __half, __half, float, float, 7, 1, 8, 3, true>(float, cudnnTensorStruct, __half const*, cudnnFilterStruct, __half const*, cudnnConvolutionStruct, float, cudnnTensorStruct, __half*, C1K1NhwcParams, int)",
     ]
 
     dw_dgrad_kernels = [
@@ -174,6 +194,7 @@ def find_torch_grouped_conv_kernels(df, kernel_iters, depthwise=False):
         "sm80_xmma_depthwise_convolution_dgrad_tiling_f16f16_f32f32_f32_nhwckrsc_nhwc_tilesize1x8x8_1x5x5_1x1x1_1x1x1_stage2_warpsize4x1x1_g64_betaFalse_execute_helper_kernel__5x_cudnn",
         "void dgrad2d_c1_k1_nhwc_kernel_specialized_window<__half, float, float, 5, 1, true>(float, __half const*, __half const*, float, __half*, cudnn::reduced_divisor, cudnn::reduced_divisor, cudnn::reduced_divisor, cudnn::reduced_divisor, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
         "void dgrad2d_c1_k1_nhwc_kernel_specialized_window<__half, float, float, 3, 1, true>(float, __half const*, __half const*, float, __half*, cudnn::reduced_divisor, cudnn::reduced_divisor, cudnn::reduced_divisor, cudnn::reduced_divisor, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
+        "void dgrad2d_c1_k1_nhwc_kernel_specialized_window<__half, float, float, 7, 1, true>(float, __half const*, __half const*, float, __half*, cudnn::reduced_divisor, cudnn::reduced_divisor, cudnn::reduced_divisor, cudnn::reduced_divisor, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int)",
     ]
 
     dw_wgrad_kernels = [
@@ -188,9 +209,19 @@ def find_torch_grouped_conv_kernels(df, kernel_iters, depthwise=False):
         "void cudnn::cnn::wgrad2d_c1_k1_nhwc_kernel<__half, float, 1, 3, 3, 1, 1, 1, 1, true>(cudnnTensorStruct, __half const*, cudnnTensorStruct, __half const*, cudnnConvolutionStruct, cudnnFilterStruct, float*)",
         "void cudnn::cnn::wgrad2d_c1_k1_nhwc_kernel<__half, float, 3, 3, 3, 1, 1, 1, 1, true>(cudnnTensorStruct, __half const*, cudnnTensorStruct, __half const*, cudnnConvolutionStruct, cudnnFilterStruct, float*)",
         "void cudnn::cnn::wgrad2d_c1_k1_nhwc_kernel<__half, float, 8, 3, 3, 1, 1, 1, 1, true>(cudnnTensorStruct, __half const*, cudnnTensorStruct, __half const*, cudnnConvolutionStruct, cudnnFilterStruct, float*)",
+        "void cudnn::cnn::wgrad2d_c1_k1_nhwc_kernel<__half, float, 8, 7, 7, 1, 1, 1, 1, true>(cudnnTensorStruct, __half const*, cudnnTensorStruct, __half const*, cudnnConvolutionStruct, cudnnFilterStruct, float*)",
+        "void cudnn::cnn::wgrad2d_c1_k1_nhwc_kernel<__half, float, 7, 7, 7, 1, 1, 1, 1, true>(cudnnTensorStruct, __half const*, cudnnTensorStruct, __half const*, cudnnConvolutionStruct, cudnnFilterStruct, float*)",
+        "void cudnn::cnn::wgrad2d_c1_k1_nhwc_kernel<__half, float, 4, 7, 7, 1, 1, 1, 1, true>(cudnnTensorStruct, __half const*, cudnnTensorStruct, __half const*, cudnnConvolutionStruct, cudnnFilterStruct, float*)",
+        "void cudnn::cnn::wgrad2d_c1_k1_nhwc_kernel<__half, float, 3, 7, 7, 1, 1, 1, 1, true>(cudnnTensorStruct, __half const*, cudnnTensorStruct, __half const*, cudnnConvolutionStruct, cudnnFilterStruct, float*)",
+        "void cudnn::cnn::wgrad2d_c1_k1_nhwc_kernel<__half, float, 1, 7, 7, 1, 1, 1, 1, true>(cudnnTensorStruct, __half const*, cudnnTensorStruct, __half const*, cudnnConvolutionStruct, cudnnFilterStruct, float*)",
         "void cudnn::cnn::wgrad2d_c1_k1_nhwc_reduction_kernel<__half, float, 1, 3, 3>(cudnnTensorStruct, cudnnConvolutionStruct, __half*, float const*, float, float)",
         "void cudnn::cnn::wgrad2d_c1_k1_nhwc_reduction_kernel<__half, float, 3, 3, 3>(cudnnTensorStruct, cudnnConvolutionStruct, __half*, float const*, float, float)",
         "void cudnn::cnn::wgrad2d_c1_k1_nhwc_reduction_kernel<__half, float, 8, 3, 3>(cudnnTensorStruct, cudnnConvolutionStruct, __half*, float const*, float, float)",
+        "void cudnn::cnn::wgrad2d_c1_k1_nhwc_reduction_kernel<__half, float, 8, 7, 7>(cudnnTensorStruct, cudnnConvolutionStruct, __half*, float const*, float, float)",
+        "void cudnn::cnn::wgrad2d_c1_k1_nhwc_reduction_kernel<__half, float, 7, 7, 7>(cudnnTensorStruct, cudnnConvolutionStruct, __half*, float const*, float, float)",
+        "void cudnn::cnn::wgrad2d_c1_k1_nhwc_reduction_kernel<__half, float, 4, 7, 7>(cudnnTensorStruct, cudnnConvolutionStruct, __half*, float const*, float, float)",
+        "void cudnn::cnn::wgrad2d_c1_k1_nhwc_reduction_kernel<__half, float, 3, 7, 7>(cudnnTensorStruct, cudnnConvolutionStruct, __half*, float const*, float, float)",
+        "void cudnn::cnn::wgrad2d_c1_k1_nhwc_reduction_kernel<__half, float, 1, 7, 7>(cudnnTensorStruct, cudnnConvolutionStruct, __half*, float const*, float, float)",
     ]
 
     if depthwise:
@@ -320,6 +351,7 @@ def collect_data_from_dir(dirname):
         raise ValueError(f"No data files found in directory: {dirname}")
     return pd.concat(all_data, ignore_index=True)
 
+
 def add_eff_bandwidth_gb_s(df, params, stats_cls, output_names):
     df["eff_bw_gb_s"] = df.apply(
         partial(
@@ -330,6 +362,7 @@ def add_eff_bandwidth_gb_s(df, params, stats_cls, output_names):
         ),
         axis=1,
     )
+
 
 def compute_eff_bandwidth_gb_s(row, params=None, stats_cls=None, output_names=None):
     params = replace(params, N=row["batch_size"])
@@ -362,9 +395,7 @@ def conv2d_gw8_kernel_params_from_dirname_params(dirname_params):
 
 
 # Plot the data
-def plot_eff_bw(
-    df_fprop, df_dgrad, df_wgrad, kernel_names, linestyle="-", colors=None
-):
+def plot_eff_bw(df_fprop, df_dgrad, df_wgrad, kernel_names, linestyle="-", colors=None):
     if colors is None:
         colors = [f"C{i}" for i in range(len(kernel_names))]
     for df, label, color in zip([df_fprop, df_dgrad, df_wgrad], kernel_names, colors):
@@ -376,8 +407,9 @@ def plot_eff_bw(
             linestyle=linestyle,
         )
 
+
 def plot_latency_microseconds(
-        df_fprop, df_dgrad, df_wgrad, kernel_names, linestyle="-", colors=None
+    df_fprop, df_dgrad, df_wgrad, kernel_names, linestyle="-", colors=None
 ):
     if colors is None:
         colors = [f"C{i}" for i in range(len(kernel_names))]

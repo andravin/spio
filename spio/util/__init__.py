@@ -1,6 +1,6 @@
 from .math import divup
 from .close import assert_all_close
-from .interval_timer import IntervalTimer
+from .interval_timer import IntervalTimer, Timer
 from .parse_dataclass import (
     load_parameter_set,
     load_dataclasses_from_resource,

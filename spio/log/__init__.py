@@ -1,4 +1,4 @@
 from .benchmark_formatter import BenchmarkResultCompactFormat, BenchmarkResultFullFormat
 from .benchmark_result import BenchmarkResult
 from .benchmark_logger import benchmark_logger
-from .logger import logger_enabled
+from .logger import logger_enabled, logger_verbose, log_level

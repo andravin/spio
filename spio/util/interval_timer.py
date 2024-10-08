@@ -2,6 +2,7 @@ from time import perf_counter
 
 TIMER_OVERHEAD = 3e-6  # 3 microseconds
 
+
 class IntervalTimer:
     def __init__(self, skip=0):
         self.reset()
@@ -38,3 +39,30 @@ class IntervalTimer:
         print(
             f"{message:40s}: avg: {self.average()*1e6:8.1f}us min: {self.min*1e6:8.1f}us max: {self.max*1e6:8.1f}us"
         )
+
+
+class Timer:
+    """A context manager for timing code blocks.
+    
+    Args:
+        message (str, optional): A message to display when the timer starts. Defaults to "".
+
+    Example:
+        with Timer("Compiling kernel"):
+            kernel.compile()
+
+    Output:
+        Compiling kernel in progress .. finished in 0.123 seconds.
+    """
+    def __init__(self, message=""):
+        self.message = message
+
+    def __enter__(self):
+        self.start = perf_counter()
+        print(f"{self.message} in progress ..", end="")
+        return self
+
+    def __exit__(self, *args):
+        self.end = perf_counter()
+        self.elapsed = self.end - self.start
+        print(f" finished in {self.elapsed:.3f} seconds.")

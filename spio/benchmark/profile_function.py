@@ -6,7 +6,7 @@ import torch
 
 from ..reflection import get_function_reflection
 from ..kernels import Stats
-from ..util import IntervalTimer, get_full_name_with_underscores
+from ..util import get_full_name_with_underscores
 
 
 def profile_function_training(

@@ -41,6 +41,7 @@ class Kernel:
         self.module = None
         self.function = None
         self.parameters_header = generate(specs)
+        self.cubin = None
 
     def compile(self):
         self.cubin = compile_kernel(*self.compiler_args)

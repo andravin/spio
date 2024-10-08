@@ -1,0 +1,28 @@
+from dataclasses import dataclass
+
+from typing import Any, Tuple, Type, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .kernel_cache import KernelCache
+
+
+@dataclass(frozen=True)
+class KernelKey:
+    """A key for a kernel in a KernelCache."""
+    device_ordinal: int
+    params: object
+
+
+@dataclass(frozen=True)
+class KernelParams:
+    """Kernel parameters captured by KernelParamsLogger."""
+    kernel_cache: "KernelCache"
+    kernel_cls: Type
+    params: Any
+    device: Any
+    kernel_kwargs: Tuple[str, Any]
+
+    @property
+    def key(self) -> KernelKey:
+        """Return the kernel key for the params and device."""
+        return KernelKey(device_ordinal=self.device.index, params=self.params)

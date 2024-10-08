@@ -1,7 +1,8 @@
-from dataclasses import dataclass
 from typing import Dict
 
 import torch
+
+from spio.kernels.kernel_key import KernelKey
 
 from .. import primary_context_guard
 
@@ -11,11 +12,6 @@ from .kernel_util import get_first_device_in_args
 from .performance_model_cache import PerformanceModelCache
 from .kernel import Kernel
 from .kernel_params_logger import log_kernel_params
-
-@dataclass(frozen=True)
-class _KernelKey:
-    device_ordinal: int
-    params: object
 
 
 perf_model_cache = PerformanceModelCache()
@@ -37,8 +33,10 @@ class KernelCache:
         """
         Add a set of kernels to the overlay cache.
 
-        These kernels will be used in preference to the main cache. A user may want to use this to
+        These kernels will be used instead of the main cache. A user may want to use this to
         select specific kernel configurations for benchmarking.
+
+        If an overlay is set, the main cache will not be used.
         """
         self._cache_overlay.update(overlay)
 
@@ -54,9 +52,13 @@ class KernelCache:
         The best kernel configuration is determined by the performance model
         for the device and kernel class.
         """
-        key = _KernelKey(device_ordinal=device.index, params=params)
+        key = KernelKey(device_ordinal=device.index, params=params)
         best_kernel = self._cache_overlay.get(key)
         if best_kernel is None:
+            if self._cache_overlay:
+                raise ValueError(
+                    f"Kernel {kernel_cls} with params {params} and device {device} enot found in overlay cache"
+                )
             best_kernel = self._cache.get(key)
             if best_kernel is None:
                 best_config = perf_model_cache.predict_best_kernel(

@@ -3,6 +3,8 @@ from contextlib import ContextDecorator
 from dataclasses import dataclass
 from typing import Type, Any, List, Tuple, TYPE_CHECKING
 
+from .kernel_key import KernelParams
+
 if TYPE_CHECKING:
     from .kernel_cache import KernelCache
 
@@ -11,15 +13,6 @@ _global_logger = None
 
 # Make it thread-safe.
 _global_lock = threading.Lock()
-
-
-@dataclass(frozen=True)
-class KernelParams:
-    kernel_cache: "KernelCache"
-    kernel_cls: Type
-    params: Any
-    device: Any
-    kernel_kwargs: Tuple[str, Any]
 
 
 class KernelParamsLogger(ContextDecorator):

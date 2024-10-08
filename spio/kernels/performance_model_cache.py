@@ -18,7 +18,7 @@ from ..util import (
 )
 
 from .kernel import Kernel
-from ..log import logger_enabled
+from ..log import logger_enabled, logger_verbose
 
 
 PERFORMANCE_MODEL_EXTENSION = ".ubj"
@@ -27,13 +27,15 @@ USER_AGENT = f"spio/{__version__}"
 
 RELEASES_URL = "https://api.github.com/repos/andravin/spio/releases"
 
-CACHE_DIR = get_cache_dir()
+CACHE_DIR = Path(get_cache_dir())
 
-LOCK_FILE = Path(CACHE_DIR, "spio_download.lock")
+LOCK_FILE = CACHE_DIR / "spio_download.lock"
 
-GITHUB_TOKEN_FILE = Path(CACHE_DIR, "GITHUB_TOKEN")
+GITHUB_TOKEN_FILE = CACHE_DIR / "GITHUB_TOKEN"
 
-RELEASE_INFO_FILE = Path(CACHE_DIR, "release_info.json")
+PERF_CACHE_DIR = CACHE_DIR / "perf"
+
+RELEASE_INFO_FILE = PERF_CACHE_DIR / "release_info.json"
 
 _download_lock = FileLock(str(LOCK_FILE))
 
@@ -201,13 +203,19 @@ def _predict_best_config(
     df = params_and_configs_to_dataframe(params, configs)
     dm = xgb.DMatrix(df)
     predictions = performance_model.predict(dm)
+    if logger_verbose:
+        print(f"Latency predictions for {params}:")
+        df['predictions'] = predictions
+        sorted_df = df.sort_values(by='predictions') 
+        print(sorted_df)
+
     best_config = configs[predictions.argmin()]
     return best_config
 
 
 def _load_model_from_archive(archive_name: str, model_file_name: str) -> xgb.Booster:
     """Load the performance model from the tar archive."""
-    archive_path = Path(CACHE_DIR, archive_name)
+    archive_path = PERF_CACHE_DIR / archive_name
     with tarfile.open(archive_path, "r:gz") as tar:
         top_level = Path(archive_name).stem
         member_name = f"{top_level}/{model_file_name}"
@@ -216,7 +224,7 @@ def _load_model_from_archive(archive_name: str, model_file_name: str) -> xgb.Boo
 
 def _ensure_archive_is_downloaded(archive_name: str):
     """Download the given archive if it has not already been downloaded."""
-    archive_path = Path(CACHE_DIR, archive_name)
+    archive_path = PERF_CACHE_DIR / archive_name
     if not archive_path.exists():
         if not _download_archive(archive_path, archive_name):
             raise ValueError(f"Failed to download archive {archive_name}.")
@@ -232,6 +240,9 @@ def _download_archive(archive_path: str, archive_name: str) -> bool:
     if archive_path.exists():
         # The archive was already downloaded by another process.
         return True
+    # Make the performance model cache directory if it does not exist.
+    if not PERF_CACHE_DIR.exists():
+        PERF_CACHE_DIR.mkdir(parents=True)
     release_info = _get_release_info()
     asset = None
     for a in release_info["assets"]:
@@ -323,8 +334,7 @@ def _save_release_info(release_info) -> None:
 
 def _clear_cache() -> None:
     """Clear all cached files in the cache directory."""
-    cache_dir = Path(CACHE_DIR)
-    for f in cache_dir.iterdir():
+    for f in PERF_CACHE_DIR.iterdir():
         if f.is_file() and (f.name.endswith(".tgz") or f.name == "release_info.json"):
             f.unlink()
 

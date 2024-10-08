@@ -5,10 +5,12 @@ import datetime
 import random
 from math import prod
 from io import StringIO, BytesIO
+from typing import Dict, List
 
 import torch
 from torch import nn
 import pandas as pd
+from tqdm import tqdm
 
 try:
     import timm
@@ -24,9 +26,10 @@ try:
 except ImportError:
     has_torchinfo = False
 
+from spio.kernels import KernelParams
 from spio.transform import transform as spio_transform
-from spio.util import get_formatted_device_name, ParseKwargs
-from spio.kernels import KernelParamsLogger, KernelParams
+from spio.util import get_formatted_device_name, ParseKwargs, Timer
+from spio.kernels import KernelParamsLogger, KernelParams, KernelKey, Kernel
 from spio.compiler import compile_kernels
 from spio.data import preprocess_data_string
 
@@ -248,6 +251,12 @@ def main():
     parser.add_argument(
         "--timm-model-kwargs", nargs="*", default={}, action=ParseKwargs
     )
+    parser.add_argument(
+        "--max-random-samples",
+        type=int,
+        default=200,
+        help="The maximum number of random samples to take from the kernel configurations.",
+    )
     args = parser.parse_args()
 
     torch.backends.cudnn.benchmark = True
@@ -340,6 +349,7 @@ def run_benchmark(args, batch_size: int = None):
 
     if args.benchmark_configs:
         output_path = args.output_dir / get_benchmark_model_output_file_name(args)
+        print("Will save benchmark results to", output_path)
         benchmark_configs(model, inputs, args, output_path)
         sys.exit(0)
 
@@ -399,12 +409,10 @@ def run_benchmark(args, batch_size: int = None):
         print(f"Averages saved to {data_file_name}")
 
 
-def benchmark_configs(
-    model, inputs, args, data_path: Path, max_random_samples: int = 1000
-):
+def benchmark_configs(model, inputs, args, data_path: Path):
     # Run the model to trace the kernel parameters.
     # TODO Create a kernels-trace mode for KernelParamsLogger that simply selects the first config for each kernel.
-    # TODO This will enable KernelCache to work without a performance model.
+    # TODO This will KernelParamsLogger to work without a performance model.
     with KernelParamsLogger() as logger:
         with torch.autocast(device_type="cuda", dtype=torch.float16):
             out = model(inputs[0])
@@ -413,8 +421,8 @@ def benchmark_configs(
         unique_kernel_params = set(logged_kernel_params)
 
     # For each unique KernelParams, compile all kernel configurations.
-    # Store the kernels in a table KernelParams -> List[Kernel].
-    kernel_table = dict()
+    # Store the kernels in a table.
+    kernel_table: Dict[KernelParams, List[Kernel]] = dict()
     for kernel_params in unique_kernel_params:
         kernel_cls = kernel_params.kernel_cls
         params = kernel_params.params
@@ -426,27 +434,34 @@ def benchmark_configs(
             kernel_cls(params, config=config, **kernel_kwargs) for config in configs
         ]
 
-    # Choose a random subset of kernel configurations to benchmark.
-    # Set the number of samples to the minimum of the number of configurations for each KernelParams.
-    max_choices = min(len(kernel_lst) for kernel_lst in kernel_table.values())
-    num_samples = min(max_choices, max_random_samples)
+    # Benchmark args.max_random_samples kernel configurations per unique layer params.
+    # Some kernels may have more configurations than others.
+    # Therefore some kernels will be benchmarked multiple times.
+    max_configs = max(len(kernel_lst) for kernel_lst in kernel_table.values())
+    num_choices = min(max_configs, args.max_random_samples)
 
+    all_kernel_choices = dict()
     for kernel_params, kernel_lst in kernel_table.items():
-        random.shuffle(kernel_lst)
+        all_kernel_choices[kernel_params] = random_sample_with_replacement(
+            kernel_lst, num_choices
+        )
 
     kernels_to_compile = []
-    for kernel_lst in kernel_table.values():
-        kernels_to_compile.extend(kernel_lst[:num_samples])
-    compile_kernels(kernels_to_compile, arch=arch)
+    for kernel_params, kernel_lst in all_kernel_choices.items():
+        num_unique_configs = len(kernel_table[kernel_params])
+        kernels_to_compile.extend(kernel_lst[:num_unique_configs])
+
+    with Timer(f"Compiling {len(kernels_to_compile)} kernels"):
+        compile_kernels(kernels_to_compile, arch=arch)
 
     with data_path.open("w") as f:
 
         f.write(f"Kernel;Params;Config;KernelKwargs;CUDA_time_avg_ms\n")
 
-        for idx in range(num_samples):
+        for idx in tqdm(range(num_choices), desc=f"Profiling kernel configurations"):
             # Select a random combination of kernel configurations without replacement.
-            kernel_choices = dict()
-            for kernel_params, kernel_lst in kernel_table.items():
+            kernel_choices: Dict[KernelParams, Kernel] = dict()
+            for kernel_params, kernel_lst in all_kernel_choices.items():
                 kernel_choices[kernel_params] = kernel_lst[idx]
 
             # Create cache overlays for each KernelCache.
@@ -455,8 +470,8 @@ def benchmark_configs(
                 kernel_cache_overlays[kernel_params.kernel_cache] = dict()
             for kernel_params, kernel in kernel_choices.items():
                 kernel_cache = kernel_params.kernel_cache
-                params = kernel_params.params
-                kernel_cache_overlays[kernel_cache][params] = kernel
+                key: KernelKey = kernel_params.key
+                kernel_cache_overlays[kernel_cache][key] = kernel
             for kernel_cache, overlay in kernel_cache_overlays.items():
                 kernel_cache.update_overlay(overlay)
 
@@ -466,7 +481,8 @@ def benchmark_configs(
                     # Sanity check to ensure that the kernel was compiled and not unloaded.
                     # This should never fail.
                     raise ValueError("Kernel cubin is None")
-                kernel.load(device.index)
+                # Load the kernel now and allow it to be reloaded later.
+                kernel.load(device.index, clear_cubin=False)
 
             # Run the benchmark.
             schedule = torch.profiler.schedule(
@@ -561,36 +577,45 @@ def get_benchmark_model_output_file_name(args):
         )
 
 
-def decode_benchmark_model_dir_name(dir_name):
-    """Decode the name of a results directory from a model benchmark.
-
-    Returns the components of the name as a dictionary.
-    """
-    parts = dir_name.split("___")
-    if parts[0] != "modelbench":
-        raise ValueError(
-            f"Invalid model benchmark file name: {dir_name}. Expected 'modelbench__*.ssv"
-        )
-    device_name = parts[1]
-    model_name = parts[2]
-    kwargs_str = parts[3]
-    kwargs_parts = kwargs_str.split("__")
-    model_kwargs = {
-        key: value for key, value in zip(kwargs_parts[::2], kwargs_parts[1::2])
-    }
-    return dict(
-        device=device_name,
-        model_name=model_name,
-        model_kwargs=model_kwargs,
-    )
-
-
 def get_batch_size_file_name_details(args):
     return f"bs{args.batch_size}"
 
 
 def get_date_stamp():
     return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def random_sample_with_replacement(alist, k):
+    """Randomly sample k items from a list with replacement.
+
+    If k is greater than the length of the list, the list will be sampled multiple times.
+    
+    Args:
+        alist (List): The list to sample from.
+        k (int): The number of samples to take.
+        
+    Returns:
+        List: A list of k randomly sampled items from alist."""
+    n = len(alist)
+    result = []
+
+    # Calculate the number of full cycles
+    full_cycles = k // n
+    remaining_items = k % n
+
+    # Add full cycles
+    for _ in range(full_cycles):
+        shuffled_list = alist[:]
+        random.shuffle(shuffled_list)
+        result.extend(shuffled_list)
+
+    # Add remaining items
+    if remaining_items > 0:
+        shuffled_list = alist[:]
+        random.shuffle(shuffled_list)
+        result.extend(shuffled_list[:remaining_items])
+
+    return result
 
 
 if __name__ == "__main__":
