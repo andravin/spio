@@ -7,12 +7,12 @@ import tarfile
 import json
 
 import xgboost as xgb
+import numpy as np
 from filelock import FileLock
 
 from .. import __version__, supported_arch
 from ..util import (
     get_cache_dir,
-    params_and_configs_to_dataframe,
     get_formatted_device_name,
     get_formatted_arch,
 )
@@ -200,14 +200,15 @@ def _predict_best_config(
     Uses the given XGBoost performance model to predict the latency of each configuration
     and returns the best one.
     """
-    df = params_and_configs_to_dataframe(params, configs)
-    dm = xgb.DMatrix(df)
+    dm = _params_and_configs_to_dmatrix(params, configs)
     predictions = performance_model.predict(dm)
-    if logger_verbose:
-        print(f"Latency predictions for {params}:")
-        df['predictions'] = predictions
-        sorted_df = df.sort_values(by='predictions') 
-        print(sorted_df)
+
+    # TODO reimpliment logging without data frame
+    # if logger_verbose:
+    #     print(f"Latency predictions for {params}:")
+    #     df['predictions'] = predictions
+    #     sorted_df = df.sort_values(by='predictions')
+    #     print(sorted_df)
 
     best_config = configs[predictions.argmin()]
     return best_config
@@ -375,3 +376,56 @@ def get_arch_performance_model_file_name(
 ) -> str:
     """Return the performance model filename for the given kernel, device, and architecture."""
     return f"archmodel__{arch}__{kernel}{ext}"
+
+
+def _params_and_configs_to_dmatrix(
+    params, configs, skip_params=["group_width", "stride"]
+):
+
+    rows = []
+
+    params_flt = _flatten_dataclass(params, skip_fields=skip_params)
+    for config in configs:
+        config_flt = _flatten_dataclass(config)
+        rows.append(params_flt + config_flt)
+
+    array = np.array(rows)
+
+    feature_names = _get_dataclass_feature_names(
+        params, prefix="Params", skip_fields=skip_params
+    )
+    feature_names += _get_dataclass_feature_names(configs[0], prefix="Config")
+
+    dm = xgb.DMatrix(array, feature_names=feature_names)
+
+    return dm
+
+
+def _get_dataclass_feature_names(obj, prefix="", skip_fields=None):
+    feature_names = []
+    for field in obj.__dataclass_fields__:
+        if skip_fields and field in skip_fields:
+            continue
+        value = getattr(obj, field)
+        if isinstance(value, tuple):
+            feature_names.extend([f"{prefix}_{field}_{i}" for i in range(len(value))])
+        else:
+            feature_names.append(f"{prefix}_{field}")
+    return feature_names
+
+
+def _flatten_dataclass(obj, skip_fields=None):
+    features = []
+    for field in obj.__dataclass_fields__:
+        if skip_fields and field in skip_fields:
+            continue
+        value = getattr(obj, field)
+        if isinstance(value, tuple):
+            features.extend(value)
+        elif isinstance(value, (int, float)):
+            features.append(float(value))
+        elif isinstance(value, str):
+            features.append(value)
+        else:
+            raise TypeError(f"Unsupported type: {type(value)} in field {field}")
+    return features

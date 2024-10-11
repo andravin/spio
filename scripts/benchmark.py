@@ -20,12 +20,12 @@ from spio.log import (
 from spio.reflection import get_function_reflection, get_kernel_reflection
 from spio.kernels import Conv2dGw8Params
 from spio.util import (
-    parse_dataclass,
     get_formatted_arch,
     get_formatted_device_name,
-    load_parameter_set,
     ParseKwargs,
 )
+
+from spio.util.load_parameter_set import load_parameter_set
 
 PARAMS_CLASSES = {"Conv2dGw8Params": Conv2dGw8Params}
 

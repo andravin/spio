@@ -31,7 +31,6 @@ setup(
         "torch>=2.4.0",
         "nvidia-cuda-nvrtc-cu12",
         "pytest",
-        "pandas",
         "xgboost",
         "appdirs",
         "requests",

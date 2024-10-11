@@ -3,7 +3,12 @@ import sys
 from datetime import datetime
 
 import torch
-import timm
+
+try:
+    import timm
+except ImportError as e:
+    raise ImportError("This script requires the timm package.") from e
+
 from timm.utils import ParseKwargs
 
 import spio
@@ -41,7 +46,9 @@ parser.add_argument("--model-kwargs", nargs="*", default={}, action=ParseKwargs)
 parser.add_argument("--no-profile", action="store_true")
 parser.add_argument("--enable-logger", action="store_true")
 parser.add_argument("--scan-modules", action="store_true")
-parser.add_argument("--bench", type=str, default="train", help="train or inference benchmark mode")
+parser.add_argument(
+    "--bench", type=str, default="train", help="train or inference benchmark mode"
+)
 
 args = parser.parse_args()
 
@@ -132,7 +139,6 @@ else:
                     with torch.autocast(device_type="cuda", dtype=torch.float16):
                         model(inputs[i % NUM_INPUTS]).sum()
                     prof.step()
-
 
     datestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 

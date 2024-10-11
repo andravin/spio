@@ -2,18 +2,21 @@ import argparse
 import os
 import glob
 from pathlib import Path
+from dataclasses import dataclass
+from functools import partial
 
-import pandas as pd
 import xgboost as xgb
+
+try:
+    import pandas as pd
+except ImportError as e:
+    raise ImportError("This script requires the pandas package.") from e
 
 try:
     from sklearn.model_selection import train_test_split, GridSearchCV
     from sklearn.metrics import root_mean_squared_error
 except ImportError as e:
-    raise ImportError(
-        "scikit-learn is required to train the performance model. "
-        "Please install it using `pip install scikit-learn`."
-    ) from e
+    raise ImportError("This script requires the scikit-learn package.") from e
 
 from spio.kernels import (
     Conv2dGw8Params,
@@ -22,7 +25,8 @@ from spio.kernels import (
     get_device_performance_model_file_name,
     PERFORMANCE_MODEL_EXTENSION,
 )
-from spio.util import import_dataclass_column
+from spio.util.parse_dataclass import parse_dataclass
+
 
 PARAMS_CLASSES = dict(Conv2dGw8Params=Conv2dGw8Params)
 CONFIG_CLASSES = dict(
@@ -224,12 +228,39 @@ def average_redundant_params_and_configs(df):
 
     # (Optional) Merge with other fields
     other_fields = grouped.first().reset_index()
-    other_fields = other_fields.drop(columns=['CUDA_time_avg_ms'])
+    other_fields = other_fields.drop(columns=["CUDA_time_avg_ms"])
 
     averaged_df = pd.merge(mean_results, other_fields, on=["Params_str", "Config_str"])
     averaged_df.drop(["Params_str", "Config_str"], axis=1, inplace=True)
 
     return averaged_df
+
+
+def _dataclass_to_series(dataclass_obj):
+    data = {}
+    for key, value in dataclass_obj.__dict__.items():
+        if isinstance(value, tuple):
+            for i, elem in enumerate(value):
+                data[f"{key}_{i}"] = elem
+        else:
+            data[key] = value
+    return pd.Series(data)
+
+
+def import_dataclass_column(df, col, dataclasses):
+    parse_these_dataclasses = partial(parse_dataclass, dataclasses=dataclasses)
+    df[col] = df[col].apply(parse_these_dataclasses)
+    attributes_df = df[col].apply(_dataclass_to_series)
+
+    # Prefix the attribute column names to avoid conflicts
+    attributes_df = attributes_df.add_prefix(f"{col}_")
+
+    # Join the new attributes DataFrame with the original DataFrame
+    df = pd.concat([df, attributes_df], axis=1)
+
+    # Drop the original dataclass column if no longer needed
+    df.drop(columns=[col], inplace=True)
+    return df
 
 
 if __name__ == "__main__":

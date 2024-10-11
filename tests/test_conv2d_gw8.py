@@ -16,7 +16,7 @@ from spio.runner import (
 from spio.kernels import Conv2dGw8Kernel, Conv2dGw8WgradKernel, Conv2dGw8Params
 from spio.functional import conv2d_gw8
 from spio.layers import Conv2dGw8
-from spio.util import load_parameter_set
+from spio.util.load_parameter_set import load_parameter_set
 
 # Accelerate tests by limiting the number of parameters tested
 #
