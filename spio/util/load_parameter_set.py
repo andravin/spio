@@ -38,7 +38,7 @@ def _load_dataclasses_from_resource(
         return []
     dataclasses = {d.__name__: d for d in dataclasses}
     params_lst = []
-    with importlib.resources.files("spio.data").joinpath(resource_name).open("r") as f:
+    with importlib.resources.files("spio.src_tests").joinpath(resource_name).open("r") as f:
         for line in f:
             if line:
                 params = parse_dataclass(line, dataclasses=dataclasses)

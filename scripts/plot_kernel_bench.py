@@ -8,7 +8,7 @@ from functools import partial
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from spio.data import preprocess_data_file
+from spio.src_tests import preprocess_data_file
 from spio.kernels import Conv2dGw8Kernel, Conv2dGw8WgradKernel
 
 
