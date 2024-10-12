@@ -15,10 +15,11 @@ from ..util import (
     get_cache_dir,
     get_formatted_device_name,
     get_formatted_arch,
+    logger_enabled,
+    logger_verbose,
 )
 
 from .kernel import Kernel
-from ..log import logger_enabled, logger_verbose
 
 
 PERFORMANCE_MODEL_EXTENSION = ".ubj"
