@@ -11,7 +11,7 @@ SKIP_COMPILE=${5:-"false"}
 LOG_LEVEL=${6:-"1"}
 
 if [ -z "$MODEL" ]; then
-    echo "Usage: $0 <model> <batch_size> [train|inference]"
+    echo "Usage: $0 <model> <batch_size> [train|inference] [EXTRA_MODEL_KWARGS] [SKIP_COMPILE] [LOG_LEVEL]"
     exit 1
 fi
 
