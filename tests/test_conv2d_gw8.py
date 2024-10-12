@@ -6,7 +6,7 @@ import importlib.resources
 
 import pytest
 
-from spio.runner import (
+from spio.src_tests import (
     run_kernel_test,
     run_grad_kernel_test,
     run_function_test,

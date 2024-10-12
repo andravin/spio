@@ -11,6 +11,7 @@ from ..transform._transform import _transform as spio_transform
 
 
 def run_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
+    """Run a test for an forward pass kernel."""
     arch = torch.cuda.get_device_capability(device)
 
     reflection = get_kernel_reflection(kernel_cls, **kernel_kwargs)
@@ -34,6 +35,7 @@ def run_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
 
 
 def run_grad_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
+    """Run a test for a backward pass kernel."""
     arch = torch.cuda.get_device_capability(device)
     reflection = get_kernel_reflection(kernel_cls, **kernel_kwargs)
     args = reflection.make_args(params, device=device, training=True)
@@ -70,6 +72,7 @@ def run_grad_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
 
 
 def run_function_test(function, params, device="cuda"):
+    """Run a test for the forward pass of a function."""
     reflection = get_function_reflection(function)
     args = reflection.make_args(params, device=device)
     function_args = reflection.arrange_args(args)
@@ -87,6 +90,7 @@ def run_function_test(function, params, device="cuda"):
 
 
 def run_grad_function_test(function, params, device="cuda"):
+    """Run a test for a backward pass of a function."""
     reflection = get_function_reflection(function)
     args = reflection.make_args(params, device=device, training=True)
     function_args = reflection.arrange_args(args)
@@ -115,6 +119,7 @@ def run_grad_function_test(function, params, device="cuda"):
 
 
 def run_layer_test(layer_cls, params, device="cuda", torchcompile=False, torchcompile_mode=None):
+    """Run a test for a torch.nn.Module layer subclass that uses Spio a function."""
     reflection = get_layer_reflection(layer_cls)
     args = reflection.make_args(params, device=device)
     layer_args = reflection.arrange_args(args)
