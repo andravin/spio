@@ -48,7 +48,7 @@ class Kernel:
 
     def load(self, device_ordinal=0, clear_cubin=True):
         """Load the compile kernel binary into a device.
-        
+
         Args:
             device_ordinal (int, optional): The device ordinal to load the kernel onto. Defaults to 0.
             clear_cubin (bool, optional): Whether to clear the kernel binary after loading. Defaults to True.
@@ -64,7 +64,7 @@ class Kernel:
 
     def unload(self):
         """Unload the kernel from the device.
-        
+
         If you previously called the load method with clear_cubin=False,
         you can load the kernel again without recompiling it.
         """
@@ -85,32 +85,22 @@ class Kernel:
             )
         except Exception as e:
             raise ValueError(f"Error in kernel {self}") from e
-        
+
     @classmethod
     def get_kernel_name(cls, params=None, **kwargs) -> str:
         """Return the full kernel name for the given parameters.
-        
+
         The full name includes the base name and the encoded parameters.
         """
         base_name = cls.get_kernel_base_name(**kwargs)
         details = params.encode()
         return f"{base_name}__{details}"
 
-    @property
-    def stats(self):
-        return self.Stats(params=self.params, unit=2, output_names=self.output_names)
-
     def __call__(self, *args):
         self.launch(*args)
 
     def __repr__(self) -> str:
         return f"{self.kernel_name} {self.params} {self.config}"
-
-    @property
-    def is_backprop(self):
-        return any(
-            [output_name.startswith("grad_") for output_name in self.output_names]
-        )
 
 
 def _check_args(args, device):

@@ -190,10 +190,3 @@ class Conv2dGw8Kernel(Kernel):
             params=params,
             config=config,
         )
-
-    @property
-    def output_names(self):
-        if self.igrad:
-            return ["grad_input"]
-        else:
-            return ["output"]

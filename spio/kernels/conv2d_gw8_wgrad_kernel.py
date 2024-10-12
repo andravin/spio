@@ -32,7 +32,6 @@ class Conv2dGw8WgradKernel(Kernel):
     Params = Conv2dGw8Params
     Config = Conv2dGw8WgradConfig
     Stats = Conv2dStats
-    output_names = ["grad_weight"]
 
     _kernel_cache = KernelCache()
 
