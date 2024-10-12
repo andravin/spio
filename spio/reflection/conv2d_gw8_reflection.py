@@ -6,8 +6,8 @@ from ..kernels.conv2d_gw8_kernel import Conv2dGw8Kernel
 from ..kernels.conv2d_gw8_wgrad_kernel import Conv2dGw8WgradKernel
 from ..kernels.conv2d_stats import Conv2dStats
 from ..kernels.conv2d_gw8_params import Conv2dGw8Params
-from ..functional.conv_gw8_function import conv2d_gw8
-from ..layers.conv_gw8 import Conv2dGw8
+from ..functional.conv2d_gw8_function import conv2d_gw8
+from ..layers.conv2d_gw8 import Conv2dGw8
 
 from .reflection import Reflection, ArgInfo, register_reflection, Init
 
