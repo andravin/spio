@@ -15,7 +15,7 @@ function profile_kernels_with_model() {
             break
         fi
         echo "Benchmarking ${model} with batch size ${batch_size} .."
-        time python $SCRIPTS_DIR/profile_fiesta.py --batch-size=${batch_size} --timm-model=${model} --spio --benchmark-configs ${extra}
+        time python $SCRIPTS_DIR/profile_block.py --batch-size=${batch_size} --timm-model=${model} --spio --benchmark-configs ${extra}
         echo ".. done."
         echo
     done

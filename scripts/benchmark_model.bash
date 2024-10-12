@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Run this script from pytorch-image-models root directory.
+# It uses use the timm benchmark.py script to benchmark a model with and without spio.
+
 MODEL=$1
 BATCH_SIZE=$2
 BENCH=${3:-train}

@@ -54,13 +54,6 @@ args = parser.parse_args()
 
 torch.backends.cudnn.benchmark = True
 
-spio.log.benchmark_logger.configure(
-    full_format=True,
-    best=False,
-    header_once=True,
-    enable=args.enable_logger,
-)
-
 memory_format = torch.channels_last if args.channels_last else torch.contiguous_format
 total_iters = WAIT_ITERS + args.warmup_iters + args.benchmark_iters
 
