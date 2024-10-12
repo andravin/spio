@@ -12,6 +12,7 @@ from spio.src_tests import (
     run_function_test,
     run_grad_function_test,
     run_layer_test,
+    run_opcheck_test
 )
 from spio.kernels import Conv2dGw8Kernel, Conv2dGw8WgradKernel, Conv2dGw8Params
 from spio.functional import conv2d_gw8
@@ -149,3 +150,8 @@ def test_conv2d_gw8_layer(params: Conv2dGw8Params):
     run_layer_test(Conv2dGw8, params)
     run_layer_test(Conv2dGw8, params, torchcompile=True, torchcompile_mode=None)
     run_layer_test(Conv2dGw8, params, torchcompile=True, torchcompile_mode="reduce-overhead")
+
+
+def test_conv2d_gw8_op_check():
+    params = Conv2dGw8Params(N=4, C=64, H=16, W=32, padding=1, R=3, S=3, has_bias=True)
+    run_opcheck_test(conv2d_gw8, params)

@@ -71,6 +71,16 @@ def run_grad_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
             assert_all_close(grad, ref_grad, msg=str(kernel))
 
 
+def run_opcheck_test(function, params, device="cuda"):
+    reflection = get_function_reflection(function)
+    args = reflection.make_args(params, device=device)
+    function_args = reflection.arrange_args(args)
+    function_kwargs = reflection.get_function_kwargs(params)
+    torch.library.opcheck(
+        function, function_args, function_kwargs, raise_exception=True
+    )
+
+
 def run_function_test(function, params, device="cuda"):
     """Run a test for the forward pass of a function."""
     reflection = get_function_reflection(function)
@@ -118,7 +128,9 @@ def run_grad_function_test(function, params, device="cuda"):
             assert_all_close(grad[0], reference_grad[0], msg=str(params))
 
 
-def run_layer_test(layer_cls, params, device="cuda", torchcompile=False, torchcompile_mode=None):
+def run_layer_test(
+    layer_cls, params, device="cuda", torchcompile=False, torchcompile_mode=None
+):
     """Run a test for a torch.nn.Module layer subclass that uses Spio a function."""
     reflection = get_layer_reflection(layer_cls)
     args = reflection.make_args(params, device=device)

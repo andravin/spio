@@ -99,7 +99,9 @@ def conv2d_gw8_backward_op(
         # Its data-type is torch.float32.
         grad_weight = torch.zeros_like(weight, dtype=torch.float32)
         args = (grad_weight, input, grad_output)
-        grad_weight_kernel = Conv2dGw8WgradKernel.grad_weight_kernel(params, input.device)
+        grad_weight_kernel = Conv2dGw8WgradKernel.grad_weight_kernel(
+            params, input.device
+        )
         grad_weight_kernel(*args)
     else:
         grad_weight = None
@@ -183,14 +185,19 @@ def conv2d_gw8_backward(ctx, grad_output):
 
 @_custom_setup_context(device_type="cuda")
 def conv2d_gw8_setup_context(ctx, inputs, output):
+    """Setup the context for the conv2d_gw8 custom op.
+    
+    Note: Our _custom_setup_context decorator is a workaround for the missing amp setup_context decorator for custom ops.
+    It has limited support for torch.compile. It does not cast the input and weight tensors are cast to float16.
+    We use an assert to ensure that the input and weight tensors are in float16.
+    """
     input, weight, bias, stride, padding_y, padding_x, *_ = inputs
 
     # Ensure that the weight tensor is in float16.
-    # This is necessary because our _custom_setup_context does not actually cast the inputs.
-    input = input.to(torch.float16)
-    weight = weight.to(torch.float16)
+    assert input.dtype == torch.float16
+    assert weight.dtype == torch.float16
     if bias is not None:
-        bias = bias.to(torch.float16)
+        assert bias.dtype == torch.float16
 
     ctx.save_for_backward(input, weight, bias)
     ctx.padding_y = padding_y

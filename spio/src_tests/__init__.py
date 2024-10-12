@@ -5,4 +5,5 @@ from .run_test import (
     run_kernel_test,
     run_grad_kernel_test,
     run_layer_test,
+    run_opcheck_test
 )
