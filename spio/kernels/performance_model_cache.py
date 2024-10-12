@@ -18,7 +18,7 @@ from ..util import (
     get_formatted_arch,
     logger_enabled,
     logger_verbose,
-    Timer,
+    time_function,
 )
 
 from .kernel import Kernel
@@ -199,6 +199,7 @@ def _get_model_name_from_archive(
         assert False, f"Invalid archive name: {archive_name}"
 
 
+@time_function("spio: predicting best kernel configuration", log_level=2)
 def _predict_best_config(
     performance_model: xgb.Booster, params: Any, configs: List[Any]
 ):
@@ -207,18 +208,8 @@ def _predict_best_config(
     Uses the given XGBoost performance model to predict the latency of each configuration
     and returns the best one.
     """
-    with Timer("Encoding params and configs for XGBoost", 2):
-        dm = _params_and_configs_to_dmatrix(params, configs)
-    with Timer("Predicting best config with XGBoost", 2):
-        predictions = performance_model.predict(dm)
-
-    # TODO reimpliment logging without data frame
-    # if logger_verbose:
-    #     print(f"Latency predictions for {params}:")
-    #     df['predictions'] = predictions
-    #     sorted_df = df.sort_values(by='predictions')
-    #     print(sorted_df)
-
+    dm = _params_and_configs_to_dmatrix(params, configs)
+    predictions = performance_model.predict(dm)
     best_config = configs[predictions.argmin()]
     return best_config
 

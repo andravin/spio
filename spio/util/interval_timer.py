@@ -62,7 +62,8 @@ class Timer:
 
     def __enter__(self):
         self.start = perf_counter()
-        print(f"{self.message} in progress ..", end="")
+        if log_level >= self.log_level:
+            print(f"{self.message} in progress ..", end="")
         return self
 
     def __exit__(self, *args):
@@ -70,3 +71,18 @@ class Timer:
         self.elapsed = self.end - self.start
         if log_level >= self.log_level:
             print(f" finished in {self.elapsed:.6f} seconds.")
+
+
+def time_function(message="", log_level=0):
+    """A decorator for timing function calls.
+    
+    Args:
+        message (str, optional): A message to display when the timer starts. Defaults to "".
+        log_level (int, optional): The log level at which to display the message. Defaults to 0.
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            with Timer(message=message, log_level=log_level):
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
