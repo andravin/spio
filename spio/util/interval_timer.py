@@ -1,4 +1,5 @@
 from time import perf_counter
+from .logger import log_level
 
 TIMER_OVERHEAD = 3e-6  # 3 microseconds
 
@@ -43,7 +44,7 @@ class IntervalTimer:
 
 class Timer:
     """A context manager for timing code blocks.
-    
+
     Args:
         message (str, optional): A message to display when the timer starts. Defaults to "".
 
@@ -54,8 +55,10 @@ class Timer:
     Output:
         Compiling kernel in progress .. finished in 0.123 seconds.
     """
-    def __init__(self, message=""):
+
+    def __init__(self, message="", log_level=0):
         self.message = message
+        self.log_level = log_level
 
     def __enter__(self):
         self.start = perf_counter()
@@ -65,4 +68,5 @@ class Timer:
     def __exit__(self, *args):
         self.end = perf_counter()
         self.elapsed = self.end - self.start
-        print(f" finished in {self.elapsed:.3f} seconds.")
+        if log_level >= self.log_level:
+            print(f" finished in {self.elapsed:.6f} seconds.")

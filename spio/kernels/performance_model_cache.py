@@ -5,6 +5,7 @@ from typing import Type, List, Any
 from packaging import version
 import tarfile
 import json
+import os
 
 import xgboost as xgb
 import numpy as np
@@ -17,10 +18,14 @@ from ..util import (
     get_formatted_arch,
     logger_enabled,
     logger_verbose,
+    Timer,
 )
 
 from .kernel import Kernel
 
+DEFAULT_PERF_THREADS = 4
+
+NUM_PERF_THREADS = int(os.environ.get("SPIO_PERF_THREADS", f"{DEFAULT_PERF_THREADS}"))
 
 PERFORMANCE_MODEL_EXTENSION = ".ubj"
 
@@ -137,6 +142,7 @@ class PerformanceModelCache:
             model_data = _load_model_from_archive(archive_name, model_file_name)
             model = xgb.Booster()
             model.load_model(model_data)
+            model.set_param("n_jobs", NUM_PERF_THREADS)
             self._model_cache[device_model_cache_key] = model
             if logger_enabled:
                 print(
@@ -201,8 +207,10 @@ def _predict_best_config(
     Uses the given XGBoost performance model to predict the latency of each configuration
     and returns the best one.
     """
-    dm = _params_and_configs_to_dmatrix(params, configs)
-    predictions = performance_model.predict(dm)
+    with Timer("Encoding params and configs for XGBoost", 2):
+        dm = _params_and_configs_to_dmatrix(params, configs)
+    with Timer("Predicting best config with XGBoost", 2):
+        predictions = performance_model.predict(dm)
 
     # TODO reimpliment logging without data frame
     # if logger_verbose:
