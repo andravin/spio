@@ -65,9 +65,9 @@ def main():
     dirname_params = extract_parameters_from_dirname(args.spio_data_dir)
     params = conv2d_gw8_kernel_params_from_dirname_params(dirname_params)
 
-    add_eff_bandwidth_gb_s(df_fprop, params, Conv2dGw8Kernel.Stats, "output")
-    add_eff_bandwidth_gb_s(df_dgrad, params, Conv2dGw8Kernel.Stats, "grad_input")
-    add_eff_bandwidth_gb_s(df_wgrad, params, Conv2dGw8Kernel.Stats, "grad_weight")
+    add_eff_bandwidth_gb_s(df_fprop, params, Conv2dGw8Kernel.stats_cls, "output")
+    add_eff_bandwidth_gb_s(df_dgrad, params, Conv2dGw8Kernel.stats_cls, "grad_input")
+    add_eff_bandwidth_gb_s(df_wgrad, params, Conv2dGw8Kernel.stats_cls, "grad_weight")
 
     plot_eff_bw(
         df_fprop,
@@ -107,12 +107,12 @@ def main():
                 label + " (Depthwise)" for label in torch_kernel_labels
             ]
 
-        add_eff_bandwidth_gb_s(fprop_df, torch_params, Conv2dGw8Kernel.Stats, "output")
+        add_eff_bandwidth_gb_s(fprop_df, torch_params, Conv2dGw8Kernel.stats_cls, "output")
         add_eff_bandwidth_gb_s(
-            dgrad_df, torch_params, Conv2dGw8Kernel.Stats, "grad_input"
+            dgrad_df, torch_params, Conv2dGw8Kernel.stats_cls, "grad_input"
         )
         add_eff_bandwidth_gb_s(
-            wgrad_df, torch_params, Conv2dGw8Kernel.Stats, "grad_weight"
+            wgrad_df, torch_params, Conv2dGw8Kernel.stats_cls, "grad_weight"
         )
 
         plot_eff_bw(
@@ -381,7 +381,7 @@ def conv2d_gw8_kernel_params_from_dirname_params(dirname_params):
     else:
         raise ValueError(f"Unknown block name: {block_name}")
 
-    return Conv2dGw8Kernel.Params(
+    return Conv2dGw8Kernel.params_cls(
         N=dirname_params.get("batch_size"),
         C=C,
         H=dirname_params["height_width"],
