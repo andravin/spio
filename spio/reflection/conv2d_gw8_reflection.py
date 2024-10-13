@@ -2,8 +2,6 @@ import math
 
 import torch
 
-from ..kernels.conv2d_gw8_kernel import Conv2dGw8Kernel
-from ..kernels.conv2d_gw8_wgrad_kernel import Conv2dGw8WgradKernel
 from ..kernels.conv2d_stats import Conv2dStats
 from ..kernels.conv2d_gw8_params import Conv2dGw8Params
 from ..functional.conv2d_gw8_function import conv2d_gw8
@@ -25,7 +23,7 @@ def register_conv2d_gw8_reflections():
 
     register_reflection(
         Reflection(
-            kernel_cls=Conv2dGw8Kernel,
+            kernel_name="spio_conv2d_gw8_fprop",
             arginfo=conv2d_arg_info,
             args=["output", "input", "weight", "bias"],
             kernel_outputs=["output"],
@@ -33,6 +31,7 @@ def register_conv2d_gw8_reflections():
             stacking=[("output", "input")],
             stats=Conv2dStats,
             prefix_op_constructor=_make_prefix_op,
+            ignore_params=["stride", "group_width"],
         )
     )
 
@@ -93,7 +92,7 @@ def register_conv2d_gw8_reflections():
 
     register_reflection(
         Reflection(
-            kernel_cls=Conv2dGw8WgradKernel,
+            kernel_name="spio_conv2d_gw8_wgrad",
             arginfo=dict(
                 input=ArgInfo(dtype=torch.float16, requires_grad=True),
                 weight=ArgInfo(dtype=torch.float16, requires_grad=True),
@@ -109,12 +108,13 @@ def register_conv2d_gw8_reflections():
             reference=torch.nn.functional.conv2d,
             prefix_op_constructor=_make_prefix_op,
             stats=Conv2dStats,
+            ignore_params=["stride", "group_width"],
         )
     )
 
     register_reflection(
         Reflection(
-            kernel_cls=Conv2dGw8Kernel,
+            kernel_name="spio_conv2d_gw8_dgrad",
             kwargs=dict(igrad=True),
             arginfo=dict(
                 input=ArgInfo(dtype=torch.float16, requires_grad=True),
@@ -133,6 +133,7 @@ def register_conv2d_gw8_reflections():
             stats=Conv2dStats,
             stacking=[("grad_input", "grad_output")],
             prefix_op_constructor=_make_prefix_op,
+            ignore_params=["stride", "group_width"],
         )
     )
 

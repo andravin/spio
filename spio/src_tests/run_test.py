@@ -8,13 +8,17 @@ from ..reflection import (
     get_layer_reflection,
 )
 from ..transform._transform import _transform as spio_transform
+from ..kernels.kernel_factory import _KernelFactory
 
 
-def run_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
+def run_kernel_test(
+    kernel_factory: _KernelFactory, params, device="cuda", **kernel_kwargs
+):
     """Run a test for an forward pass kernel."""
     arch = torch.cuda.get_device_capability(device)
 
-    reflection = get_kernel_reflection(kernel_cls, **kernel_kwargs)
+    kernel_name = kernel_factory._get_kernel_name(**kernel_kwargs)
+    reflection = get_kernel_reflection(kernel_name)
     args = reflection.make_args(params, device=device)
     kernel_args = reflection.arrange_args(args)
 
@@ -24,7 +28,9 @@ def run_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
     torch_kwargs = reference_reflection.get_function_kwargs(params)
 
     torch_output = reference_function(*reference_args, **torch_kwargs)
-    kernels = compile_kernel_configs(kernel_cls, params, arch=arch, **reflection.kwargs)
+    kernels = compile_kernel_configs(
+        kernel_factory, params, arch=arch, **reflection.kwargs
+    )
     for kernel in kernels:
         kernel.load()
         reflection.init_zeros(args)
@@ -34,10 +40,13 @@ def run_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
         assert_all_close(output, torch_output, msg=str(kernel))
 
 
-def run_grad_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
+def run_grad_kernel_test(
+    kernel_factory: _KernelFactory, params, device="cuda", **kernel_kwargs
+):
     """Run a test for a backward pass kernel."""
     arch = torch.cuda.get_device_capability(device)
-    reflection = get_kernel_reflection(kernel_cls, **kernel_kwargs)
+    kernel_name = kernel_factory._get_kernel_name(**kernel_kwargs)
+    reflection = get_kernel_reflection(kernel_name)
     args = reflection.make_args(params, device=device, training=True)
 
     reference_function = reflection.reference
@@ -60,7 +69,7 @@ def run_grad_kernel_test(kernel_cls, params, device="cuda", **kernel_kwargs):
     }
 
     kernel_args = reflection.arrange_args(args)
-    kernels = compile_kernel_configs(kernel_cls, params, arch=arch, **kernel_kwargs)
+    kernels = compile_kernel_configs(kernel_factory, params, arch=arch, **kernel_kwargs)
     for kernel in kernels:
         kernel.load()
         reflection.init_zeros(args)

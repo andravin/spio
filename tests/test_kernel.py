@@ -16,7 +16,9 @@ from spio.util import divup, assert_all_close
 
 def test_add_kernel():
     """Compile and run a simple CUDA kernel."""
-    module, add_kernel = compile_and_load_kernel(kernel_name="add", test_kernel=True)
+    module, add_kernel = compile_and_load_kernel(
+        kernel_name="add", src_module="spio.src_tests"
+    )
 
     x1 = torch.arange(25, dtype=torch.float32, device="cuda").reshape(5, 5)
     x2 = torch.arange(25, dtype=torch.float32, device="cuda").reshape(5, 5)
@@ -28,7 +30,9 @@ def test_add_kernel():
 def test_mma_m16_n8_k8_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k8."""
     module, mma_kernel = compile_and_load_kernel(
-        kernel_name="mma_m16_n8_k8", source_file_name="mma.cu", test_kernel=True
+        kernel_name="mma_m16_n8_k8",
+        source_file_name="mma.cu",
+        src_module="spio.src_tests",
     )
 
     A = torch.zeros((16, 8), dtype=torch.float16, device="cuda")
@@ -58,7 +62,7 @@ def test_mma_m16_n8_k16_kernel():
         kernel_name="mma_m16_n8_k16",
         source_file_name="mma.cu",
         debug=True,
-        test_kernel=True,
+        src_module="spio.src_tests",
     )
 
     A = torch.zeros((16, 16), dtype=torch.float16, device="cuda")
@@ -123,7 +127,7 @@ def test_memcpy_kernel():
         debug=debug,
         lineinfo=lineinfo,
         header_dict={"my_params.h": my_params_header},
-        test_kernel=True,
+        src_module="spio.src_tests",
     )
 
     inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float32).to(
@@ -213,7 +217,7 @@ def test_row_memcpy_kernel():
         debug=debug,
         lineinfo=lineinfo,
         header_dict={"parameters.h": parameters_header},
-        test_kernel=True,
+        src_module="spio.src_tests",
     )
 
     inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float32).to(

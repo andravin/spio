@@ -45,7 +45,7 @@ class KernelCache:
         self._cache_overlay.clear()
 
     @log_kernel_params
-    def get(self, kernel_cls, params, device, **kernel_kwargs) -> Kernel:
+    def get(self, kernel_factory, params, device, **kernel_kwargs) -> Kernel:
         """Return the best kernel for the given params and device.
 
         If the kernel is not in the cache, it will be compiled and loaded.
@@ -57,19 +57,19 @@ class KernelCache:
         if best_kernel is None:
             if self._cache_overlay:
                 raise ValueError(
-                    f"Kernel {kernel_cls} with params {params} and device {device} enot found in overlay cache"
+                    f"Kernel {kernel_factory} with params {params} and device {device} enot found in overlay cache"
                 )
             best_kernel = self._cache.get(key)
             if best_kernel is None:
                 best_config = perf_model_cache.predict_best_kernel(
-                    kernel_cls, params, device, **kernel_kwargs
+                    kernel_factory, params, device, **kernel_kwargs
                 )
                 if best_config is None:
                     raise ValueError(
-                        f"Could not find best config for {kernel_cls} with params {params} and kwargs {kernel_kwargs}"
+                        f"Could not find best config for {kernel_factory} with params {params} and kwargs {kernel_kwargs}"
                     )
                 best_kernel = _compile_and_load_kernel(
-                    kernel_cls, params, best_config, device, **kernel_kwargs
+                    kernel_factory, params, best_config, device, **kernel_kwargs
                 )
 
                 self._cache[key] = best_kernel
@@ -77,7 +77,7 @@ class KernelCache:
 
 
 def _compile_and_load_kernel(
-    kernel_cls, params, config, device, **kernel_kwargs
+    kernel_factory, params, config, device, **kernel_kwargs
 ) -> Kernel:
     with torch.device(device) as device_obj:
         device_ordinal = device_obj.index if device_obj.index is not None else 0
@@ -85,7 +85,7 @@ def _compile_and_load_kernel(
         primary_context_guard.set_device(device_ordinal)
         configs = [config]
         kernels = compile_kernel_configs(
-            kernel_cls, params, configs=configs, arch=arch, **kernel_kwargs
+            kernel_factory, params, configs=configs, arch=arch, **kernel_kwargs
         )
         best_kernel = kernels[0]
         device_ordinal = device_obj.index if device_obj.index is not None else 0

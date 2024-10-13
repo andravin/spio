@@ -31,7 +31,7 @@ from spio.transform import transform as spio_transform
 from spio.util import get_formatted_device_name, ParseKwargs, Timer
 from spio.kernels import KernelParamsLogger, KernelParams, KernelKey, Kernel
 from spio.compiler import compile_kernels
-from spio.data import preprocess_data_string
+from spio.src_tests import preprocess_data_string
 
 GROUP_WIDTH = 8
 CHANNELS_LAST = True

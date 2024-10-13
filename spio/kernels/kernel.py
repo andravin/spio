@@ -20,8 +20,9 @@ class Kernel:
         return (
             self.kernel_name,
             self.kernel_source_file,
-            None,
             {"parameters.h": self.parameters_header},
+            self.src_module,
+            self.includes_module,
         )
 
     def __init__(
@@ -32,6 +33,8 @@ class Kernel:
         specs=[],
         params=None,
         config=None,
+        src_module="spio.src",
+        includes_module="spio.include",
     ):
         self._kernel_source_file = kernel_source_file
         self.kernel_name = kernel_name
@@ -42,6 +45,8 @@ class Kernel:
         self.function = None
         self.parameters_header = generate(specs)
         self.cubin = None
+        self.src_module = src_module
+        self.includes_module = includes_module
 
     def compile(self):
         self.cubin = compile_kernel(*self.compiler_args)
@@ -86,21 +91,17 @@ class Kernel:
         except Exception as e:
             raise ValueError(f"Error in kernel {self}") from e
 
-    @classmethod
-    def get_kernel_name(cls, params=None, **kwargs) -> str:
-        """Return the full kernel name for the given parameters.
-
-        The full name includes the base name and the encoded parameters.
-        """
-        base_name = cls.get_kernel_base_name(**kwargs)
-        details = params.encode()
-        return f"{base_name}__{details}"
-
     def __call__(self, *args):
         self.launch(*args)
 
     def __repr__(self) -> str:
         return f"{self.kernel_name} {self.params} {self.config}"
+
+
+def get_full_kernel_name(kernel_name, params):
+    """Return the full kernel name including the parameters."""
+    details = params.encode()
+    return f"{kernel_name}__{details}"
 
 
 def _check_args(args, device):

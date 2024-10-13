@@ -1,44 +1,33 @@
 from typing import Tuple
+import importlib.resources
 
 import torch
 
 from .. import primary_context_guard
 from ..cuda.driver import Module, Function
-from .paths import (
-    spio_src_path,
-    spio_test_src_path,
-    spio_include_path,
-)
-
 from .compile import compile
 
 
 def compile_kernel(
     kernel_name=None,
     source_file_name=None,
-    includes=[],
     header_dict=None,
+    src_module="spio.src",
+    includes_module="spio.include",
     arch=None,
     debug=False,
     lineinfo=False,
-    test_kernel=False,
 ):
     assert arch is not None, "Must specify GPU architecture for kernel compilation."
     if arch[0] < 8:
         raise ValueError(
             "Minimum supported GPU compute capability is sm_80 (Ampere or newer)."
         )
-    if test_kernel:
-        cuda_source_file = spio_test_src_path(source_file_name)
-    else:
-        cuda_source_file = spio_src_path(source_file_name)
-    all_includes = includes if includes is not None else []
-    all_includes = all_includes + [spio_include_path()]
+    cuda_source_file = importlib.resources.files(src_module).joinpath(source_file_name)
+    includes_dir = str(importlib.resources.files(includes_module))
     return compile(
-        [cuda_source_file],
-        includes=all_includes,
-        compile=True,
-        cubin=True,
+        cuda_source_file,
+        includes=[includes_dir],
         arch=arch,
         device_debug=debug,
         lineinfo=lineinfo,
@@ -59,24 +48,24 @@ def load_kernel(
 def compile_and_load_kernel(
     kernel_name=None,
     source_file_name=None,
-    includes=[],
+    header_dict=None,
+    src_module="spio.src",
+    includes_module="spio.include",
     device_ordinal=0,
     debug=False,
     lineinfo=False,
-    test_kernel=False,
-    header_dict=None,
 ):
     arch = torch.cuda.get_device_capability(device_ordinal)
     if source_file_name is None:
         source_file_name = f"{kernel_name}.cu"
     cubin = compile_kernel(
-            kernel_name=kernel_name,
-            source_file_name=source_file_name,
-            header_dict=header_dict,
-            debug=debug,
-            lineinfo=lineinfo,
-            includes=includes,
-            arch=arch,
-            test_kernel=test_kernel,
-        )
+        kernel_name=kernel_name,
+        source_file_name=source_file_name,
+        src_module=src_module,
+        includes_module=includes_module,
+        header_dict=header_dict,
+        debug=debug,
+        lineinfo=lineinfo,
+        arch=arch,
+    )
     return load_kernel(kernel_name, cubin, device_ordinal=device_ordinal)

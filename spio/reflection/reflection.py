@@ -32,13 +32,14 @@ class Reflection:
 
     arginfo: Dict[str, ArgInfo]
 
-    kernel_cls: Any = None
+    kernel_name: str = None
 
     function: staticmethod = None
 
     layer_cls: Any = None
 
     args: List[str] = field(default_factory=list)
+    
     kwargs: Dict[str, Any] = field(default_factory=dict)
 
     kernel_outputs: List[str] = field(default_factory=list)
@@ -58,6 +59,8 @@ class Reflection:
     from_layer: staticmethod = None
 
     memory_format = torch.channels_last
+
+    ignore_params: List[str] = None
 
     def __post_init__(self):
         for name, arg in self.arginfo.items():
@@ -174,7 +177,7 @@ class Reflection:
         A backprop kernel is a kernel that computes the gradient of a function.
         A kernel is backprop kernel if any of its arguments start with "grad_".
         """
-        return self.kernel_cls is not None and any(
+        return self.kernel_name is not None and any(
             [arg.startswith("grad_") for arg in self.args]
         )
 
@@ -186,36 +189,23 @@ reflection_function_registry = dict()
 reflection_layer_registry = dict()
 
 
-@dataclass(frozen=True)
-class KernelKey:
-    kernel_cls: Any
-    kernel_kwargs: Tuple[Tuple[str, Any]]
-
-
 def register_reflection(reflection: Reflection):
     if _more_than_one_not_none(
-        reflection.kernel_cls, reflection.function, reflection.layer_cls
+        reflection.kernel_name, reflection.function, reflection.layer_cls
     ):
         raise ValueError(
             f"Reflection must have exactly one of kernel_cls, layer_cls, or function: {reflection}"
         )
-    if reflection.kernel_cls is not None:
-        kernel_key = KernelKey(
-            kernel_cls=reflection.kernel_cls,
-            kernel_kwargs=_dict_to_ordered_tuples(reflection.kwargs),
-        )
-        reflection_kernel_registry[kernel_key] = reflection
+    if reflection.kernel_name is not None:
+        reflection_kernel_registry[reflection.kernel_name] = reflection
     elif reflection.function is not None:
         reflection_function_registry[reflection.function] = reflection
     elif reflection.layer_cls is not None:
         reflection_layer_registry[reflection.layer_cls] = reflection
 
 
-def get_kernel_reflection(kernel_cls: Any, **kernel_kwargs) -> Reflection:
-    kernel_key = KernelKey(
-        kernel_cls=kernel_cls, kernel_kwargs=_dict_to_ordered_tuples(kernel_kwargs)
-    )
-    return reflection_kernel_registry[kernel_key]
+def get_kernel_reflection(kernel_name: str) -> Reflection:
+    return reflection_kernel_registry[kernel_name]
 
 
 def get_function_reflection(function: Any) -> Reflection:
@@ -224,10 +214,6 @@ def get_function_reflection(function: Any) -> Reflection:
 
 def get_layer_reflection(layer_cls: Any) -> Reflection:
     return reflection_layer_registry[layer_cls]
-
-
-def _dict_to_ordered_tuples(d: dict) -> list:
-    return tuple(sorted(d.items()))
 
 
 def _more_than_one_not_none(*args):

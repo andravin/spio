@@ -86,20 +86,20 @@ class PerformanceModelCache:
         self._archive_cache = {}
 
     def predict_best_kernel(
-        self, kernel_cls: Type[Kernel], params: Any, device: str, **kernel_kwargs
+        self, kernel_factory: Type[Kernel], params: Any, device: str, **kernel_kwargs
     ) -> Kernel:
         """Return the best kernel for the given kernel class and layer parameters.
 
         Returns None if no performance model is available for the given kernel and device.
         """
-        kernel_name = kernel_cls.get_kernel_base_name(**kernel_kwargs)
+        kernel_name = kernel_factory._get_kernel_name(**kernel_kwargs)
         device_name = get_formatted_device_name(device)
         arch = get_formatted_arch(device)
         performance_model = self._get_performance_model(kernel_name, device_name, arch)
         if performance_model is None:
             return None
 
-        configs = list(kernel_cls.configs(params))
+        configs = list(kernel_factory._configs(params))
         return _predict_best_config(performance_model, params, configs)
 
     def _get_performance_model(

@@ -1,4 +1,5 @@
 import importlib.resources
+from importlib.abc import Traversable
 
 from ..cuda.nvrtc_ctypes import Program, version as nvrtc_version
 
@@ -13,11 +14,8 @@ CUDA_RUNTIME_INCLUDE_PATH = _find_cuda_runtime_include_dir()
 
 
 def compile(
-    sources,
+    src_file:Traversable,
     includes=[],
-    run=False,
-    cubin=False,
-    compile=False,
     arch=None,
     device_debug=False,
     lineinfo=False,
@@ -41,8 +39,7 @@ def compile(
         headers = []
         include_names = []
 
-    with open(sources[0], "r") as f:
-        src = f.read()
+    src = src_file.read_text()
     program = Program(src, "spio.cu", headers=headers, include_names=include_names)
     try:
         program.compile(options)

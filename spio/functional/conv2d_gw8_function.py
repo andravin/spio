@@ -4,7 +4,11 @@ import functools
 import torch
 import torch.amp
 
-from ..kernels import Conv2dGw8Kernel, Conv2dGw8WgradKernel, Conv2dGw8Params
+from ..kernels import (
+    conv2d_gw8_kernel_factory,
+    conv2d_gw8_wgrad_kernel_factory,
+    Conv2dGw8Params,
+)
 
 
 def _custom_setup_context(
@@ -36,7 +40,9 @@ def _custom_setup_context(
                     return setup_context_fn(
                         ctx,
                         *torch.amp.autocast_mode._cast(args, device_type, cast_inputs),
-                        **torch.amp.autocast_mode._cast(kwargs, device_type, cast_inputs),
+                        **torch.amp.autocast_mode._cast(
+                            kwargs, device_type, cast_inputs
+                        ),
                     )
             else:
                 return setup_context_fn(ctx, *args, **kwargs)
@@ -69,7 +75,7 @@ def conv2d_gw8(
     if bias is None:
         bias = _none(input.device)
     args = (output, input, weight, bias)
-    kernel = Conv2dGw8Kernel.fprop_kernel(params, input.device)
+    kernel = conv2d_gw8_kernel_factory.get_kernel(params, input.device)
     kernel(*args)
     return output
 
@@ -115,9 +121,7 @@ def conv2d_gw8_backward_op(
         # Its data-type is torch.float32.
         grad_weight = torch.zeros_like(weight, dtype=torch.float32)
         args = (grad_weight, input, grad_output)
-        grad_weight_kernel = Conv2dGw8WgradKernel.grad_weight_kernel(
-            params, input.device
-        )
+        grad_weight_kernel = conv2d_gw8_wgrad_kernel_factory.get_kernel(params, input.device)
         grad_weight_kernel(*args)
     else:
         grad_weight = None
@@ -132,7 +136,7 @@ def conv2d_gw8_backward_op(
     if needs_input_grad:
         grad_input = torch.empty_like(input)
         args = (grad_input, grad_output, weight, _none(input.device))
-        grad_input_kernel = Conv2dGw8Kernel.grad_input_kernel(params, input.device)
+        grad_input_kernel = conv2d_gw8_kernel_factory.get_kernel(params, input.device, igrad=True)
         grad_input_kernel(*args)
     else:
         grad_input = None

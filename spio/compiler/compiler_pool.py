@@ -26,7 +26,7 @@ signal.signal(signal.SIGINT, old_handler)
 
 
 def compile_kernel_configs(
-    kernel_cls, params, configs=None, arch=None, **kernel_kwargs
+    kernel_factory, params, configs=None, arch=None, **kernel_kwargs
 ):
     """Compile multiple kernel configurations for a given kernel class.
 
@@ -37,8 +37,11 @@ def compile_kernel_configs(
     after which you can call the kernel's launch method to execute it.
     """
     if configs is None:
-        configs = list(kernel_cls.configs(params))
-    kernels = [kernel_cls(params, config=config, **kernel_kwargs) for config in configs]
+        configs = list(kernel_factory._configs(params))
+    kernels = [
+        kernel_factory.make_kernel(params, config=config, **kernel_kwargs)
+        for config in configs
+    ]
     compile_kernels(kernels, arch=arch)
     return kernels
 
@@ -51,7 +54,10 @@ def compile_kernels(kernels, arch=None) -> None:
         kernel.cubin = cubin
 
 
-def _compile_kernels(compiler_args, arch=None):
+def _compile_kernels(
+    compiler_args,
+    arch: str = None,
+):
     """Compile multiple kernels in parallel."""
     ck_with_args = partial(
         compile_kernel, arch=arch, lineinfo=lineinfo.get(), debug=debug.get()

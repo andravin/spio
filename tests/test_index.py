@@ -7,6 +7,7 @@ work in both C++ and CUDA programs.
 
 from subprocess import CalledProcessError
 from tempfile import NamedTemporaryFile
+import importlib.resources
 
 import pytest
 
@@ -18,8 +19,8 @@ CPP_SOURCES = ["test_index.cpp"]
 
 def compile_cpp_tests(extra_cpp_test_files=[]):
     includes = [
-        spio.compiler.spio_include_path(),
-        spio.compiler.spio_test_include_path(),
+        importlib.resources.files("spio.include"),
+        importlib.resources.files("spio.srct_tests")
     ]
     sources = [spio.compiler.spio_test_src_path(src) for src in CPP_SOURCES] + extra_cpp_test_files
     includes = [str(include) for include in includes]

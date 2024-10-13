@@ -26,6 +26,7 @@ from spio.kernels import (
     PERFORMANCE_MODEL_EXTENSION,
 )
 from spio.util.parse_dataclass import parse_dataclass
+from spio.reflection import get_kernel_reflection
 
 
 PARAMS_CLASSES = dict(Conv2dGw8Params=Conv2dGw8Params)
@@ -87,12 +88,15 @@ def main():
         print()
         print(f"Kernel {kernel} has {len(df)} unique samples.")
 
+        reflection = get_kernel_reflection(kernel)
+
         # Separate the features and target.
         X = df[["Params", "Config"]]
         y = df["CUDA_time_avg_ms"]
 
         X = import_dataclass_column(X, "Params", PARAMS_CLASSES)
-        drop_stride_and_group_width(X)
+
+        drop_ignored_params(X, reflection.ignore_params)
 
         X = import_dataclass_column(X, "Config", CONFIG_CLASSES)
 
@@ -117,7 +121,6 @@ def main():
         num_rounds = 100  # Number of boosting rounds
 
         # Grid search for best training parameters.
-        dataset = xgb.DMatrix(X_train, label=y_train)
         gscv = GridSearchCV(
             xgb.XGBRegressor(),
             {
@@ -207,9 +210,15 @@ def get_device_name_from_data_dir(dir_name):
     return device_name
 
 
-def drop_stride_and_group_width(df):
-    df.drop("Params_group_width", axis=1, inplace=True)
-    df.drop("Params_stride", axis=1, inplace=True)
+def drop_ignored_params(df, ignore_params=None):
+    """Automatically drop the ignored params from the DataFrame when training the performance model.
+    
+    The kernel's ignored params are retrieved from the kernel reflection's "ignore_params" attribute.
+    """
+    if ignore_params is not None:
+        ignore_fields = [f"Params_{field}" for field in ignore_params]
+        for field in ignore_fields:
+            df.drop(field, axis=1, inplace=True)
     return df
 
 
