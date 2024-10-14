@@ -4,11 +4,13 @@ from typing import Any, Tuple, Type, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .kernel_cache import KernelCache
+    from .kernel_factory import _KernelFactory
 
 
 @dataclass(frozen=True)
 class KernelKey:
     """A key for a kernel in a KernelCache."""
+
     device_ordinal: int
     params: object
 
@@ -16,8 +18,9 @@ class KernelKey:
 @dataclass(frozen=True)
 class KernelParams:
     """Kernel parameters captured by KernelParamsLogger."""
+
     kernel_cache: "KernelCache"
-    kernel_cls: Type
+    kernel_factory: "_KernelFactory"
     params: Any
     device: Any
     kernel_kwargs: Tuple[str, Any]

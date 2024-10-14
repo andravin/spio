@@ -28,12 +28,12 @@ class KernelParamsLogger(ContextDecorator):
         _global_logger = None
         return False
 
-    def log_params(self, kernel_cache, kernel_cls, params, device, **kernel_kwargs):
+    def log_params(self, kernel_cache, kernel_factory, params, device, **kernel_kwargs):
         with self.lock:
             self.logged_params.append(
                 KernelParams(
                     kernel_cache,
-                    kernel_cls,
+                    kernel_factory,
                     params,
                     device,
                     tuple(kernel_kwargs.items()),
@@ -49,6 +49,10 @@ def get_global_logger():
         return _global_logger
 
 
+def kernel_params_logging_is_enabled():
+    return get_global_logger() is not None
+
+
 def log_kernel_params(func):
     """Decorator for conditionally logging function parameters"""
 
@@ -56,11 +60,11 @@ def log_kernel_params(func):
         logger = get_global_logger()
         if logger:
             kernel_cache = args[0]
-            kernel_cls = args[1]
+            kernel_factory = args[1]
             params = args[2]
             device = args[3]
             kernel_kwargs = kwargs.copy()
-            logger.log_params(kernel_cache, kernel_cls, params, device, **kernel_kwargs)
+            logger.log_params(kernel_cache, kernel_factory, params, device, **kernel_kwargs)
         return func(*args, **kwargs)
 
     return wrapper

@@ -11,7 +11,7 @@ from ..compiler import compile_kernel_configs
 from .kernel_util import get_first_device_in_args
 from .performance_model_cache import PerformanceModelCache
 from .kernel import Kernel
-from .kernel_params_logger import log_kernel_params
+from .kernel_params_logger import log_kernel_params, kernel_params_logging_is_enabled
 
 
 perf_model_cache = PerformanceModelCache()
@@ -44,6 +44,10 @@ class KernelCache:
         """Clear the ovleray cache."""
         self._cache_overlay.clear()
 
+    def clear_cache(self):
+        """Clear the main cache."""
+        self._cache.clear()
+
     @log_kernel_params
     def get(self, kernel_factory, params, device, **kernel_kwargs) -> Kernel:
         """Return the best kernel for the given params and device.
@@ -57,21 +61,25 @@ class KernelCache:
         if best_kernel is None:
             if self._cache_overlay:
                 raise ValueError(
-                    f"Kernel {kernel_factory} with params {params} and device {device} enot found in overlay cache"
+                    f"Kernel {kernel_factory} with params {params} and device {device} not found in overlay cache"
                 )
             best_kernel = self._cache.get(key)
             if best_kernel is None:
-                best_config = perf_model_cache.predict_best_kernel(
-                    kernel_factory, params, device, **kernel_kwargs
-                )
-                if best_config is None:
-                    raise ValueError(
-                        f"Could not find best config for {kernel_factory} with params {params} and kwargs {kernel_kwargs}"
+                if kernel_params_logging_is_enabled():
+                    # If kernel params are being logged, the performance model might not exist for this kernel.
+                    # We also don't care about performance in this case.
+                    # So we just use the first configuration.
+                    # Be careful to clear the cache when you are done logging params so
+                    # that first config is not used for performance.
+                    configs = kernel_factory._configs(params)
+                    best_config = next(configs)
+                else:
+                    best_config = perf_model_cache.predict_best_kernel(
+                        kernel_factory, params, device, **kernel_kwargs
                     )
                 best_kernel = _compile_and_load_kernel(
                     kernel_factory, params, best_config, device, **kernel_kwargs
                 )
-
                 self._cache[key] = best_kernel
         return best_kernel
 

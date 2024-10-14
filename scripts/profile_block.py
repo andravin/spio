@@ -29,7 +29,12 @@ except ImportError:
 from spio.kernels import KernelParams
 from spio.transform import transform as spio_transform
 from spio.util import get_formatted_device_name, ParseKwargs, Timer
-from spio.kernels import KernelParamsLogger, KernelParams, KernelKey, Kernel
+from spio.kernels import (
+    KernelParamsLogger,
+    KernelParams,
+    KernelKey,
+    Kernel,
+)
 from spio.compiler import compile_kernels
 from spio.src_tests import preprocess_data_string
 
@@ -411,8 +416,6 @@ def run_benchmark(args, batch_size: int = None):
 
 def benchmark_configs(model, inputs, args, data_path: Path):
     # Run the model to trace the kernel parameters.
-    # TODO Create a kernels-trace mode for KernelParamsLogger that simply selects the first config for each kernel.
-    # TODO This will KernelParamsLogger to work without a performance model.
     with KernelParamsLogger() as logger:
         with torch.autocast(device_type="cuda", dtype=torch.float16):
             out = model(inputs[0])
@@ -420,18 +423,26 @@ def benchmark_configs(model, inputs, args, data_path: Path):
         logged_kernel_params = logger.get_logged_params()
         unique_kernel_params = set(logged_kernel_params)
 
+    # Clear the kernel caches from the configs that were used during logging.
+    unique_kernel_caches = set(
+        kernel_params.kernel_cache for kernel_params in unique_kernel_params
+    )
+    for kernel_cache in unique_kernel_caches:
+        kernel_cache.clear_cache()
+
     # For each unique KernelParams, compile all kernel configurations.
     # Store the kernels in a table.
     kernel_table: Dict[KernelParams, List[Kernel]] = dict()
     for kernel_params in unique_kernel_params:
-        kernel_cls = kernel_params.kernel_cls
+        kernel_factory = kernel_params.kernel_factory
         params = kernel_params.params
         device = kernel_params.device
         arch = torch.cuda.get_device_capability(device=device)
-        configs = kernel_params.kernel_cls.configs(kernel_params.params)
+        configs = kernel_factory._configs(kernel_params.params)
         kernel_kwargs = dict(kernel_params.kernel_kwargs)
         kernel_table[kernel_params] = [
-            kernel_cls(params, config=config, **kernel_kwargs) for config in configs
+            kernel_factory.make_kernel(params, config, **kernel_kwargs)
+            for config in configs
         ]
 
     # Benchmark args.max_random_samples kernel configurations per unique layer params.
@@ -589,11 +600,11 @@ def random_sample_with_replacement(alist, k):
     """Randomly sample k items from a list with replacement.
 
     If k is greater than the length of the list, the list will be sampled multiple times.
-    
+
     Args:
         alist (List): The list to sample from.
         k (int): The number of samples to take.
-        
+
     Returns:
         List: A list of k randomly sampled items from alist."""
     n = len(alist)
