@@ -8,16 +8,16 @@ from ..reflection import (
     get_layer_reflection,
 )
 from ..transform._transform import _transform as spio_transform
-from ..kernels.kernel_factory import _KernelFactory
+from ..kernels.kernel_factory import KernelFactory
 
 
 def run_kernel_test(
-    kernel_factory: _KernelFactory, params, device="cuda", **kernel_kwargs
+    kernel_factory: KernelFactory, params, device="cuda", **kernel_kwargs
 ):
     """Run a test for an forward pass kernel."""
     arch = torch.cuda.get_device_capability(device)
 
-    kernel_name = kernel_factory._get_kernel_name(**kernel_kwargs)
+    kernel_name = kernel_factory.get_kernel_name(**kernel_kwargs)
     reflection = get_kernel_reflection(kernel_name)
     args = reflection.make_args(params, device=device)
     kernel_args = reflection.arrange_args(args)
@@ -41,11 +41,11 @@ def run_kernel_test(
 
 
 def run_grad_kernel_test(
-    kernel_factory: _KernelFactory, params, device="cuda", **kernel_kwargs
+    kernel_factory: KernelFactory, params, device="cuda", **kernel_kwargs
 ):
     """Run a test for a backward pass kernel."""
     arch = torch.cuda.get_device_capability(device)
-    kernel_name = kernel_factory._get_kernel_name(**kernel_kwargs)
+    kernel_name = kernel_factory.get_kernel_name(**kernel_kwargs)
     reflection = get_kernel_reflection(kernel_name)
     args = reflection.make_args(params, device=device, training=True)
 

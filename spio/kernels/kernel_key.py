@@ -4,7 +4,7 @@ from typing import Any, Tuple, Type, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .kernel_cache import KernelCache
-    from .kernel_factory import _KernelFactory
+    from .kernel_factory import KernelFactory
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,7 @@ class KernelParams:
     """Kernel parameters captured by KernelParamsLogger."""
 
     kernel_cache: "KernelCache"
-    kernel_factory: "_KernelFactory"
+    kernel_factory: "KernelFactory"
     params: Any
     device: Any
     kernel_kwargs: Tuple[str, Any]

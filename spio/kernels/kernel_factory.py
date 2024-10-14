@@ -5,7 +5,24 @@ from .launch_params import LaunchParams
 from .kernel_cache import KernelCache
 
 
-class _KernelFactory:
+class KernelFactory:
+    """Factory for creating Kernel objects for a CUDA kernel.
+
+    Use the make_kernel() method to create a new kernel object for a given layer
+    parameters and kernel configuration.
+
+    Use the get_kernel() method to get the best kernel for a given set of layer parameters and device.
+    It returns a cached kernel if one is found, otherwise it estimates the best kernel configuration
+    using the kernel's performance model and compiles a new kernel that uses it.
+
+    Users do not use this class directly. Rather, they define new kernels by calling
+    the  make_kernel_factory() function.
+
+    Methods that take keywoard arguments (**kwargs) use them to distinguish between different
+    instances of the kernel that use the same kernel source code and configurations. For example,
+    a forward and backward kernel may use the same source code but have different kernel names.
+    """
+
     def __init__(
         self,
         params_cls: Type = None,
@@ -31,44 +48,62 @@ class _KernelFactory:
         self._src_module = src_module
         self._includes_module = includes_module
 
-    def _configs(self, params):
+    def configs(self, params):
         """Return a generator for the configurations of the given layer parameters."""
         if callable(self._configs):
             return self._configs(params)
         else:
             return self._configs
 
-    def _get_kernel_name(self, **kwargs):
+    def get_kernel_name(self, **kwargs) -> str:
+        """Return the name of the kernel with the given keyword arguments."""
         if callable(self._kernel_name):
             return self._kernel_name(**kwargs)
         else:
             return self._kernel_name
 
-    def _get_full_kernel_name(self, params, **kwargs):
-        kernel_name = self._get_kernel_name(**kwargs)
+    def get_full_kernel_name(self, params, **kwargs) -> str:
+        """Return the full name of the kernel with the given keyword arguments.
+
+        The full name includes the kernel name and the parameters.
+        """
+        kernel_name = self.get_kernel_name(**kwargs)
         return get_full_kernel_name(kernel_name, params)
 
-    def _get_specs(self, params, config, **kwargs):
+    def get_specs(self, params, config, **kwargs):
+        """Return the kernel specs and launch parameters for the given layer parameters and configuration.
+
+        Kernel specs are code generators for named tensors, constant variables, macros, and other kernel-specific
+        structures that are used in the CUDA kernel source code.
+        """
         if callable(self._specs):
             return self._specs(params, config, **kwargs)
         else:
             return self._specs, self._launch_params
 
-    def get_kernel_cache(self, **kwargs):
-        kernel_name = self._get_kernel_name(**kwargs)
+    def get_kernel_cache(self, **kwargs) -> KernelCache:
+        """Return the kernel cache for the given keryword arguments."""
+        kernel_name = self.get_kernel_name(**kwargs)
         kernel_cache = self._kernel_caches.get(kernel_name)
         if kernel_cache is None:
             kernel_cache = KernelCache()
             self._kernel_caches[kernel_name] = kernel_cache
         return kernel_cache
 
-    def get_kernel(self, params, device, **kwargs):
+    def get_kernel(self, params, device, **kwargs) -> Kernel:
+        """Return the best kernel for the given layer parameters and device.
+
+        Returns a cached kernel if one is found matching the params and device. Otherwise, uses
+        the kernel's performance model to estimate the best kernel configuration and compiles a new
+        kernel that uses it.
+        """
         kernel_cache = self.get_kernel_cache(**kwargs)
         return kernel_cache.get(self, params, device, **kwargs)
 
-    def make_kernel(self, params, config, **kwargs):
-        kernel_name = self._get_full_kernel_name(params, **kwargs)
-        specs, launch_params = self._get_specs(params, config, **kwargs)
+    def make_kernel(self, params, config, **kwargs) -> Kernel:
+        """Return a new Kernel object for the given layer parameters and configuration."""
+        kernel_name = self.get_full_kernel_name(params, **kwargs)
+        specs, launch_params = self.get_specs(params, config, **kwargs)
         return Kernel(
             kernel_name,
             launch_params,
@@ -92,8 +127,25 @@ def make_kernel_factory(
     launch_params: Union[LaunchParams, Callable[..., LaunchParams]] = None,
     src_module: str = "spio.src",
     includes_module: str = "spio.include",
-):
-    return _KernelFactory(
+) -> KernelFactory:
+    """Return a new KernelFactory object for a CUDA kernel.
+
+    All callable arguments must be functions that take (params, **kwargs) arguments
+    and return the corresponding values. 
+    
+    Args:
+        params_cls: The class for the layer parameters.
+        config_cls: The class for the kernel configuration.
+        stats_cls: The class for the kernel statistics.
+        kernel_name: The name of the kernel or a function that returns the name.
+        configs: The list of kernel configurations or a function that returns them.
+        specs: The list of kernel specs and launch parameters or a function that returns them and the launch parameters.
+        kernel_source_file: The file name of the CUDA kernel source code.
+        launch_params: Optional launch parameters for the kernel. These may be returned by the specs function instead.
+        src_module: The module name where the kernel_source_file is located.
+        includes_module: The module name where any include files are located.
+    """
+    return KernelFactory(
         params_cls=params_cls,
         config_cls=config_cls,
         stats_cls=stats_cls,

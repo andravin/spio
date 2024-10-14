@@ -92,14 +92,14 @@ class PerformanceModelCache:
 
         Returns None if no performance model is available for the given kernel and device.
         """
-        kernel_name = kernel_factory._get_kernel_name(**kernel_kwargs)
+        kernel_name = kernel_factory.get_kernel_name(**kernel_kwargs)
         device_name = get_formatted_device_name(device)
         arch = get_formatted_arch(device)
         performance_model = self._get_performance_model(kernel_name, device_name, arch)
         if performance_model is None:
             return None
 
-        configs = list(kernel_factory._configs(params))
+        configs = list(kernel_factory.configs(params))
         return _predict_best_config(performance_model, params, configs)
 
     def _get_performance_model(

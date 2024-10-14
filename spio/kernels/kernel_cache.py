@@ -71,7 +71,7 @@ class KernelCache:
                     # So we just use the first configuration.
                     # Be careful to clear the cache when you are done logging params so
                     # that first config is not used for performance.
-                    configs = kernel_factory._configs(params)
+                    configs = kernel_factory.configs(params)
                     best_config = next(configs)
                 else:
                     best_config = perf_model_cache.predict_best_kernel(
