@@ -48,10 +48,10 @@ class KernelFactory:
         self._src_module = src_module
         self._includes_module = includes_module
 
-    def configs(self, params):
+    def configs(self, params, **kwargs):
         """Return a generator for the configurations of the given layer parameters."""
         if callable(self._configs):
-            return self._configs(params)
+            return self._configs(params, **kwargs)
         else:
             return self._configs
 

@@ -22,7 +22,8 @@ class Conv2dGw8Config:
     block_n: int = 1
 
 
-def _get_configs(params: Conv2dGw8Params):
+def _get_configs(params: Conv2dGw8Params, igrad=False):
+    # igrad is unused in this function
     max_groups = min(params.groups, 8)
     block_n_values = [block_n for block_n in [1, 2, 4] if block_n <= params.N]
     block_p_values = [

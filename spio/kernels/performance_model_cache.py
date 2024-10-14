@@ -99,7 +99,7 @@ class PerformanceModelCache:
         if performance_model is None:
             return None
 
-        configs = list(kernel_factory.configs(params))
+        configs = list(kernel_factory.configs(params, **kernel_kwargs))
         return _predict_best_config(performance_model, params, configs)
 
     def _get_performance_model(

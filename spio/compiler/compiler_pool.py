@@ -37,7 +37,7 @@ def compile_kernel_configs(
     after which you can call the kernel's launch method to execute it.
     """
     if configs is None:
-        configs = list(kernel_factory.configs(params))
+        configs = list(kernel_factory.configs(params, **kernel_kwargs))
     kernels = [
         kernel_factory.make_kernel(params, config=config, **kernel_kwargs)
         for config in configs
