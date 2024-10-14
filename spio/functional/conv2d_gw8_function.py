@@ -11,47 +11,7 @@ from ..kernels import (
 )
 
 
-def _custom_setup_context(
-    setup_context_fn=None,
-    *,
-    device_type: str,
-    cast_inputs: Optional[torch.dtype] = None,
-):
-    """The missing amp setup_context decorator for custom ops.
-
-    See https://github.com/pytorch/pytorch/issues/132388 for more details.
-    """
-    if setup_context_fn is None:
-        return functools.partial(
-            _custom_setup_context, device_type=device_type, cast_inputs=cast_inputs
-        )
-
-    @functools.wraps(setup_context_fn)
-    def decorate_setup_context(ctx, *args, **kwargs):
-        ctx._dtype = torch.get_autocast_dtype(device_type)
-        if cast_inputs is None:
-            ctx._fwd_used_autocast = torch.is_autocast_enabled(device_type)
-            return setup_context_fn(ctx, *args, **kwargs)
-        else:
-            autocast_context = torch.is_autocast_enabled(device_type)
-            ctx._fwd_used_autocast = False
-            if autocast_context:
-                with torch.autocast(device_type=device_type, enabled=False):
-                    return setup_context_fn(
-                        ctx,
-                        *torch.amp.autocast_mode._cast(args, device_type, cast_inputs),
-                        **torch.amp.autocast_mode._cast(
-                            kwargs, device_type, cast_inputs
-                        ),
-                    )
-            else:
-                return setup_context_fn(ctx, *args, **kwargs)
-
-    return decorate_setup_context
-
-
 @torch.library.custom_op("spio::conv2d_gw8", mutates_args=())
-@torch.amp.custom_fwd(device_type="cuda", cast_inputs=torch.float16)
 def conv2d_gw8(
     input: torch.Tensor,
     weight: torch.Tensor,
@@ -78,6 +38,22 @@ def conv2d_gw8(
     kernel = conv2d_gw8_kernel_factory.get_kernel(params, input.device)
     kernel(*args)
     return output
+
+
+# See discussion at https://github.com/pytorch/pytorch/issues/137033
+def conv2d_gw8_autocast(ks, input, weight, bias, *args, **kwargs):
+    input_dtype = input.dtype
+    input = input.to(dtype=torch.float16)
+    weight = weight.to(dtype=torch.float16)
+    if bias is not None:
+        bias = bias.to(dtype=torch.float16)
+    autocast = torch._C.DispatchKeySet("AutocastCUDA")
+    with torch._C._ExcludeDispatchKeyGuard(autocast):
+        result = torch.ops.spio.conv2d_gw8.default.redispatch(
+            ks - autocast, input, weight, bias, *args, **kwargs
+        )
+    result = result.to(dtype=input_dtype)
+    return result
 
 
 @conv2d_gw8.register_fake
@@ -121,7 +97,9 @@ def conv2d_gw8_backward_op(
         # Its data-type is torch.float32.
         grad_weight = torch.zeros_like(weight, dtype=torch.float32)
         args = (grad_weight, input, grad_output)
-        grad_weight_kernel = conv2d_gw8_wgrad_kernel_factory.get_kernel(params, input.device)
+        grad_weight_kernel = conv2d_gw8_wgrad_kernel_factory.get_kernel(
+            params, input.device
+        )
         grad_weight_kernel(*args)
     else:
         grad_weight = None
@@ -136,7 +114,9 @@ def conv2d_gw8_backward_op(
     if needs_input_grad:
         grad_input = torch.empty_like(input)
         args = (grad_input, grad_output, weight, _none(input.device))
-        grad_input_kernel = conv2d_gw8_kernel_factory.get_kernel(params, input.device, igrad=True)
+        grad_input_kernel = conv2d_gw8_kernel_factory.get_kernel(
+            params, input.device, igrad=True
+        )
         grad_input_kernel(*args)
     else:
         grad_input = None
@@ -177,7 +157,6 @@ def _(
     return grad_input, grad_weight, grad_bias
 
 
-@torch.amp.custom_bwd(device_type="cuda")
 def conv2d_gw8_backward(ctx, grad_output):
     input, weight, bias = ctx.saved_tensors
 
@@ -203,7 +182,6 @@ def conv2d_gw8_backward(ctx, grad_output):
     return grad_input, grad_weight, grad_bias, None, None, None, None, None
 
 
-@_custom_setup_context(device_type="cuda", cast_inputs=torch.float16)
 def conv2d_gw8_setup_context(ctx, inputs, output):
     """Setup the context for the conv2d_gw8 custom op.
 
@@ -227,6 +205,10 @@ def conv2d_gw8_setup_context(ctx, inputs, output):
 conv2d_gw8.register_autograd(
     conv2d_gw8_backward, setup_context=conv2d_gw8_setup_context
 )
+
+# See discussion at https://github.com/pytorch/pytorch/issues/137033
+m = torch.library.Library("spio", "FRAGMENT")
+m.impl("conv2d_gw8", conv2d_gw8_autocast, "AutocastCUDA", with_keyset=True)
 
 
 def _none(device):
