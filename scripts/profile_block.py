@@ -438,10 +438,8 @@ def benchmark_configs(model, inputs, args, data_path: Path):
         params = kernel_params.params
         device = kernel_params.device
         arch = torch.cuda.get_device_capability(device=device)
-        configs = kernel_factory.configs(
-            kernel_params.params, **kernel_params.kernel_kwargs
-        )
         kernel_kwargs = dict(kernel_params.kernel_kwargs)
+        configs = kernel_factory.configs(kernel_params.params, **kernel_kwargs)
         kernel_table[kernel_params] = [
             kernel_factory.make_kernel(params, config, **kernel_kwargs)
             for config in configs
