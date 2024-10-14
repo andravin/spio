@@ -9,7 +9,7 @@ from .compile_kernel import compile_kernel
 
 TRUTHS = ["true", "1", "yes", "y", "t"]
 LONG_TIMEOUT = 999
-DEFAULT_WORKERS = 4
+DEFAULT_WORKERS = 1
 
 default_lineinfo = os.environ.get("SPIO_LINEINFO", "False").lower() in TRUTHS
 default_debug = os.environ.get("SPIO_DEBUG", "False").lower() in TRUTHS

@@ -45,11 +45,3 @@ Because you installed from source, you can run the tests:
 ```bash
 pytest tests/
 ```
-
-Kernel compilation dominates the test time. Set the SPIO_WORKERS environment
-variable equal to the number of processes to use for compilation. The default value is four.
-
-```
-export SPIO_WORKERS=`nproc`
-pytest tests/
-```
