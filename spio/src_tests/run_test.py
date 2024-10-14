@@ -144,16 +144,17 @@ def run_layer_test(
     reflection = get_layer_reflection(layer_cls)
     args = reflection.make_args(params, device=device)
     layer_args = reflection.arrange_args(args)
-    layer_kwargs = reflection.get_function_kwargs(params)
-    dtype = layer_args[0].dtype
 
     reference_layer_cls = reflection.reference
     reference_reflection = get_layer_reflection(reference_layer_cls)
     reference_args = reference_reflection.arrange_args(args)
     reference_kwargs = reference_reflection.get_function_kwargs(params)
 
+    # Let's force all args to float to test autocast.
+    reference_args = [a.float() if a is not None else None for a in reference_args]
+
     reference_layer = reference_layer_cls(**reference_kwargs).to(
-        device=device, memory_format=reference_reflection.memory_format, dtype=dtype
+        device=device, memory_format=reference_reflection.memory_format
     )
 
     reference_model = torch.nn.Sequential(reference_layer)
