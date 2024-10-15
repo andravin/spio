@@ -81,8 +81,9 @@ class Kernel:
     def launch(self, *args):
         """Launch the kernel with the given arguments."""
         try:
+            args = _to_channels_last(*args)
             device = get_first_device_in_args(args)
-            _check_args(args, device)
+            _check_device(args, device)
             kernel_args = _kernel_args(args)
             primary_context_guard.set_device(device.index)
             self.function.launch(
@@ -104,13 +105,22 @@ def get_full_kernel_name(kernel_name, params):
     return f"{kernel_name}__{details}"
 
 
-def _check_args(args, device):
-    """Ensure that all tensor arguments are on the same device and are channels_last contiguous."""
+def _to_channels_last(*args):
+    """ "Convert all tensor arguments to channels_last memory format."""
+    return [
+        (
+            t.contiguous(memory_format=torch.channels_last)
+            if isinstance(t, torch.Tensor) and len(t.shape) == 4
+            else t
+        )
+        for t in args
+    ]
+
+
+def _check_device(args, device):
+    """Ensure that all tensor arguments are on the same device."""
     for arg in args:
         if isinstance(arg, torch.Tensor) and arg.numel() > 0:
-            assert (len(arg.shape) != 4) or arg.is_contiguous(
-                memory_format=torch.channels_last
-            ), f"Not all tensors arguments are channels_last contiguous: {args}"
             assert (
                 device == arg.device
             ), f"Not all tensor arguments are on the same device: {args}"
