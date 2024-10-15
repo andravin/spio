@@ -12,7 +12,6 @@ except ImportError as e:
 from timm.utils import ParseKwargs
 
 import spio
-import spio.log
 import spio.transform
 
 
@@ -45,7 +44,7 @@ parser.add_argument("--spio", action="store_true")
 parser.add_argument("--model-kwargs", nargs="*", default={}, action=ParseKwargs)
 parser.add_argument("--no-profile", action="store_true")
 parser.add_argument("--enable-logger", action="store_true")
-parser.add_argument("--scan-modules", action="store_true")
+parser.add_argument("--scan-modules", action="store_true", help="Scan the model for matching Spio modules and print their parameters")
 parser.add_argument(
     "--bench", type=str, default="train", help="train or inference benchmark mode"
 )
