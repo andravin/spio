@@ -243,7 +243,7 @@ def _download_archive(archive_path: str, archive_name: str) -> bool:
         return True
     # Make the performance model cache directory if it does not exist.
     if not PERF_CACHE_DIR.exists():
-        PERF_CACHE_DIR.mkdir(parents=True)
+        PERF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     release_info = _get_release_info()
     asset = None
     for a in release_info["assets"]:
@@ -335,9 +335,12 @@ def _save_release_info(release_info) -> None:
 
 def _clear_cache() -> None:
     """Clear all cached files in the cache directory."""
-    for f in PERF_CACHE_DIR.iterdir():
-        if f.is_file() and (f.name.endswith(".tgz") or f.name == "release_info.json"):
-            f.unlink()
+    if PERF_CACHE_DIR.exists():
+        for f in PERF_CACHE_DIR.iterdir():
+            if f.is_file() and (f.name.endswith(".tgz") or f.name == "release_info.json"):
+                f.unlink()
+    else:
+        PERF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _get_http_headers() -> str:
