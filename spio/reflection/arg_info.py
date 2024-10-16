@@ -73,9 +73,10 @@ class ArgInfo:
         t = torch.ones(self._shape(params), dtype=self.dtype, device=device)
         return _to(t, memory_format=self.memory_format)
 
-    def _randn(self, params: Any, device: str):
+    def _randn_clip_3(self, params: Any, device: str):
         shape = self._shape(params)
         t = torch.randn(shape, dtype=self.dtype, device=device)
+        t = torch.clip(t, -3, 3)
         return _to(t, memory_format=self.memory_format)
 
     def make_arg(self, params, training=False, device="cuda"):
@@ -89,7 +90,7 @@ class ArgInfo:
         elif self.one:
             tensor = self._ones(params, device)
         elif self.random:
-            tensor = self._randn(params, device)
+            tensor = self._randn_clip_3(params, device)
         else:
             raise ValueError(f"Invalid init value for argument {self.name}: {self.init}")
         if self.requires_grad and training and has_arg:

@@ -78,7 +78,7 @@ class Reflection:
         args = dict()
         for name, info in self.arginfo.items():
             if info.output:
-                args[f"grad_{name}"] = info._randn(params, device)
+                args[f"grad_{name}"] = info._randn_clip_3(params, device)
         return args
 
     def arrange_args(self, args) -> List[torch.Tensor]:

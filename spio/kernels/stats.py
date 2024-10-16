@@ -40,3 +40,10 @@ class Stats:
     @property
     def op_byte(self):
         return 2.0 * self.macs / self.bytes
+
+    @property
+    def accumulation_depths(self):
+        return [
+            getattr(self, f"{output_tensor}_accumulation_depth")
+            for output_tensor in self.output_names
+        ]

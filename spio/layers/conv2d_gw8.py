@@ -12,6 +12,8 @@ class Conv2dGw8(nn.Conv2d):
     def match(module: nn.Module):
         if not isinstance(module, nn.Conv2d) or isinstance(module, Conv2dGw8):
             return False
+        if module.in_channels != module.out_channels:
+            return False
         group_width = module.in_channels // module.groups
         R, S = module.kernel_size
         return (

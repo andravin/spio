@@ -1,7 +1,6 @@
 import torch
 from torch.fx import symbolic_trace
 
-from ..kernels import Conv2dGw8Params
 from ..layers import Conv2dGw8
 from ..util import get_full_name, logger_enabled
 

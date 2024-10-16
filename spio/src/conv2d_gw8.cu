@@ -85,6 +85,21 @@ extern "C"
 
         int block_c = block_c8 * 8;
 
+        // Fetch the bias
+        float2 bias_f32 = make_float2(0, 0);
+        if constexpr (Mode::has_bias)
+        {
+            BiasIdx idx(threadIdx.x);
+            int lane_k2 = Acc::k2(idx.lane());
+            int k8 = block_c8 + idx.k8();
+            if (k8 < Output::K8) {
+                __half2 bias = *Bias(bias_ptr).k8(k8).k2(lane_k2);
+                bias_f32 = __half22float2(bias);
+            } else {
+                bias_f32 = make_float2(0, 0);
+            }
+        }
+
         //
         // Define tile mappings
         //
@@ -230,20 +245,6 @@ extern "C"
             wgts.reg(rs) = ld_weights_x1(smem_weights_load.rs(rs).get());
         }
 
-        // Fetch the bias
-        float2 bias_f32 = make_float2(0, 0);
-        if constexpr (Mode::has_bias)
-        {
-            BiasIdx idx(threadIdx.x);
-            int lane_k2 = Acc::k2(idx.lane());
-            int k8 = block_c8 + idx.k8();
-            if (k8 < Output::K8) {
-                __half2 bias = *Bias(bias_ptr).k8(k8).k2(lane_k2);
-                bias_f32 = __half22float2(bias);
-            } else {
-                bias_f32 = make_float2(0, 0);
-            }
-        }
 
         //
         // Declare the accumulators.

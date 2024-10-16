@@ -35,9 +35,22 @@ def conv2d_gw8(
     if bias is None:
         bias = _none(input.device)
     args = (output, input, weight, bias)
+    args = _to_channels_last(*args)
     kernel = conv2d_gw8_kernel_factory.get_kernel(params, input.device)
     kernel(*args)
     return output
+
+
+def _to_channels_last(*args):
+    """ "Convert all tensor arguments to channels_last memory format."""
+    return tuple(
+        (
+            t.contiguous(memory_format=torch.channels_last)
+            if isinstance(t, torch.Tensor) and len(t.shape) == 4
+            else t
+        )
+        for t in args
+    )
 
 
 # See discussion at https://github.com/pytorch/pytorch/issues/137033
@@ -87,6 +100,8 @@ def conv2d_gw8_backward_op(
     assert grad_output.dtype == torch.float16
     assert input.dtype == torch.float16
     assert weight.dtype == torch.float16
+
+    grad_output, input, weight = _to_channels_last(grad_output, input, weight)
 
     params = Conv2dGw8Params.from_tensors(
         input, weight, bias, padding=(padding_y, padding_x)
@@ -191,11 +206,13 @@ def conv2d_gw8_setup_context(ctx, inputs, output):
     """
     input, weight, bias, stride, padding_y, padding_x, *_ = inputs
 
-    # Ensure that the weight tensor is in float16.
+    # Ensure that the tensor are float16.
     assert input.dtype == torch.float16
     assert weight.dtype == torch.float16
     if bias is not None:
         assert bias.dtype == torch.float16
+
+    _check_channels_last([input, weight, bias])
 
     ctx.save_for_backward(input, weight, bias)
     ctx.padding_y = padding_y
@@ -217,3 +234,11 @@ def _none(device):
     This might not be necesary now that our spio.cuda.driver.Function.launch supports None arguments.
     """
     return torch.tensor([], device=device, dtype=torch.float16, requires_grad=False)
+
+
+def _check_channels_last(args):
+    for arg in args:
+        if isinstance(arg, torch.Tensor) and len(arg.shape) == 4:
+            assert arg.is_contiguous(
+                memory_format=torch.channels_last
+            ), f"Tensor is not channels_last: {arg}"

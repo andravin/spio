@@ -11,7 +11,7 @@ from spio.generators import (
     generate,
 )
 from spio.compiler import compile_and_load_kernel
-from spio.util import divup, assert_all_close
+from spio.util import divup, assert_all_close_with_acc_depth
 
 
 def test_add_kernel():
@@ -24,7 +24,7 @@ def test_add_kernel():
     x2 = torch.arange(25, dtype=torch.float32, device="cuda").reshape(5, 5)
     y = torch.zeros((5, 5), dtype=torch.float32, device="cuda")
     add_kernel.launch((5, 1, 1), (5, 1, 1), (x1, x2, y))  # grid, block and arguments
-    assert_all_close(y, x1 + x2)
+    assert_all_close_with_acc_depth(y, x1 + x2, acc_depth=25)
 
 
 def test_mma_m16_n8_k8_kernel():
@@ -53,7 +53,7 @@ def test_mma_m16_n8_k8_kernel():
 
     C_ref = torch.matmul(A.float(), B.float())
 
-    assert_all_close(C, C_ref)
+    assert_all_close_with_acc_depth(C, C_ref, acc_depth=8)
 
 
 def test_mma_m16_n8_k16_kernel():
@@ -83,7 +83,7 @@ def test_mma_m16_n8_k16_kernel():
 
     C_ref = torch.matmul(A.float(), B.float())
 
-    assert_all_close(C, C_ref)
+    assert_all_close_with_acc_depth(C, C_ref, acc_depth=16)
 
 
 def test_memcpy_kernel():

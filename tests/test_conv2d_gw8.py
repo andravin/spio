@@ -36,6 +36,8 @@ MAX_TEST_PARAMS = int(
 
 def _random_sample_test_params(
     max_samples: int = MAX_TEST_PARAMS,
+    allow_bias: bool = True,
+    always_bias: bool = False,
 ) -> List[Conv2dGw8Params]:
     """Randomly sample test parameters from the available test parameters.
 
@@ -49,14 +51,16 @@ def _random_sample_test_params(
     List[Conv2dGw8Params]
         A list of randomly sampled test parameters.
     """
+
+    all_samples = []
+    if allow_bias:
+        all_samples += _get_test_params(has_bias=True)
+    if not always_bias:
+        all_samples += _get_test_params(has_bias=False)
     if max_samples <= 0:
-        return _get_test_params_with_and_without_bias()
+        return all_samples
     else:
-        return random.sample(_get_test_params_with_and_without_bias(), max_samples)
-
-
-def _get_test_params_with_and_without_bias():
-    return _get_test_params(has_bias=True) + _get_test_params(has_bias=False)
+        return random.sample(all_samples, max_samples)
 
 
 def _get_test_params(has_bias=False) -> List[Conv2dGw8Params]:
@@ -114,7 +118,7 @@ def test_kernel_conv2d_gw8_wgrad_sanity():
 
 def test_functional_conv2d_gw8_grad_sanity():
     params = Conv2dGw8Params(
-        N=1, C=128, H=32, W=32, padding=(2, 0), R=4, S=1, has_bias=True
+        N=4, C=128, H=32, W=32, padding=(2, 0), R=4, S=1, has_bias=True
     )
     run_grad_function_test(conv2d_gw8, params)
 
@@ -152,10 +156,11 @@ def test_functional_conv2d_gw8_grad(params: Conv2dGw8Params):
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_conv2d_gw8_layer(params: Conv2dGw8Params):
     run_layer_test(Conv2dGw8, params)
-    run_layer_test(Conv2dGw8, params, torchcompile=True, torchcompile_mode=None)
-    run_layer_test(
-        Conv2dGw8, params, torchcompile=True, torchcompile_mode="reduce-overhead"
-    )
+
+
+@pytest.mark.parametrize("params", _random_sample_test_params())
+def test_conv2d_gw8_layer_torchcompile(params: Conv2dGw8Params):
+    run_layer_test(Conv2dGw8, params, torchcompile=True)
 
 
 def test_conv2d_gw8_op_check():

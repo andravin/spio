@@ -10,6 +10,7 @@ def test_conv2d_stats_fprop():
     assert stats.bytes_written == written
     assert stats.bytes == read + written
     assert stats.macs == (16 * 32 * 64 * 128) * 8 * 3 * 3
+    assert stats.accumulation_depths == [8 * 3 * 3]
 
 
 def test_conv2d_stats_input_grad():
@@ -21,6 +22,7 @@ def test_conv2d_stats_input_grad():
     assert stats.bytes_written == written
     assert stats.bytes == read + written
     assert stats.macs == (16 * 32 * 64 * 128) * 8 * 3 * 3
+    assert stats.accumulation_depths == [8 * 3 * 3]
 
 
 def test_conv2d_stats_weight_grad():
@@ -32,3 +34,9 @@ def test_conv2d_stats_weight_grad():
     assert stats.bytes_written == written
     assert stats.bytes == read + written
     assert stats.macs == (16 * 32 * 64 * 128) * 8 * 3 * 3
+    assert stats.accumulation_depths == [16 * 32 * 64]
+
+def test_conv2d_stats_bias_grad():
+    params = conv2d_gw8_kernel_factory.params_cls(N=16, H=32, W=64, C=128, R=3, S=3)
+    stats = conv2d_gw8_kernel_factory.stats_cls(params, output_names="grad_bias")
+    assert stats.accumulation_depths == [16 * 32 * 64]

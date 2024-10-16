@@ -65,6 +65,25 @@ class Conv2dStats(Stats):
     def grad_bias_bytes_written(self):
         """Return the number of bytes written during the backward pass w.r.t. bias."""
         return self._size_bias * self.unit
+    
+    @property
+    def output_accumulation_depth(self):
+        """Return the depth of accumulation in the output tensor."""
+        return self._accumulation_depth
+    
+    @property
+    def grad_input_accumulation_depth(self):
+        """Return the depth of accumulation in the gradient of the input tensor."""
+        return self._accumulation_depth
+    
+    @property
+    def grad_weight_accumulation_depth(self):
+        """Return the depth of accumulation in the gradient of the weight tensor."""
+        return self.params.N * self.params.H * self.params.W
+    
+    @property
+    def grad_bias_accumulation_depth(self):
+        return self.params.N * self.params.H * self.params.W
 
     @property
     def _size_input(self):
