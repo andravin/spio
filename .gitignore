@@ -20,6 +20,9 @@ inference_*.json
 *.ubj
 results/
 
+# Other cruft.
+wandb/
+
 build/
 driver.c
 
