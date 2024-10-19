@@ -2,17 +2,16 @@ from typing import Dict
 
 import torch
 
-from spio.kernels.kernel_key import KernelKey
-
 from .. import primary_context_guard
 
 from ..compiler import compile_kernel_configs
+from ..util import logger_enabled
 
+from .kernel_key import KernelKey
 from .kernel_util import get_first_device_in_args
 from .performance_model_cache import PerformanceModelCache
 from .kernel import Kernel
 from .kernel_params_logger import log_kernel_params, kernel_params_logging_is_enabled
-
 
 perf_model_cache = PerformanceModelCache()
 
@@ -79,8 +78,10 @@ class KernelCache:
                     )
                 best_kernel = _compile_and_load_kernel(
                     kernel_factory, params, best_config, device, **kernel_kwargs
-                )
+                )                
                 self._cache[key] = best_kernel
+                if logger_enabled:
+                    print(f"spio: compiled kernel {best_kernel.kernel_name} for device {device}.")
         return best_kernel
 
 
