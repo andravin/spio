@@ -93,18 +93,14 @@ class PerformanceModelCache:
         Returns None if no performance model is available for the given kernel and device.
         """
         kernel_name = kernel_factory.get_kernel_name(**kernel_kwargs)
-        device_name = get_formatted_device_name(device)
-        arch = get_formatted_arch(device)
-        performance_model = self._get_performance_model(kernel_name, device_name, arch)
+        performance_model = self._get_performance_model(kernel_name, device)
         if performance_model is None:
             return None
 
         configs = list(kernel_factory.configs(params, **kernel_kwargs))
         return _predict_best_config(performance_model, params, configs)
 
-    def _get_performance_model(
-        self, kernel_name: str, device: str, arch: str
-    ) -> xgb.Booster:
+    def _get_performance_model(self, kernel_name: str, device) -> xgb.Booster:
         """Return the performance model for the given kernel, device, and architecture.
 
         Each new version of spio has a new set of performance models stored in the release assets.
@@ -120,23 +116,26 @@ class PerformanceModelCache:
         Additionally, there may be performance models for the device. We prefer device models if they exist.
         """
 
+        device_name = get_formatted_device_name(device)
+        arch = get_formatted_arch(device)
+
         if arch not in supported_arch:
             raise NotImplementedError(
                 f"NVIDIA GPU architecture {arch} is not supported."
             )
 
-        device_model_cache_key = _PerformanceModelKey(kernel_name, device)
+        device_model_cache_key = _PerformanceModelKey(kernel_name, device_name)
 
         model = self._model_cache.get(device_model_cache_key)
         if model is None:
-            archive_name = self._archive_cache.get(device)
+            archive_name = self._archive_cache.get(device_name)
             if archive_name is None:
                 archive_name = _get_archive_name_for_device_from_release_info(
-                    device, arch
+                    device_name, arch
                 )
-                self._archive_cache[device] = archive_name
+                self._archive_cache[device_name] = archive_name
             model_file_name = _get_model_name_from_archive(
-                kernel_name, device, arch, archive_name
+                kernel_name, device_name, arch, archive_name
             )
             _ensure_archive_is_downloaded(archive_name)
             model_data = _load_model_from_archive(archive_name, model_file_name)
@@ -146,12 +145,12 @@ class PerformanceModelCache:
             self._model_cache[device_model_cache_key] = model
             if logger_enabled:
                 print(
-                    f"spio: loaded a performance model for {kernel_name} on {device}:{arch} from {archive_name}."
+                    f"spio: loaded a performance model for {kernel_name} on device {device} with type {device_name}:{arch} from {archive_name}."
                 )
 
         assert (
             model is not None
-        ), f"No performance model found for kernel {kernel_name}, device {device}, and architecture {arch}."
+        ), f"No performance model found for kernel {kernel_name}, device {device_name}, and architecture {arch}."
         return model
 
 
@@ -337,7 +336,9 @@ def _clear_cache() -> None:
     """Clear all cached files in the cache directory."""
     if PERF_CACHE_DIR.exists():
         for f in PERF_CACHE_DIR.iterdir():
-            if f.is_file() and (f.name.endswith(".tgz") or f.name == "release_info.json"):
+            if f.is_file() and (
+                f.name.endswith(".tgz") or f.name == "release_info.json"
+            ):
                 f.unlink()
     else:
         PERF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
