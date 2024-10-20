@@ -18,7 +18,7 @@ def register_conv2d_gw8_reflections():
         output=ArgInfo(dtype=torch.float16, output=True, init=Init.EMPTY),
         input=ArgInfo(dtype=torch.float16, requires_grad=True),
         weight=ArgInfo(dtype=torch.float16, requires_grad=True),
-        bias=ArgInfo(dtype=torch.float16, requires_grad=True),
+        bias=ArgInfo(dtype=torch.float32, requires_grad=True),
     )
 
     register_reflection(
@@ -96,7 +96,7 @@ def register_conv2d_gw8_reflections():
             arginfo=dict(
                 input=ArgInfo(dtype=torch.float16, requires_grad=True),
                 weight=ArgInfo(dtype=torch.float16, requires_grad=True),
-                bias=ArgInfo(dtype=torch.float16, requires_grad=True),
+                bias=ArgInfo(dtype=torch.float32, requires_grad=True),
                 output=ArgInfo(dtype=torch.float16, output=True, init=Init.EMPTY),
                 grad_output=ArgInfo(dtype=torch.float16, grad_of="output"),
                 grad_weight=ArgInfo(
@@ -119,7 +119,7 @@ def register_conv2d_gw8_reflections():
             arginfo=dict(
                 input=ArgInfo(dtype=torch.float16, requires_grad=True),
                 weight=ArgInfo(dtype=torch.float16, requires_grad=True),
-                bias=ArgInfo(dtype=torch.float16, requires_grad=True),
+                bias=ArgInfo(dtype=torch.float32, requires_grad=True),
                 output=ArgInfo(dtype=torch.float16, output=True, init=Init.EMPTY),
                 grad_output=ArgInfo(dtype=torch.float16, grad_of="output"),
                 grad_input=ArgInfo(

@@ -64,7 +64,7 @@ extern "C"
         uint4 *__restrict__ dst,
         const uint4 *__restrict__ input_ptr,
         const uint4 *__restrict__ weights_ptr,
-        const __half2 *__restrict__ bias_ptr)
+        const float2 *__restrict__ bias_ptr)
     {
         //
         // Define the shared memory buffers.
@@ -93,10 +93,7 @@ extern "C"
             int lane_k2 = Acc::k2(idx.lane());
             int k8 = block_c8 + idx.k8();
             if (k8 < Output::K8) {
-                __half2 bias = *Bias(bias_ptr).k8(k8).k2(lane_k2);
-                bias_f32 = __half22float2(bias);
-            } else {
-                bias_f32 = make_float2(0, 0);
+                bias_f32 = *Bias(bias_ptr).k8(k8).k2(lane_k2);
             }
         }
 

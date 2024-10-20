@@ -24,7 +24,7 @@ def conv2d_gw8(
 ) -> torch.Tensor:
     assert input.dtype == torch.float16
     assert weight.dtype == torch.float16
-    assert bias is None or bias.dtype == torch.float16
+    assert bias is None or bias.dtype == torch.float32
     params = Conv2dGw8Params.from_tensors(input, weight, bias, (padding_y, padding_x))
     output = torch.empty(
         params.output_shape,
@@ -59,7 +59,7 @@ def conv2d_gw8_autocast(ks, input, weight, bias, *args, **kwargs):
     input = input.to(dtype=torch.float16)
     weight = weight.to(dtype=torch.float16)
     if bias is not None:
-        bias = bias.to(dtype=torch.float16)
+        bias = bias.to(dtype=torch.float32)
     autocast = torch._C.DispatchKeySet("AutocastCUDA")
     with torch._C._ExcludeDispatchKeyGuard(autocast):
         result = torch.ops.spio.conv2d_gw8.default.redispatch(
@@ -210,7 +210,7 @@ def conv2d_gw8_setup_context(ctx, inputs, output):
     assert input.dtype == torch.float16
     assert weight.dtype == torch.float16
     if bias is not None:
-        assert bias.dtype == torch.float16
+        assert bias.dtype == torch.float32
 
     _check_channels_last([input, weight, bias])
 

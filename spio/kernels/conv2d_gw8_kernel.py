@@ -116,7 +116,7 @@ def _get_specs(params, config=None, igrad=False):
         ),
         IndexSpec("InputIdx", dict(n=block_n, x=block_w, c8=block_c8)),
         TensorSpec("Input", "const uint4", dict(n=n, y=h, x=w, c8=c8)),
-        TensorSpec("Bias", "const __half2", dict(k8=c8, k2=4)),
+        TensorSpec("Bias", "const float2", dict(k8=c8, k2=4)),
         IndexSpec("BiasIdx", dict(k8=block_c8, lane=32)),
         TensorSpec("Output", "uint4", dict(n=n, p=p, q=q, k8=c8)),
         TensorSpec("Weights", "const uint4", dict(k=c, r=r, s=s)),
