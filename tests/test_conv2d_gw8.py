@@ -145,7 +145,7 @@ def test_functional_conv2d_gw8(params: Conv2dGw8Params):
 
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_functional_conv2d_gw8_grad(params: Conv2dGw8Params):
-    """NOTE this test failed when it was run isolation due to an unknown race condition that caused a CUDA_ERROR_INVALID_CONTEXT.
+    """NOTE this test failed when it was run in isolation due to an unknown race condition that caused a CUDA_ERROR_INVALID_CONTEXT.
     If this test was run after the tests that precede it, there is no error.
     I added a workaround in the benchmark function to synchronize the CUDA context before loading the kernel.
     This hack seems to have fixed the issue.
