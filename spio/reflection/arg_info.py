@@ -26,6 +26,7 @@ class ArgInfo:
     memory_format: torch.memory_format = torch.channels_last
     grad_of: str = None
     name: str = None
+    scale: float = 1.0
 
     @property
     def zero(self):
@@ -70,13 +71,13 @@ class ArgInfo:
         return _to(t, memory_format=self.memory_format)
 
     def _ones(self, params: Any, device: str):
-        t = torch.ones(self._shape(params), dtype=self.dtype, device=device)
+        t = torch.ones(self._shape(params), dtype=self.dtype, device=device) * self.scale
         return _to(t, memory_format=self.memory_format)
 
     def _randn_clip_3(self, params: Any, device: str):
         shape = self._shape(params)
         t = torch.randn(shape, dtype=self.dtype, device=device)
-        t = torch.clip(t, -3, 3)
+        t = torch.clip(t, -3, 3) * self.scale
         return _to(t, memory_format=self.memory_format)
 
     def make_arg(self, params, training=False, device="cuda"):
