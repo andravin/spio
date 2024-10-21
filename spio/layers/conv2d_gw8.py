@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import torch
 from torch import nn
 
@@ -9,22 +11,69 @@ class Conv2dGw8(nn.Conv2d):
     Params = Conv2dGw8Params
 
     @staticmethod
+    def make(*args, **kwargs) -> nn.Module:
+        """Create a Conv2dGw8 module if the parameters match the requirements.
+
+        The arguments list is the same as for nn.Conv2d which is also the same as Conv2dGw8.match_args(), below.
+        Returns None if the parameters do not match the requirements. Otherwise, returns a Conv2dGw8 module.
+        """
+        if Conv2dGw8.match_args(*args, **kwargs):
+            return Conv2dGw8(*args, **kwargs)
+        else:
+            return None
+
+    @staticmethod
     def match(module: nn.Module):
-        if not isinstance(module, nn.Conv2d) or isinstance(module, Conv2dGw8):
-            return False
-        if module.in_channels != module.out_channels:
-            return False
-        group_width = module.in_channels // module.groups
-        R, S = module.kernel_size
+        """Check if the module matches the requirements for a Conv2dGw8 module."""
         return (
-            group_width == 8
-            and R >= 1
-            and R <= 5
-            and S >= 1
-            and S <= 5
-            and module.in_channels == module.out_channels
-            and module.stride == (1, 1)
-            and module.dilation == (1, 1)
+            isinstance(module, nn.Conv2d)
+            and not isinstance(module, Conv2dGw8)
+            and Conv2dGw8.match_args(
+                module.in_channels,
+                module.out_channels,
+                module.kernel_size,
+                module.stride,
+                module.padding,
+                module.dilation,
+                module.groups,
+                module.bias is not None,
+            )
+        )
+
+    @staticmethod
+    def match_args(
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        bias=True,
+        padding_mode="zeros",
+        device=None,
+        dtype=None,
+    ) -> bool:
+        """Check if the arguments match the requirements for a Conv2dGw8 module.
+
+        Returns True if the arguments match the requirements. Otherwise, returns False.
+        """
+        group_width = in_channels // groups
+        r, s = _get_pair(kernel_size)
+        dy, dx = _get_pair(dilation)
+        sy, sx = _get_pair(stride)
+        return (
+            in_channels == out_channels
+            and group_width == 8
+            and r >= 1
+            and r <= 5
+            and s >= 1
+            and s <= 5
+            and dy == 1
+            and dx == 1
+            and sy == 1
+            and sx == 1
+            and padding_mode == "zeros"
         )
 
     @staticmethod
@@ -47,13 +96,7 @@ class Conv2dGw8(nn.Conv2d):
         return module
 
     def forward(self, x):
-        padding = self.padding
-        if isinstance(padding, int):
-            padding_y = padding
-            padding_x = padding
-        else:
-            padding_y, padding_x = padding
-
+        padding_y, padding_x = _get_pair(self.padding)
         return conv2d_gw8(
             x,
             self.weight,
@@ -63,3 +106,14 @@ class Conv2dGw8(nn.Conv2d):
             padding_x=padding_x,
             groups=self.groups,
         )
+
+
+def _get_pair(x) -> Tuple[int, int]:
+    """Return the argument as a pair of integers.
+
+    If the argument is a single integer, return a pair of the same integer.
+    Otherwise, return the argument as is.
+    """
+    if isinstance(x, int):
+        return x, x
+    return x
