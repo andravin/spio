@@ -32,8 +32,6 @@ def conv2d_gw8(
         dtype=torch.float16,
         memory_format=torch.channels_last,
     )
-    if bias is None:
-        bias = _none(input.device)
     args = (output, input, weight, bias)
     args = _to_channels_last(*args)
     kernel = conv2d_gw8_kernel_factory.get_kernel(params, input.device)
@@ -128,7 +126,7 @@ def conv2d_gw8_backward_op(
 
     if needs_input_grad:
         grad_input = torch.empty_like(input)
-        args = (grad_input, grad_output, weight, _none(input.device))
+        args = (grad_input, grad_output, weight, None)
         grad_input_kernel = conv2d_gw8_kernel_factory.get_kernel(
             params, input.device, igrad=True
         )
@@ -226,14 +224,6 @@ conv2d_gw8.register_autograd(
 # See discussion at https://github.com/pytorch/pytorch/issues/137033
 m = torch.library.Library("spio", "FRAGMENT")
 m.impl("conv2d_gw8", conv2d_gw8_autocast, "AutocastCUDA", with_keyset=True)
-
-
-def _none(device):
-    """Return an empty tensor.
-
-    This might not be necesary now that our spio.cuda.driver.Function.launch supports None arguments.
-    """
-    return torch.tensor([], device=device, dtype=torch.float16, requires_grad=False)
 
 
 def _check_channels_last(args):
