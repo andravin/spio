@@ -44,7 +44,12 @@ parser.add_argument("--spio", action="store_true")
 parser.add_argument("--model-kwargs", nargs="*", default={}, action=ParseKwargs)
 parser.add_argument("--no-profile", action="store_true")
 parser.add_argument("--enable-logger", action="store_true")
-parser.add_argument("--scan-modules", action="store_true", help="Scan the model for matching Spio modules and print their parameters")
+parser.add_argument(
+    "--scan-modules",
+    action="store_true",
+    help="Scan the model for matching Spio modules and print their parameters",
+)
+parser.add_argument("--img-size", type=int, default=None)
 parser.add_argument(
     "--bench", type=str, default="train", help="train or inference benchmark mode"
 )
@@ -60,10 +65,13 @@ model = timm.create_model(
     args.model, pretrained=args.pretrained, **args.model_kwargs
 ).cuda()
 
-training_input_size = model.default_cfg["input_size"]
+if args.img_size is not None:
+    img_size = 3, args.img_size, args.img_size
+else:
+    img_size = model.default_cfg["input_size"]
 
 inputs = [
-    torch.randn((args.batch_size, *training_input_size), device="cuda").to(
+    torch.randn((args.batch_size, *img_size), device="cuda").to(
         memory_format=memory_format, dtype=torch.float16
     )
     for _ in range(NUM_INPUTS)
@@ -81,7 +89,7 @@ if args.summary:
 
     torchinfo.summary(
         model,
-        input_size=(args.batch_size, *training_input_size),
+        input_size=(args.batch_size, *img_size),
         depth=99,
         col_names=[
             "input_size",
