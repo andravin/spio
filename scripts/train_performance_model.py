@@ -34,9 +34,11 @@ CONFIG_CLASSES = dict(
     Conv2dGw8Config=Conv2dGw8Config, Conv2dGw8WgradConfig=Conv2dGw8WgradConfig
 )
 
-device_arch_table = dict(
-    nvidia_geforce_rtx_4090="sm_89",
-)
+device_arch_table = {
+    "nvidia_a100-pcie-40gb": "sm_80",
+    "nvidia_geforce_rtx_3090": "sm_86",
+    "nvidia_geforce_rtx_4090": "sm_89",
+}
 
 # Suppress SettingWithCopyWarning
 pd.options.mode.chained_assignment = None
