@@ -9,7 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from spio.src_tests import preprocess_data_file
-from spio.kernels import Conv2dGw8Kernel, Conv2dGw8WgradKernel
+from spio.reflection import get_kernel_reflection
 
 
 MAX_BANDWIDTH_GB_S = 3000
@@ -65,9 +65,13 @@ def main():
     dirname_params = extract_parameters_from_dirname(args.spio_data_dir)
     params = conv2d_gw8_kernel_params_from_dirname_params(dirname_params)
 
-    add_eff_bandwidth_gb_s(df_fprop, params, Conv2dGw8Kernel.stats_cls, "output")
-    add_eff_bandwidth_gb_s(df_dgrad, params, Conv2dGw8Kernel.stats_cls, "grad_input")
-    add_eff_bandwidth_gb_s(df_wgrad, params, Conv2dGw8Kernel.stats_cls, "grad_weight")
+    fprop_reflection = get_kernel_reflection(fprop_kernel_name)
+    dgrad_reflection = get_kernel_reflection(dgrad_kernel_name)
+    wgrad_reflection = get_kernel_reflection(wgrad_kernel_name)
+
+    add_eff_bandwidth_gb_s(df_fprop, params, fprop_reflection.stats, "output")
+    add_eff_bandwidth_gb_s(df_dgrad, params, dgrad_reflection.stats, "grad_input")
+    add_eff_bandwidth_gb_s(df_wgrad, params, wgrad_reflection.stats, "grad_weight")
 
     plot_eff_bw(
         df_fprop,
@@ -107,12 +111,12 @@ def main():
                 label + " (Depthwise)" for label in torch_kernel_labels
             ]
 
-        add_eff_bandwidth_gb_s(fprop_df, torch_params, Conv2dGw8Kernel.stats_cls, "output")
+        add_eff_bandwidth_gb_s(fprop_df, torch_params, fprop_reflection.stats, "output")
         add_eff_bandwidth_gb_s(
-            dgrad_df, torch_params, Conv2dGw8Kernel.stats_cls, "grad_input"
+            dgrad_df, torch_params, dgrad_reflection.stats, "grad_input"
         )
         add_eff_bandwidth_gb_s(
-            wgrad_df, torch_params, Conv2dGw8Kernel.stats_cls, "grad_weight"
+            wgrad_df, torch_params, wgrad_reflection.stats, "grad_weight"
         )
 
         plot_eff_bw(
@@ -127,7 +131,7 @@ def main():
     plt.ylabel("Effective Bandwidth (GB/s)")
     plt.ylim(0, MAX_BANDWIDTH_GB_S)
     device_name = dirname_params["device_name"]
-    plt.title("Effective Bandwidth vs Batch Size")
+    plt.title("Grouped Convolution Performance")
     plt.suptitle(
         f"{params.C} channels, {params.H}x{params.W} input, {params.R}x{params.S} kernel, group width {params.group_width}, {device_name}",
         fontsize=10,
@@ -380,8 +384,9 @@ def conv2d_gw8_kernel_params_from_dirname_params(dirname_params):
         C = dirname_params["channels"] * dirname_params["expansion_ratio"]
     else:
         raise ValueError(f"Unknown block name: {block_name}")
-
-    return Conv2dGw8Kernel.params_cls(
+    fprop_reflection = get_kernel_reflection("spio_conv2d_gw8_fprop")
+    params_cls = fprop_reflection.params
+    return params_cls(
         N=dirname_params.get("batch_size"),
         C=C,
         H=dirname_params["height_width"],
