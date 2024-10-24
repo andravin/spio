@@ -17,7 +17,11 @@ The first Spio kernel is for grouped convolution, a prime example of a promising
 
 The cuDNN conv2d kernels use an "implicit gemm" algorithm that tiles the input tensor with horizontal strips. The support halo for the convolution kernel causes overlapping reads of the input tensor, and when the tile is a 1-D strip, the overlap is larger than the tile. This results in excess global memory traffic.
 
-The Spio conv2d kernel used 2-d tiles. This reduces the overlap between tiles and reduces global memory traffic. It processes the 2-d tile one row at a time, convolving each row with every row of the filter. This overlap-add style algorithm minimizes the kernel's local memory footprint, which increases occupancy and maximizes utilization of the global memory bandwidth.
+The Spio conv2d kernel used 2-d tiles. This reduces the overlap between tiles and reduces global memory traffic. It processes the 2-d tile one row at a time, convolving each input row with every filter row while updating a circular buffer of output rows. The circular buffer is implemented in registers by unrolling the input-row loop by the number of filter rows.  This overlap-add style algorithm minimizes the kernel's local memory footprint, which increases occupancy and maximizes utilization of the global memory bandwidth.
+
+Group width 8 matches the accumulation depth of the float16 tensor core (through AD102, sm_89). Therefore
+the grouped convolution is implemented just like regular planar convolution, but with scalar input elements
+replaced by 8-element vectors, scalar filter elements replaced by 8 x 8 matrices, and scalar multiplication replaced by matrix-vector multiplication. Processing 16 columns of the input row at once turns the input vectors into input matrices, so that the algorithm can use the `mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32` instruction.
 
 On the NVIDIA RTX 3090 GPU, Spio approaches the DRAM memory bandwidth limit for the Fprop, Dgrad (gradient with respect to inputs), and Wgrad (gradient with respect to weights) kernels, while the PyTorch / cuDNN kernels struggle with excess data transfers:
 
@@ -38,8 +42,11 @@ ConvFirst or MBConv building block and constructing a stack of several blocks. T
 Spio uses several strategies to simplify the development of high performance CUDA kernels that
 integrate with PyTorch.
 
-We use named tensors to simplify tensor indexing in CUDA source code. In Python, you spec the tensor
+### Named Tensors
+
+Spio uses named tensors to simplify tensor indexing in CUDA source code. In Python, you spec the tensor
 and indexing dimensions like this
+
 ```python
         TensorSpec("Output", "uint4", dict(n=n, p=p, q=q, k8=c8)),
         TensorSpec(
@@ -68,9 +75,15 @@ which generates CUDA/C++ classes that you use in your kernel like this
     }
 ```
 
-Spio compiles kernels at run time using libnvrtc and launch them with libcuda. Unlike other packages that offer run time compilation, Spio does not rely on the CUDA toolkit. We simply use the same NVIDIA libnvrtc and cuda-runtime python packages on which PyTorch already depends. This minimizes software dependencies and simplifies installation.
+### Run Time Compilation
+
+Spio compiles kernels at run time using libnvrtc and launches them with libcuda. Unlike other packages that offer run time compilation, Spio does not depend on the CUDA toolkit. We simply use the same NVIDIA libnvrtc and cuda-runtime Python packages on which PyTorch already depends. This minimizes software dependencies and simplifies installation.
+
+### Kernel Performance Models
 
 Spio predicts the best kernel configuration for each layer with a performance model trained on thousands of offline benchmarking samples. Prediction takes just a few milliseconds, so startup is much faster than other frameworks that use a time consuming auto-tuning step.
+
+### Integration with torch.compile
 
 We integrate with `torch.compile` using the `custom_op` interface from PyTorch 2.4.
 
