@@ -177,6 +177,19 @@ class GroupedConvFiesta(nn.Module):
     ):
         super().__init__()
 
+        num_post = extra_depth // 2
+        num_pre = extra_depth - num_post
+
+        pre = [
+            MLP(
+                num_channels,
+                num_channels,
+                expansion_ratio=expansion_ratio,
+                act_cls=act_cls,
+            )
+            for _ in range(num_pre)
+        ]
+
         blocks = [
             block_cls(
                 num_channels,
@@ -189,23 +202,25 @@ class GroupedConvFiesta(nn.Module):
             for _ in range(depth)
         ]
 
-        extra = [
+        post = [
             MLP(
                 num_channels,
                 num_channels,
                 expansion_ratio=expansion_ratio,
                 act_cls=act_cls,
             )
-            for _ in range(extra_depth)
+            for _ in range(num_post)
         ]
 
+        self.pre = nn.Sequential(*pre)
         self.blocks = nn.Sequential(*blocks)
-        self.extra = nn.Sequential(*extra)
+        self.post = nn.Sequential(*post)
         self.pool = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, x):
+        x = self.pre(x)
         x = self.blocks(x)
-        x = self.extra(x)
+        x = self.post(x)
         x = self.pool(x)
         return x
 
