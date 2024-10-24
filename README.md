@@ -89,6 +89,8 @@ We integrate with `torch.compile` using the `custom_op` interface from PyTorch 2
 
 ## Installation from Source
 
+Spio is compatible with NVIDIA Ampere (sm_80 and sm_86) and Ada (sm_89) GPUs.
+
 First, ensure you have a C compiler installed. On Ubuntu:
 
 ```bash
