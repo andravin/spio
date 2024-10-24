@@ -4,7 +4,7 @@
 # It uses use the timm benchmark.py script to benchmark a model with and without spio.
 
 MODEL=$1
-BATCH_SIZE=$2
+BATCH_SIZE=${2:-"256"}
 BENCH=${3:-train}
 EXTRA_MODEL_KWARGS=${4:-""}
 SKIP_COMPILE=${5:-"false"}
