@@ -25,6 +25,7 @@ def main():
         type=str,
         help="Path to the PyTorch benchmark data directory",
     )
+    parser.add_argument("--max-bandwidth-gb-s", type=float, default=MAX_BANDWIDTH_GB_S)
     args = parser.parse_args()
 
     if not Path(args.spio_data_dir).is_dir():
@@ -129,7 +130,7 @@ def main():
 
     plt.xlabel("Batch Size")
     plt.ylabel("Effective Bandwidth (GB/s)")
-    plt.ylim(0, MAX_BANDWIDTH_GB_S)
+    plt.ylim(0, args.max_bandwidth_gb_s)
     device_name = dirname_params["device_name"]
     plt.title("Grouped Convolution Performance")
     plt.suptitle(
