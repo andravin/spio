@@ -11,7 +11,7 @@ the performance of convnet kernels has languished. Today, the performance of a c
 In our [paper](https://arxiv.org/abs/2404.03617), we implemented efficient GPU kernels for convnet inference.
 This project implements kernels for training.
 
-The first Spio kernel is for grouped convolution, a prime example of a promising layer that has fallen into disuse because of the inefficiency of the current implementation. We focus on group-width equal to eight and stride 1, as used in our ConvFirst model.
+The first Spio kernel is for grouped convolution, a prime example of a promising layer that has fallen into disuse because of the inefficiency of the current implementation. We focus on group-width equal to eight and stride 1, as used in our ConvFirst model. Spio is compatible with NVIDIA Ampere (sm_80 and sm_86) and Ada (sm_89) GPUs.
 
 ## Benchmarks
 
@@ -88,8 +88,6 @@ Spio predicts the best kernel configuration for each layer with a performance mo
 We integrate with `torch.compile` using the `custom_op` interface from PyTorch 2.4.
 
 ## Installation from Source
-
-Spio is compatible with NVIDIA Ampere (sm_80 and sm_86) and Ada (sm_89) GPUs.
 
 First, ensure you have a C compiler installed. On Ubuntu:
 
