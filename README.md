@@ -17,8 +17,7 @@ The first Spio kernel is for grouped convolution, a prime example of a promising
 
 The cuDNN conv2d kernels use an "implicit gemm" algorithm that tiles the input tensor with horizontal strips. The support halo for the convolution kernel causes overlapping reads of the input tensor, and when the tile is a 1-D strip, the overlap is larger than the tile. This results in excess global memory traffic.
 
-The Spio conv2d kernel used 2-d tiles. This
-reduces the overlap between tiles and reduces global memory traffic.
+The Spio conv2d kernel used 2-d tiles. This reduces the overlap between tiles and reduces global memory traffic. It processes the 2-d tile one row at a time, convolving each row with every row of the filter. This overlap-add style algorithm minimizes the kernel's local memory footprint, which increases occupancy and maximizes utilization of the global memory bandwidth.
 
 On the NVIDIA RTX 3090 GPU, Spio approaches the DRAM memory bandwidth limit for the Fprop, Dgrad (gradient with respect to inputs), and Wgrad (gradient with respect to weights) kernels, while the PyTorch / cuDNN kernels struggle with excess data transfers:
 
@@ -33,6 +32,47 @@ On the NVIDIA RTX 4090 GPU, Spio exceeds the DRAM memory bandwidth limit for sma
 Our benchmarks use [torch.profile](https://pytorch.org/docs/stable/profiler.html), which uses NVIDIA's [libcupti](https://developer.nvidia.com/cupti-ctk12_0) internally for precise
 kernel timing. We benchmark layers *in situ*, placing a grouped convolution layer inside a
 ConvFirst or MBConv building block and constructing a stack of several blocks. This creates a realistic environment for the target kernel, where the memory hierarchy is exercised similarly to a real-world use case.
+
+## Implementation Notes
+
+Spio uses several strategies to simplify the development of high performance CUDA kernels that
+integrate with PyTorch.
+
+We use named tensors to simplify tensor indexing in CUDA source code. In Python, you spec the tensor
+and indexing dimensions like this
+```python
+        TensorSpec("Output", "uint4", dict(n=n, p=p, q=q, k8=c8)),
+        TensorSpec(
+            "ConstSmemOutput",
+            "const uint4",
+            dict(q=block_q, n=block_n, k8=block_c8 + 1),
+        ),
+        IndexSpec("OutputStoreIdx", dict(n=block_n, q=block_q, k8=block_c8)),
+```
+
+which generates CUDA/C++ classes that you use in your kernel like this
+
+```c++
+    // Output-smem to output.
+    ConstSmemOutput smem_output_load(smem_output_buf);
+    Output output(dst);
+    bool thread_stores_output;
+    {
+        OutputStoreIdx idx(threadIdx.x);
+        auto q = block_q + idx.q();
+        auto n = block_n + idx.n();
+        auto k8 = block_c8 + idx.k8();
+        smem_output_load = smem_output_load.n(idx.n()).q(idx.q()).k8(idx.k8());
+        output = output.n(n).p(block_p).q(q).k8(k8);
+        thread_stores_output = n < Output::N && q < Output::Q && k8 < Output::K8 && threadIdx.x < OutputStoreIdx::size;
+    }
+```
+
+Spio compiles kernels at run time using libnvrtc and launch them with libcuda. Unlike other packages that offer run time compilation, Spio does not rely on the CUDA toolkit. We simply use the same NVIDIA libnvrtc and cuda-runtime python packages on which PyTorch already depends. This minimizes software dependencies and simplifies installation.
+
+Spio predicts the best kernel configuration for each layer with a performance model trained on thousands of offline benchmarking samples. Prediction takes just a few milliseconds, so startup is much faster than other frameworks that use a time consuming auto-tuning step.
+
+We integrate with `torch.compile` using the `custom_op` interface from PyTorch 2.4.
 
 ## Installation from Source
 
