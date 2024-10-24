@@ -2,14 +2,6 @@
 
 Efficient CUDA kernels for training convolutional neural networks with PyTorch.
 
-## Installation
-
-Install the package using pip:
-
-```bash
-pip install spio
-```
-
 ## Installation from Source
 
 First, ensure you have a C compiler installed. On Ubuntu:
@@ -22,7 +14,7 @@ sudo apt install build-essential
 Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/spio.git
+git clone https://github.com/andravin/spio.git
 cd spio
 ```
 
@@ -40,8 +32,16 @@ pip install --upgrade pip
 pip install .
 ```
 
-Because you installed from source, you can run the tests:
+Optionally, run the unit tests. This can take a while,
+because Spio tests every configuration of every kernel. It goes a bit faster
+if we set the SPIO_WORKERS environment variable to use all CPU cores for compiling kernels:
 
 ```bash
-pytest tests/
+cd tests
+SPIO_WORKERS=$(nproc) pytest .
 ```
+
+Note: the tests and scripts cannot be run from the top-level spio directory because
+that would cause Python to find the local spio package instead of the installed package.
+Only the installed package has the compiled spio.cuda.driver Cython extension, so using
+the local package would cause an import error. That is why `cd tests` before `pytest .` is essential.
