@@ -30,6 +30,7 @@ def register_conv2d_gw8_reflections():
             reference=torch.nn.functional.conv2d,
             stacking=[("output", "input")],
             stats=Conv2dStats,
+            params=Conv2dGw8Params,
             prefix_op_constructor=_make_prefix_op,
             ignore_params=["stride", "group_width"],
         )
@@ -108,6 +109,7 @@ def register_conv2d_gw8_reflections():
             reference=torch.nn.functional.conv2d,
             prefix_op_constructor=_make_prefix_op,
             stats=Conv2dStats,
+            params=Conv2dGw8Params,
             ignore_params=["stride", "group_width"],
         )
     )
@@ -131,6 +133,7 @@ def register_conv2d_gw8_reflections():
             kernel_outputs=["grad_input"],
             reference=torch.nn.functional.conv2d,
             stats=Conv2dStats,
+            params=Conv2dGw8Params,
             stacking=[("grad_input", "grad_output")],
             prefix_op_constructor=_make_prefix_op,
             ignore_params=["stride", "group_width"],
