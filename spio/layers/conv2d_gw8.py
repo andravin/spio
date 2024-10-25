@@ -71,10 +71,8 @@ class Conv2dGw8(nn.Conv2d):
         return (
             in_channels == out_channels
             and group_width == 8
-            and r >= 1
-            and r <= 5
-            and s >= 1
-            and s <= 5
+            and 1 <= r <= 5
+            and 1 <= s <= 5
             and dy == 1
             and dx == 1
             and sy == 1
