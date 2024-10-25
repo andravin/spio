@@ -44,7 +44,10 @@ class KernelFactory:
         launch_params: LaunchParams = None,
         src_module: str = "spio.src",
         includes_module: str = "spio.include",
+        perf_model_skip_params: List[str] = None
     ):
+        if perf_model_skip_params is None:
+            perf_model_skip_params = []
         self.params_cls = params_cls
         self.config_cls = config_cls
         self.stats_cls = stats_cls
@@ -56,6 +59,7 @@ class KernelFactory:
         self._kernel_caches = dict()
         self._src_module = src_module
         self._includes_module = includes_module
+        self.per_model_skip_params = perf_model_skip_params
 
     def configs(self, params: Params, **kwargs):
         """Return a generator for the configs of the given layer parameters."""
@@ -143,6 +147,7 @@ def make_kernel_factory(
     launch_params: Union[LaunchParams, Callable[..., LaunchParams]] = None,
     src_module: str = "spio.src",
     includes_module: str = "spio.include",
+    perf_model_skip_params: List[str] = None,
 ) -> KernelFactory:
     """Return a new KernelFactory object for a CUDA kernel.
 
@@ -176,4 +181,5 @@ def make_kernel_factory(
         launch_params=launch_params,
         src_module=src_module,
         includes_module=includes_module,
+        perf_model_skip_params=perf_model_skip_params,
     )

@@ -1,8 +1,15 @@
+"""A dataclass for defining launch parameters for CUDA kernels."""
 from dataclasses import dataclass
 from typing import Tuple, Union
 
 @dataclass
 class LaunchParams:
+    """Launch parameters for CUDA kernels.
+    
+    Attributes:
+        grid: The grid size.
+        block: The block size.
+    """
     grid: Union[int, Tuple[int, ...]]
     block: Union[int, Tuple[int, ...]]
 

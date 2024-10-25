@@ -1,3 +1,5 @@
+"""Utility functions for kernels."""
+
 import torch
 
 

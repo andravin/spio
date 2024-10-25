@@ -1,12 +1,14 @@
+"""Performance model cache for kernel performance prediction."""
+
 from pathlib import Path
 from dataclasses import dataclass
-import requests
-from typing import Type, List, Any
-from packaging import version
+from typing import List, Any, TYPE_CHECKING
 import tarfile
 import json
 import os
 
+from packaging import version
+import requests
 import xgboost as xgb
 import numpy as np
 from filelock import FileLock
@@ -17,11 +19,12 @@ from ..util import (
     get_formatted_device_name,
     get_formatted_arch,
     logger_enabled,
-    logger_verbose,
     time_function,
 )
 
 from .kernel import Kernel
+if TYPE_CHECKING:
+    from .kernel_factory import KernelFactory
 
 DEFAULT_PERF_THREADS = 4
 
@@ -45,6 +48,7 @@ RELEASE_INFO_FILE = PERF_CACHE_DIR / "release_info.json"
 
 _download_lock = FileLock(str(LOCK_FILE))
 
+# pylint: disable=C0103
 _release_info = None
 
 
@@ -86,7 +90,7 @@ class PerformanceModelCache:
         self._archive_cache = {}
 
     def predict_best_kernel(
-        self, kernel_factory: Type[Kernel], params: Any, device: str, **kernel_kwargs
+        self, kernel_factory: "KernelFactory", params: Any, device: str, **kernel_kwargs
     ) -> Kernel:
         """Return the best kernel for the given kernel class and layer parameters.
 
@@ -98,7 +102,12 @@ class PerformanceModelCache:
             return None
 
         configs = list(kernel_factory.configs(params, **kernel_kwargs))
-        return _predict_best_config(performance_model, params, configs)
+        return _predict_best_config(
+            performance_model,
+            params,
+            configs,
+            skip_params=kernel_factory.per_model_skip_params,
+        )
 
     def _get_performance_model(self, kernel_name: str, device) -> xgb.Booster:
         """Return the performance model for the given kernel, device, and architecture.
@@ -145,12 +154,12 @@ class PerformanceModelCache:
             self._model_cache[device_model_cache_key] = model
             if logger_enabled:
                 print(
-                    f"spio: loaded a performance model for {kernel_name} on device {device} with type {device_name}:{arch} from {archive_name}."
+                    f"spio: loaded perf. model for {kernel_name} on {device}/{device_name}:{arch} from {archive_name}."
                 )
 
         assert (
             model is not None
-        ), f"No performance model found for kernel {kernel_name}, device {device_name}, and architecture {arch}."
+        ), f"No performance model found for {kernel_name} on {device_name} / {device_name}:{arch}."
         return model
 
 
@@ -200,14 +209,17 @@ def _get_model_name_from_archive(
 
 @time_function("spio: predicting best kernel configuration", log_level=2)
 def _predict_best_config(
-    performance_model: xgb.Booster, params: Any, configs: List[Any]
+    performance_model: xgb.Booster,
+    params: Any,
+    configs: List[Any],
+    skip_params: List[str] = None,
 ):
     """Return the best configuration for the given parameters.
 
     Uses the given XGBoost performance model to predict the latency of each configuration
     and returns the best one.
     """
-    dm = _params_and_configs_to_dmatrix(params, configs)
+    dm = _params_and_configs_to_dmatrix(params, configs, skip_params=skip_params)
     predictions = performance_model.predict(dm)
     best_config = configs[predictions.argmin()]
     return best_config
@@ -382,12 +394,11 @@ def get_arch_performance_model_file_name(
     return f"archmodel__{arch}__{kernel}{ext}"
 
 
-def _params_and_configs_to_dmatrix(
-    params, configs, skip_params=["group_width", "stride"]
-):
+def _params_and_configs_to_dmatrix(params, configs, skip_params=None):
+    if skip_params is None:
+        skip_params = []
 
     rows = []
-
     params_flt = _flatten_dataclass(params, skip_fields=skip_params)
     for config in configs:
         config_flt = _flatten_dataclass(config)

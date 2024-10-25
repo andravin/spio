@@ -1,22 +1,27 @@
+"""A class that encapsulates the a CUDA kernel."""
+
 import torch
 
 from .. import primary_context_guard
 from ..generators import generate
 from ..compiler import compile_kernel, load_kernel
-from .launch_params import LaunchParams
 from .kernel_util import get_first_device_in_args
-from .stats import Stats
+from .launch_params import LaunchParams
 
 
 class Kernel:
+    """A class that encapsulates a CUDA kernel."""
+
     @property
     def kernel_source_file(self):
+        """Return the CUDA source file."""
         if self._kernel_source_file is None:
             return f"{self.kernel_name}.cu"
         return self._kernel_source_file
 
     @property
     def compiler_args(self):
+        """Return the arguments for the kernel compiler."""
         return (
             self.kernel_name,
             self.kernel_source_file,
@@ -30,12 +35,14 @@ class Kernel:
         kernel_name: str,
         launch_params: LaunchParams,
         kernel_source_file=None,
-        specs=[],
+        specs=None,
         params=None,
         config=None,
         src_module="spio.src",
         includes_module="spio.include",
     ):
+        if specs is None:
+            specs = []
         self._kernel_source_file = kernel_source_file
         self.kernel_name = kernel_name
         self.launch_params = launch_params
@@ -49,14 +56,17 @@ class Kernel:
         self.includes_module = includes_module
 
     def compile(self):
+        """Compile the kernel."""
         self.cubin = compile_kernel(*self.compiler_args)
 
     def load(self, device_ordinal=0, clear_cubin=True):
         """Load the compile kernel binary into a device.
 
         Args:
-            device_ordinal (int, optional): The device ordinal to load the kernel onto. Defaults to 0.
-            clear_cubin (bool, optional): Whether to clear the kernel binary after loading. Defaults to True.
+            device_ordinal (int, optional): The device ordinal to load the kernel onto.
+              Defaults to 0.
+            clear_cubin (bool, optional): Whether to clear the kernel binary after loading.
+              Defaults to True.
         """
         self.module, self.function = load_kernel(
             kernel_name=self.kernel_name,

@@ -247,4 +247,5 @@ conv2d_gw8_wgrad_kernel_factory = make_kernel_factory(
     kernel_source_file="conv2d_gw8_wgrad.cu",
     src_module="spio.src",
     includes_module="spio.include",
+    perf_model_skip_params=["group_width", "stride"],
 )
