@@ -1,3 +1,4 @@
+"""Code generator for custom index classes in CUDA kernel source code."""
 from math import prod
 from typing import Dict, Tuple, List
 from dataclasses import dataclass
@@ -18,18 +19,8 @@ class IndexSpec:
     dims: Dict[str, int]
 
     def generate(self) -> str:
+        """Generate the C++ source code for the custom index class."""
         return _generate_index(self.class_name, self.dims)
-
-
-def generate_indices(index_specs: List[IndexSpec], header_file_name: str) -> None:
-    code = _index_header()
-    code += ""
-    for index_spec in index_specs:
-        code += index_spec.generate()
-        code += "\n"
-
-    with open(header_file_name, "w") as file:
-        file.write(code)
 
 
 def _generate_index(class_name: str, dims: Dict[str, int]) -> str:
@@ -54,7 +45,7 @@ def _generate_index(class_name: str, dims: Dict[str, int]) -> str:
     return code
 
 
-def _index_header():
+def _index_header() -> str:
     """Return the C++ statement that includes the spio index header file.
 
     This file implements the C++ base template classes from which the
@@ -109,6 +100,6 @@ def _offset_to_index(d: int, name: str) -> str:
 
 
 def _tail() -> str:
-    return f"""
-    }};
+    return """
+    };
 """

@@ -1,3 +1,4 @@
+"""Kernel cache for compiled kernels."""
 from typing import Dict
 
 import torch
@@ -8,7 +9,6 @@ from ..compiler import compile_kernel_configs
 from ..util import logger_enabled
 
 from .kernel_key import KernelKey
-from .kernel_util import get_first_device_in_args
 from .performance_model_cache import PerformanceModelCache
 from .kernel import Kernel
 from .kernel_params_logger import log_kernel_params, kernel_params_logging_is_enabled

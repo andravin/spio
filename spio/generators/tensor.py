@@ -1,42 +1,47 @@
-from typing import Dict, Tuple, List
+"""Code generator for custom tensor classes in CUDA kernel source code."""
+
+from typing import Dict, Tuple
 from dataclasses import dataclass
 from math import prod
 
 from .index import _generate_index
 
+DATA_TYPE_SIZES = dict(
+    float=4,
+    float2=8,
+    float4=16,
+    unsigned=4,
+    uint2=8,
+    uint4=16,
+    half=2,
+    half2=4,
+)
+
 
 @dataclass
 class TensorSpec:
     """Code generator for custom tensor classes in CUDA kernel source code.
-    
+
     This class is used to generate custom tensor classes that map named tensor dimensions to pointers.
-    
+
     Attributes:
         class_name (str): The name of the custom tensor class.
         data_type (str): The data type of the tensor elements (e.g., float, uint4).
         dims (Dict[str, int]): A dictionary mapping dimension names to their sizes.
     """
+
     class_name: str
     data_type: str
     dims: Dict[str, int]
 
     def generate(self) -> str:
+        """Generate the C++ source code for the custom tensor class."""
         return _generate_tensor(self.class_name, self.data_type, self.dims)
 
     @property
     def num_bytes(self) -> int:
+        """Return the number of bytes required to store the tensor data."""
         return prod(self.dims.values()) * _sizeof_data_type(self.data_type)
-
-
-def generate_tensors(tensor_specs: List[TensorSpec], header_file_name: str) -> None:
-    code = _tensor_header()
-    code += ""
-    for tensor_spec in tensor_specs:
-        code += tensor_spec.generate()
-        code += "\n"
-
-    with open(header_file_name, "w") as file:
-        file.write(code)
 
 
 def _generate_tensor(class_name: str, data_type: str, dims: Dict[str, int]) -> str:
@@ -118,23 +123,13 @@ def _dim_to_pointer(class_name: str, d: int, name: str) -> str:
 
 
 def _tail() -> str:
-    return f"""
-    }};
+    return """
+    };
 """
 
 
 def _sizeof_data_type(data_type: str) -> int:
-    DataTypeSizes = dict(
-        float=4,
-        float2=8,
-        float4=16,
-        unsigned=4,
-        uint2=8,
-        uint4=16,
-        half=2,
-        half2=4,
-    )
-    return DataTypeSizes[_strip_data_type(data_type)]
+    return DATA_TYPE_SIZES[_strip_data_type(data_type)]
 
 
 def _strip_data_type(data_type: str) -> str:

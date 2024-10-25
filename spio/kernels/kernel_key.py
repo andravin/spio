@@ -1,6 +1,8 @@
+"""Kernel key and parameters for kernel caching."""
+
 from dataclasses import dataclass
 
-from typing import Any, Tuple, Type, TYPE_CHECKING
+from typing import Any, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .kernel_cache import KernelCache

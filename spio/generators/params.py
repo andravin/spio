@@ -1,3 +1,4 @@
+"""Code generator for constant parameters in CUDA kernel source code."""
 from typing import Dict, Any, Tuple
 from dataclasses import dataclass
 
@@ -16,7 +17,8 @@ class ParamsSpec:
     name_space: str
     params: Dict[str, Any]
 
-    def generate(self) -> None:
+    def generate(self) -> str:
+        """Generate the C++ code for the parameter definitions."""
         code = f"namespace {self.name_space} {{\n"
         for name, val in self.params.items():
             c_type_name, c_value = _c_type_name(val)
@@ -29,9 +31,8 @@ def _c_type_name(val: Any) -> Tuple[str, Any]:
     if isinstance(val, bool):
         # Careful, bool is int, so check for bool first.
         return "bool", "true" if val else "false"
-    elif isinstance(val, int):
+    if isinstance(val, int):
         return "int", val
-    elif isinstance(val, float):
+    if isinstance(val, float):
         return "float", val
-    else:
-        raise ValueError(f"Unsupported parameter type {type(val)}")
+    raise ValueError(f"Unsupported parameter type {type(val)}")

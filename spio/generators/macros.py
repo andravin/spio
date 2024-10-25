@@ -1,3 +1,4 @@
+"""Code generator for macros in CUDA kernel source code."""
 from typing import Dict
 from dataclasses import dataclass
 
@@ -15,6 +16,7 @@ class MacroSpec:
     macros: Dict[str, str]
 
     def generate(self) -> str:
+        """Generate the macro definitions as a string."""
         code = ""
         for name, value in self.macros.items():
             code += f"#define {name} {value}\n"

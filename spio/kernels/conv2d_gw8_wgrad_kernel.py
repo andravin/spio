@@ -1,7 +1,11 @@
+"""Define the kernel factory for the Conv2dGw8Wgrad kernel."""
+
 from dataclasses import dataclass
 from itertools import product
+from typing import Generator, Tuple, List
 
 from ..generators import (
+    GenSpecs,
     MacroSpec,
     ParamsSpec,
     IndexSpec,
@@ -18,6 +22,8 @@ from .kernel import get_full_kernel_name
 
 @dataclass(frozen=True)
 class Conv2dGw8WgradConfig:
+    """Tile configuration for the Conv2d GW8 Wgrad kernel."""
+
     groups: int = 8
     block_h: int = 16
     block_n_iters: int = 1
@@ -25,12 +31,15 @@ class Conv2dGw8WgradConfig:
     warp_s: int = None
 
 
-_kernel_name = "spio_conv2d_gw8_wgrad"
+KERNEL_NAME = "spio_conv2d_gw8_wgrad"
 
 BLOCK_Q = 8
 
 
-def _get_configs(params: Conv2dGw8Params):
+def _get_configs(
+    params: Conv2dGw8Params,
+) -> Generator[Conv2dGw8WgradConfig, None, None]:
+    """Generate tile configurations for the given layer parameters."""
     max_groups = min(params.groups, 8)
     max_warps = 32
 
@@ -79,7 +88,10 @@ def _get_configs(params: Conv2dGw8Params):
     )
 
 
-def _get_specs(params, config=None, igrad=False):
+def _get_specs(
+    params: Conv2dGw8Params, config: Conv2dGw8WgradConfig = None, **kwargs
+) -> Tuple[List[GenSpecs], LaunchParams]:
+    """Return the code generator specs and launch parameters for the Conv2d GW8 Wgrad kernel."""
     params.validate()
 
     r, s = params.R, params.S
@@ -140,7 +152,7 @@ def _get_specs(params, config=None, igrad=False):
 
     launch_params = LaunchParams(grid=blocks, block=threads)
 
-    full_kernel_name = get_full_kernel_name(_kernel_name, params)
+    full_kernel_name = get_full_kernel_name(KERNEL_NAME, params)
 
     specs = [
         MacroSpec(dict(SPIO_CONV_WGRAD_KERNEL=full_kernel_name)),
@@ -229,7 +241,7 @@ conv2d_gw8_wgrad_kernel_factory = make_kernel_factory(
     Conv2dGw8Params,
     Conv2dGw8WgradConfig,
     Conv2dStats,
-    kernel_name=_kernel_name,
+    kernel_name=KERNEL_NAME,
     configs=_get_configs,
     specs=_get_specs,
     kernel_source_file="conv2d_gw8_wgrad.cu",

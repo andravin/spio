@@ -1,7 +1,23 @@
+"""Generate CUDA code using generator specifications."""
+
+from typing import List
+
+from .gen_specs import GenSpecs
+
+
 def generate(
-    gen_specs,
+    gen_specs: List[GenSpecs],
     namespace: str = None,
-) -> None:
+) -> str:
+    """Generate CUDA code from generator specifications.
+
+    Args:
+        gen_specs: List of generator specifications.
+        namespace: Optional namespace for the generated code.
+
+    Returns:
+        Generated CUDA code as a string.
+    """
     code = _include_files()
     code += "\n"
     if namespace is not None:
@@ -30,6 +46,6 @@ namespace {namespace} {{
 
 
 def _end_namespace() -> str:
-    return f"""
-}}
+    return """
+}
 """

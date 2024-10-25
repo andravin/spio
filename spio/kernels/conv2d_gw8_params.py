@@ -1,5 +1,7 @@
+"""A module for the Conv2dGw8Params class."""
 from dataclasses import dataclass
 import re
+from typing import Tuple, Union
 
 import torch
 
@@ -25,7 +27,7 @@ class Conv2dGw8Params:
     C: int
     H: int
     W: int
-    padding: int = 1  # Also allows tuple (padding_h, padding_w)
+    padding: Union[int, Tuple[int, int]] = 1  # Also allows tuple (padding_h, padding_w)
     R: int = 3
     S: int = 3
     has_bias: bool = False

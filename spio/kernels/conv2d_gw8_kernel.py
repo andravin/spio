@@ -1,5 +1,7 @@
+"""Create the kernel factory for the Conv2d GW8 kernel."""
 from dataclasses import dataclass
 from itertools import product
+from typing import Generator
 
 from ..generators import (
     MacroSpec,
@@ -17,12 +19,14 @@ from .kernel import get_full_kernel_name
 
 @dataclass(frozen=True)
 class Conv2dGw8Config:
+    """Tile configuration for the Conv2d GW8 kernel."""
     groups: int = 8
     block_p: int = 16
     block_n: int = 1
 
 
-def _get_configs(params: Conv2dGw8Params, igrad=False):
+def _get_configs(params: Conv2dGw8Params, igrad=False) -> Generator[Conv2dGw8Config, None, None]:
+    """Generate configurations for the Conv2d GW8 kernel."""
     # igrad is unused in this function
     max_groups = min(params.groups, 8)
     block_n_values = [block_n for block_n in [1, 2, 4] if block_n <= params.N]
@@ -47,6 +51,7 @@ def _get_kernel_name(igrad=False) -> str:
 
 
 def _get_specs(params, config=None, igrad=False):
+    """Return the code generator specs and launch parameters for the Conv2d GW8 kernel."""
     params.validate()
 
     r, s = params.R, params.S

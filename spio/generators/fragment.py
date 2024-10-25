@@ -1,15 +1,39 @@
+"""Code generator for matrix fragment with named dimensions."""
 from dataclasses import dataclass
-from typing import List
 
 
 @dataclass
 class FragmentSpec:
+    """Fragment code generator.
+
+    Example:
+
+        Define a FragmentSpec in your kernel factory's specs like this:
+            FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k")
+
+        Use the generated class in your CUDA kernel like this:
+            # Get element coordinates for this thread.
+            auto lane_k2 = Acc::k2(idx.lane());
+            auto lane_qn_0 = Acc::qn(idx.lane(), 0);
+            auto lane_qn_8 = Acc::qn(idx.lane(), 1);
+
+            # Define an accumulator and initialize it to zero.
+            Acc acc;
+            acc.zero();
+    
+    Attributes:
+        class_name: Name of the fragment class.
+        fragment_type: Type of the fragment (see spio.include.spio / fragment.cuh)
+        row: Name of the row dimension.
+        col: Name of the column dimension.
+    """
     class_name: str
     fragment_type: str
     row: str
     col: str
 
     def generate(self) -> str:
+        """Generate the fragment class code."""
         return f"""
 class {self.class_name} : public spio::{self.fragment_type} {{
     public:
@@ -20,21 +44,8 @@ class {self.class_name} : public spio::{self.fragment_type} {{
 """
 
 
-def generate_fragments(
-    namespace: str, fragment_specs: List[FragmentSpec], header_file_name: str
-) -> None:
-    code = _fragment_header()
-    code += _start_namespace(namespace)
-    for fragment_spec in fragment_specs:
-        code += fragment_spec.generate()
-        code += "\n"
-    code += _end_namespace()
-    with open(header_file_name, "w") as file:
-        file.write(code)
-
-
 def _fragment_header() -> str:
-    return f"""
+    return """
 #include "spio/mma.cuh"
 """
 
@@ -47,6 +58,6 @@ namespace {namespace} {{
 
 
 def _end_namespace() -> str:
-    return f"""
-}}
+    return """
+}
 """

@@ -1,9 +1,9 @@
 """Kernel factory for creating Kernel objects for CUDA kernels."""
+
 from typing import Type, Callable, Union, List
 
-from .gen_specs import GenSpecs
+from ..generators.gen_specs import GenSpecs
 from .params import Params
-
 from .kernel import Kernel, get_full_kernel_name
 from .launch_params import LaunchParams
 from .kernel_cache import KernelCache
