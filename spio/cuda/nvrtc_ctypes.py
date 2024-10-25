@@ -1,20 +1,22 @@
-import os
-import sys
+"""Classes and functions for NVRTC (NVIDIA Runtime Compilation) using ctypes."""
+
 import ctypes
-from typing import List
+from typing import List, Tuple
 from enum import Enum
 import importlib.resources
 
 NVRTC_LIB = "libnvrtc.so.12"
 
 
-# Find the path to the NVRTC shared library.
-def _find_libnvrtc_in_sys_path() -> str:
+def _find_libnvrtc() -> str:
+    """Find the NVRTC shared library in the nvidia.cuda_nvrtc package."""
     return str(importlib.resources.files("nvidia.cuda_nvrtc.lib").joinpath(NVRTC_LIB))
 
 
 # Define the types.
 class _nvrtc_Program(ctypes.Structure):
+    """Opaque NVRTC program type."""
+
     _fields_ = []
 
 
@@ -22,7 +24,7 @@ nvrtc_Program = ctypes.POINTER(_nvrtc_Program)
 
 
 def _define_nvrtc_types(nvrtc):
-    # Define the function signatures.
+    """Define the function signatures."""
     nvrtc.nvrtcVersion.restype = ctypes.c_int
     nvrtc.nvrtcVersion.argtypes = [
         ctypes.POINTER(ctypes.c_int),
@@ -75,17 +77,19 @@ def _define_nvrtc_types(nvrtc):
 
 
 try:
-    lib_path = _find_libnvrtc_in_sys_path()
+    lib_path = _find_libnvrtc()
 except FileNotFoundError as e:
     raise Exception(
         f"Could not find {NVRTC_LIB}. Did you install PyTorch with CUDA support?"
     ) from e
-nvrtc = ctypes.CDLL(lib_path)
-_define_nvrtc_types(nvrtc)
+_nvrtc = ctypes.CDLL(lib_path)
+_define_nvrtc_types(_nvrtc)
 
 
 # Define the NVRTC error codes.
 class NVRTCErrorCode(Enum):
+    """NVRTC error codes."""
+
     NVRTC_SUCCESS = 0
     NVRTC_ERROR_OUT_OF_MEMORY = 1
     NVRTC_ERROR_PROGRAM_CREATION_FAILURE = 2
@@ -101,19 +105,19 @@ class NVRTCErrorCode(Enum):
     NVRTC_ERROR_TIME_FILE_WRITE_FAILED = 12
 
 
-def version():
+def version() -> Tuple[int, int]:
     """Return the NVRTC version as a (major, minor) tuple."""
     major = ctypes.c_int()
     minor = ctypes.c_int()
-    result = nvrtc.nvrtcVersion(ctypes.byref(major), ctypes.byref(minor))
+    result = _nvrtc.nvrtcVersion(ctypes.byref(major), ctypes.byref(minor))
     if result != 0:
-        raise Exception("Failed to get NVRTC version")
+        raise ValueError("Failed to get NVRTC version")
     return major.value, minor.value
 
 
-def error_string(code: int):
+def error_string(code: int) -> str:
     """Return the error string for the given NVRTC error code."""
-    return nvrtc.nvrtcGetErrorString(code).decode("utf-8")
+    return _nvrtc.nvrtcGetErrorString(code).decode("utf-8")
 
 
 class NVRTCError(Exception):
@@ -131,13 +135,20 @@ def _check(err: int):
 
 
 class Program:
+    """NVRTC program class for compiling CUDA code."""
+
     def __init__(
         self,
         src: str,
         name: str,
-        headers: List[str] = [],
-        include_names: List[str] = [],
+        headers: List[str] = None,
+        include_names: List[str] = None,
     ):
+        """Create a new NVRTC program."""
+        if headers is None:
+            headers = []
+        if include_names is None:
+            include_names = []
         self.program = nvrtc_Program()
         num_headers = len(headers)
         headers_arr = (ctypes.c_char_p * num_headers)()
@@ -145,7 +156,7 @@ class Program:
         include_names_arr = (ctypes.c_char_p * len(include_names))()
         include_names_arr[:] = [name.encode("utf-8") for name in include_names]
         _check(
-            nvrtc.nvrtcCreateProgram(
+            _nvrtc.nvrtcCreateProgram(
                 ctypes.byref(self.program),
                 src.encode("utf-8"),
                 name.encode("utf-8"),
@@ -156,30 +167,36 @@ class Program:
         )
 
     def __del__(self):
-        nvrtc.nvrtcDestroyProgram(ctypes.byref(self.program))
+        _nvrtc.nvrtcDestroyProgram(ctypes.byref(self.program))
 
-    def compile(self, options: List[str] = []):
+    def compile(self, options: List[str] = None):
+        """Compile the program with the given options."""
+        if options is None:
+            options = []
         utf8_options = [option.encode("utf-8") for option in options]
         options = (ctypes.c_char_p * len(options))(*utf8_options)
-        _check(nvrtc.nvrtcCompileProgram(self.program, len(options), options))
+        _check(_nvrtc.nvrtcCompileProgram(self.program, len(options), options))
 
-    def ptx(self):
+    def ptx(self) -> str:
+        """Return the PTX code as a string."""
         size = ctypes.c_size_t()
-        _check(nvrtc.nvrtcGetPTXSize(self.program, ctypes.byref(size)))
+        _check(_nvrtc.nvrtcGetPTXSize(self.program, ctypes.byref(size)))
         ptx = ctypes.create_string_buffer(size.value)
-        _check(nvrtc.nvrtcGetPTX(self.program, ptx))
+        _check(_nvrtc.nvrtcGetPTX(self.program, ptx))
         return ptx.value.decode("utf-8")
 
     def cubin(self) -> bytes:
+        """Return the CUBIN code as bytes."""
         size = ctypes.c_size_t()
-        _check(nvrtc.nvrtcGetCUBINSize(self.program, ctypes.byref(size)))
+        _check(_nvrtc.nvrtcGetCUBINSize(self.program, ctypes.byref(size)))
         cubin = ctypes.create_string_buffer(size.value)
-        _check(nvrtc.nvrtcGetCUBIN(self.program, cubin))
+        _check(_nvrtc.nvrtcGetCUBIN(self.program, cubin))
         return cubin.raw
 
-    def log(self):
+    def log(self) -> str:
+        """Return the compilation log as a string."""
         size = ctypes.c_size_t()
-        _check(nvrtc.nvrtcGetProgramLogSize(self.program, ctypes.byref(size)))
+        _check(_nvrtc.nvrtcGetProgramLogSize(self.program, ctypes.byref(size)))
         log = ctypes.create_string_buffer(size.value)
-        _check(nvrtc.nvrtcGetProgramLog(self.program, log))
+        _check(_nvrtc.nvrtcGetProgramLog(self.program, log))
         return log.value.decode("utf-8")

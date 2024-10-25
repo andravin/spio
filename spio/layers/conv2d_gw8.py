@@ -1,3 +1,4 @@
+"""PyTorch module for Conv2d with group width equal to 8."""
 from typing import Tuple
 
 import torch
@@ -8,6 +9,16 @@ from ..kernels import Conv2dGw8Params
 
 
 class Conv2dGw8(nn.Conv2d):
+    """PyTorch module for Conv2d with group width equal to 8.
+
+    This module implements 2D convolution with group width equal to 8. It is derived from nn.Conv2d
+    and calls the conv2d_gw8 function for the forward pass, which in turn calls a custom CUDA kernel.
+
+    The function is designed for channels last memory format and float16 precision. The weights
+    are maintained in float32 and we use AMP (Automatic Mixed Precision) for conversion
+    to float16. Bias is optional and will use float32 if present.
+    """
+
     Params = Conv2dGw8Params
 
     @staticmethod
@@ -33,10 +44,8 @@ class Conv2dGw8(nn.Conv2d):
                 module.out_channels,
                 module.kernel_size,
                 module.stride,
-                module.padding,
                 module.dilation,
                 module.groups,
-                module.bias is not None,
             )
         )
 
@@ -46,13 +55,10 @@ class Conv2dGw8(nn.Conv2d):
         out_channels,
         kernel_size,
         stride=1,
-        padding=0,
         dilation=1,
         groups=1,
-        bias=True,
         padding_mode="zeros",
-        device=None,
-        dtype=None,
+        **kwargs,
     ) -> bool:
         """Check if the arguments match the requirements for a Conv2dGw8 module.
 
@@ -78,6 +84,7 @@ class Conv2dGw8(nn.Conv2d):
 
     @staticmethod
     def from_torch_module(conv2d: nn.Conv2d):
+        """Create a Conv2dGw8 module from a nn.Conv2d module."""
         if not Conv2dGw8.match(conv2d):
             raise ValueError(f"Conv2d {conv2d} does not match Conv2dGw8")
         module = Conv2dGw8(
@@ -95,7 +102,9 @@ class Conv2dGw8(nn.Conv2d):
             module.bias.data.copy_(conv2d.bias)
         return module
 
-    def forward(self, x):
+    # pylint: disable=arguments-renamed
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass for the Conv2dGw8 module."""
         padding_y, padding_x = _get_pair(self.padding)
         return conv2d_gw8(
             x,

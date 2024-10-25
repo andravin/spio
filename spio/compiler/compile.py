@@ -1,7 +1,10 @@
+"""Function for compling CUDA source code into binary."""
+
 import importlib.resources
 from importlib.abc import Traversable
+from typing import List, Dict, Tuple
 
-from ..cuda.nvrtc_ctypes import Program, version as nvrtc_version
+from ..cuda.nvrtc_ctypes import Program
 
 from .arch import sm_from_arch
 
@@ -13,15 +16,27 @@ def _find_cuda_runtime_include_dir() -> str:
 CUDA_RUNTIME_INCLUDE_PATH = _find_cuda_runtime_include_dir()
 
 
-def compile(
-    src_file:Traversable,
-    includes=[],
-    arch=None,
-    device_debug=False,
-    lineinfo=False,
-    header_dict=None,
+def compile_cuda(
+    src_file: Traversable,
+    includes: List[str] = None,
+    arch: Tuple[int, int] = None,
+    device_debug: bool = False,
+    lineinfo: bool = False,
+    header_dict: Dict[str, str] = None,
 ):
+    """Compile CUDA source code and return the resulting cubin.
+
+    Args:
+        src_file: The CUDA source file to compile.
+        includes: Additional include directories.
+        arch: The GPU architecture to target.
+        device_debug: Whether to include debugging information.
+        lineinfo: Whether to include line information.
+        header_dict: A dictionary of header file names and contents.
+    """
     arch = sm_from_arch(arch)
+    if includes is None:
+        includes = []
     includes = includes + [CUDA_RUNTIME_INCLUDE_PATH]
     options = []
     if arch is not None:

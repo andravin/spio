@@ -1,3 +1,4 @@
+"""Subpackage for kernels."""
 from .conv2d_gw8_params import Conv2dGw8Params
 from .conv2d_gw8_kernel import conv2d_gw8_kernel_factory, Conv2dGw8Config
 from .conv2d_gw8_wgrad_kernel import (
@@ -16,3 +17,4 @@ from .kernel_params_logger import (
 )
 from .kernel_key import KernelParams, KernelKey
 from .kernel import Kernel, get_full_kernel_name
+from .kernel_factory import KernelFactory

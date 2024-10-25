@@ -1,5 +1,6 @@
-from typing import List, Tuple, Optional
-import functools
+"""Custom conv2d_gw8 function for PyTorch."""
+
+from typing import List, Tuple, Any
 
 import torch
 import torch.amp
@@ -13,7 +14,7 @@ from ..kernels import (
 
 @torch.library.custom_op("spio::conv2d_gw8", mutates_args=())
 def conv2d_gw8(
-    input: torch.Tensor,
+    inputs: torch.Tensor,
     weight: torch.Tensor,
     bias: torch.Tensor = None,
     stride: int = 1,
@@ -22,37 +23,47 @@ def conv2d_gw8(
     dilation: int = 1,
     groups: int = 1,
 ) -> torch.Tensor:
-    assert input.dtype == torch.float16
+    """Custom conv2d_gw8 function.
+
+    Implements conv2d with group width equal to 8. Uses channels last memory format
+    and float16 precision.
+
+    Args:
+        input: Input tensor of shape (N, C, H, W).
+        weight: Weight tensor of shape (C, 8, R, S).
+        bias: Optional bias tensor of shape (C,).
+        stride: Stride for the convolution. Must equal 1.
+        padding_y: Padding for the height dimension.
+        padding_x: Padding for the width dimension.
+        dilation: Dilation for the convolution. Must equal 1.
+        groups: Number of groups for the convolution. Must equal C // 8.
+
+    Returns:
+        Output tensor of shape (N, C, P, Q).
+    """
+    assert inputs.dtype == torch.float16
     assert weight.dtype == torch.float16
     assert bias is None or bias.dtype == torch.float32
-    params = Conv2dGw8Params.from_tensors(input, weight, bias, (padding_y, padding_x))
+    assert stride == 1 or stride == (1, 1)
+    assert dilation == 1 or dilation == (1, 1)
+    assert groups == inputs.shape[1] // 8
+    params = Conv2dGw8Params.from_tensors(inputs, weight, bias, (padding_y, padding_x))
     output = torch.empty(
         params.output_shape,
-        device=input.device,
+        device=inputs.device,
         dtype=torch.float16,
         memory_format=torch.channels_last,
     )
-    args = (output, input, weight, bias)
+    args = (output, inputs, weight, bias)
     args = _to_channels_last(*args)
-    kernel = conv2d_gw8_kernel_factory.get_kernel(params, input.device)
+    kernel = conv2d_gw8_kernel_factory.get_kernel(params, inputs.device)
     kernel(*args)
     return output
 
 
-def _to_channels_last(*args):
-    """ "Convert all tensor arguments to channels_last memory format."""
-    return tuple(
-        (
-            t.contiguous(memory_format=torch.channels_last)
-            if isinstance(t, torch.Tensor) and len(t.shape) == 4
-            else t
-        )
-        for t in args
-    )
-
-
 # See discussion at https://github.com/pytorch/pytorch/issues/137033
 def conv2d_gw8_autocast(ks, input, weight, bias, *args, **kwargs):
+    """Autocast wrapper for conv2d_gw8."""
     input_dtype = input.dtype
     input = input.to(dtype=torch.float16)
     weight = weight.to(dtype=torch.float16)
@@ -69,22 +80,26 @@ def conv2d_gw8_autocast(ks, input, weight, bias, *args, **kwargs):
 
 @conv2d_gw8.register_fake
 def _(
-    input,
+    inputs,
     weight,
     bias=None,
     stride: int = 1,
     padding_y: int = 0,
     padding_x: int = 0,
-    dilation=1,
-    groups=1,
+    dilation: int = 1,
+    groups: int = 1,
 ):
-    params = Conv2dGw8Params.from_tensors(input, weight, bias, (padding_y, padding_x))
-    return input.new_empty(params.output_shape).to(memory_format=torch.channels_last)
+    """FakeTensor implementation of conv2d_gw8."""
+    assert stride == 1 or stride == (1, 1)
+    assert dilation == 1 or dilation == (1, 1)
+    assert groups == inputs.shape[1] // 8
+    params = Conv2dGw8Params.from_tensors(inputs, weight, bias, (padding_y, padding_x))
+    return inputs.new_empty(params.output_shape).to(memory_format=torch.channels_last)
 
 
 @torch.library.custom_op("spio::conv2d_gw8_backward", mutates_args=())
 def conv2d_gw8_backward_op(
-    input: torch.Tensor,
+    inputs: torch.Tensor,
     weight: torch.Tensor,
     bias: torch.Tensor,
     grad_output: torch.Tensor,
@@ -94,24 +109,25 @@ def conv2d_gw8_backward_op(
     needs_weight_grad: bool,
     needs_bias_grad: bool,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Backward function for conv2d_gw8."""
 
     assert grad_output.dtype == torch.float16
-    assert input.dtype == torch.float16
+    assert inputs.dtype == torch.float16
     assert weight.dtype == torch.float16
 
-    grad_output, input, weight = _to_channels_last(grad_output, input, weight)
+    grad_output, inputs, weight = _to_channels_last(grad_output, inputs, weight)
 
     params = Conv2dGw8Params.from_tensors(
-        input, weight, bias, padding=(padding_y, padding_x)
+        inputs, weight, bias, padding=(padding_y, padding_x)
     )
 
     if needs_weight_grad:
         # The grad_weight kernel requires that the grad_weight tensor is initialized to zero.
         # Its data-type is torch.float32.
         grad_weight = torch.zeros_like(weight, dtype=torch.float32)
-        args = (grad_weight, input, grad_output)
+        args = (grad_weight, inputs, grad_output)
         grad_weight_kernel = conv2d_gw8_wgrad_kernel_factory.get_kernel(
-            params, input.device
+            params, inputs.device
         )
         grad_weight_kernel(*args)
     else:
@@ -125,10 +141,10 @@ def conv2d_gw8_backward_op(
         grad_bias = None
 
     if needs_input_grad:
-        grad_input = torch.empty_like(input)
+        grad_input = torch.empty_like(inputs)
         args = (grad_input, grad_output, weight, None)
         grad_input_kernel = conv2d_gw8_kernel_factory.get_kernel(
-            params, input.device, igrad=True
+            params, inputs.device, igrad=True
         )
         grad_input_kernel(*args)
     else:
@@ -138,19 +154,17 @@ def conv2d_gw8_backward_op(
 
 @conv2d_gw8_backward_op.register_fake
 def _(
-    input,
+    inputs,
     weight,
     bias,
-    grad_output,
-    padding_y,
-    padding_x,
+    _grad_output,
+    _padding_y,
+    _padding_x,
     needs_input_grad,
     needs_weight_grad,
     needs_bias_grad,
 ):
-    params = Conv2dGw8Params.from_tensors(
-        input, weight, bias, padding=(padding_y, padding_x)
-    )
+    """FakeTensor implementation of conv2d_gw8_backward."""
     if needs_weight_grad:
         grad_weight = weight.new_empty(weight.shape).to(
             memory_format=torch.channels_last
@@ -164,14 +178,17 @@ def _(
         grad_bias = None
 
     if needs_input_grad:
-        grad_input = input.new_empty(input.shape).to(memory_format=torch.channels_last)
+        grad_input = inputs.new_empty(inputs.shape).to(
+            memory_format=torch.channels_last
+        )
     else:
         grad_input = None
     return grad_input, grad_weight, grad_bias
 
 
 def conv2d_gw8_backward(ctx, grad_output):
-    input, weight, bias = ctx.saved_tensors
+    """Backward function for conv2d_gw8."""
+    inputs, weight, bias = ctx.saved_tensors
 
     padding_y = ctx.padding_y
     padding_x = ctx.padding_x
@@ -181,7 +198,7 @@ def conv2d_gw8_backward(ctx, grad_output):
     needs_bias_grad = ctx.needs_input_grad[2]
 
     grad_input, grad_weight, grad_bias = conv2d_gw8_backward_op(
-        input,
+        inputs,
         weight,
         bias,
         grad_output,
@@ -196,23 +213,18 @@ def conv2d_gw8_backward(ctx, grad_output):
 
 
 def conv2d_gw8_setup_context(ctx, inputs, output):
-    """Setup the context for the conv2d_gw8 custom op.
-
-    Note: Our _custom_setup_context decorator is a workaround for the missing amp setup_context decorator for custom ops.
-    It has limited support for torch.compile. It does not cast the input and weight tensors are cast to float16.
-    We use an assert to ensure that the input and weight tensors are in float16.
-    """
-    input, weight, bias, stride, padding_y, padding_x, *_ = inputs
+    """Setup the context for the conv2d_gw8 custom op."""
+    input_tensor, weight, bias, _, padding_y, padding_x, *_ = inputs
 
     # Ensure that the tensor are float16.
-    assert input.dtype == torch.float16
+    assert input_tensor.dtype == torch.float16
     assert weight.dtype == torch.float16
     if bias is not None:
         assert bias.dtype == torch.float32
 
-    _check_channels_last([input, weight, bias])
+    _check_channels_last([input_tensor, weight, bias])
 
-    ctx.save_for_backward(input, weight, bias)
+    ctx.save_for_backward(input_tensor, weight, bias)
     ctx.padding_y = padding_y
     ctx.padding_x = padding_x
 
@@ -226,7 +238,20 @@ m = torch.library.Library("spio", "FRAGMENT")
 m.impl("conv2d_gw8", conv2d_gw8_autocast, "AutocastCUDA", with_keyset=True)
 
 
-def _check_channels_last(args):
+def _to_channels_last(*args) -> List[Any]:
+    """ "Convert all 4-D tensors to channels_last memory format."""
+    return tuple(
+        (
+            t.contiguous(memory_format=torch.channels_last)
+            if isinstance(t, torch.Tensor) and len(t.shape) == 4
+            else t
+        )
+        for t in args
+    )
+
+
+def _check_channels_last(args: List[Any]):
+    """Assert that all 4-D tensors are in channels_last memory format."""
     for arg in args:
         if isinstance(arg, torch.Tensor) and len(arg.shape) == 4:
             assert arg.is_contiguous(

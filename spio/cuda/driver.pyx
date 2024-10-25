@@ -1,3 +1,4 @@
+"""Classes for CUDA driver API using Cython."""
 from spio.cuda cimport cdriver
 from cpython.bytes cimport PyBytes_FromString
 
@@ -9,6 +10,7 @@ cdef _check(cdriver.CUresult status):
         raise ValueError(f"CUDA error: " + py_err_str)
 
 cdef class Function:
+    """CUDA kernel function wrapper."""
     cdef cdriver.CUfunction _c_function
 
     def __cinit__(self):
@@ -18,6 +20,7 @@ cdef class Function:
         self._c_function = c_function
 
     def launch(self, grid, block, args):
+        """Launch the CUDA kernel function."""
         cdef cdriver.CUdeviceptr arg_ptrs[16]
         cdef int arg_ints[16]
         cdef float arg_floats[16]
@@ -53,6 +56,7 @@ cdef class Function:
         ))
 
 cdef class Module:
+    """CUDA module wrapper."""
     cdef cdriver.CUmodule _c_module
 
     def __cinit__(self):
@@ -62,18 +66,22 @@ cdef class Module:
         self.unload()
 
     def load(self, fname):
+        """Load a CUDA module from file."""
         _check(cdriver.cuModuleLoad(&self._c_module, fname.encode('utf-8')))
 
     def unload(self):
+        """Unload the CUDA module."""
         if self._c_module is not NULL:
             _check(cdriver.cuModuleUnload(self._c_module))
             self._c_module = NULL
 
     def load_data(self, image):
+        """Load a CUDA module from binary data."""
         cdef char *c_image = image
         _check(cdriver.cuModuleLoadData(&self._c_module, c_image))
 
     def get_function(self, name):
+        """Get a function from the CUDA module."""
         cdef cdriver.CUfunction _c_function
         _check(cdriver.cuModuleGetFunction(&_c_function, self._c_module, name.encode('utf-8')))
         f = Function()
@@ -82,6 +90,11 @@ cdef class Module:
 
 
 cdef class PrimaryContextGuard:
+    """CUDA primary context guard.
+    
+    This class gets and retains the primary context for a given device.
+    It releases the context when the object is deleted.
+    """
     cdef cdriver.CUcontext _c_context
     cdef cdriver.CUdevice _c_device
 
@@ -105,19 +118,24 @@ cdef class PrimaryContextGuard:
     def __del__(self):
         cdriver.cuDevicePrimaryCtxRelease(self._c_device)
 
+
 def init():
+    """Initialize the CUDA driver API."""
     _check(cdriver.cuInit(0))
 
 
 def ctx_synchronize():
+    """Synchronize the current CUDA context."""
     _check(cdriver.cuCtxSynchronize())
 
 def get_ctx_api_version():
+    """Get the CUDA context API version."""
     cdef unsigned int version
     _check(cdriver.cuCtxGetApiVersion(NULL, &version))
     return version
 
 def get_driver_version():
+    """Get the CUDA driver version."""
     cdef int version
     _check(cdriver.cuDriverGetVersion(&version))
     return version

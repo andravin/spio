@@ -1,23 +1,37 @@
-from typing import Tuple
+"""Functions for compiling and loading CUDA kernels."""
+
+from typing import Tuple, Dict
 import importlib.resources
 
 import torch
 
 from .. import primary_context_guard
 from ..cuda.driver import Module, Function
-from .compile import compile
+from .compile import compile_cuda
 
 
 def compile_kernel(
-    kernel_name=None,
-    source_file_name=None,
-    header_dict=None,
-    src_module="spio.src",
-    includes_module="spio.include",
-    arch=None,
-    debug=False,
-    lineinfo=False,
+    kernel_name: str = None,
+    source_file_name: str = None,
+    header_dict: Dict[str, str] = None,
+    src_module: str = "spio.src",
+    includes_module: str = "spio.include",
+    arch: Tuple[int, int] = None,
+    debug: bool = False,
+    lineinfo: bool = False,
 ):
+    """Compile a CUDA kernel from source file and return the cubin.
+
+    Args:
+        kernel_name (str): Name of the kernel to compile.
+        source_file_name (str): Name of the source file containing the kernel.
+        header_dict (dict): Dictionary of header files to include.
+        src_module (str): Module containing the source file.
+        includes_module (str): Module containing the include files.
+        arch (tuple): GPU architecture (e.g., (8, 0) for sm_80).
+        debug (bool): Whether to include debug information.
+        lineinfo (bool): Whether to include line information.
+    """
     assert arch is not None, "Must specify GPU architecture for kernel compilation."
     if arch[0] < 8:
         raise ValueError(
@@ -25,7 +39,7 @@ def compile_kernel(
         )
     cuda_source_file = importlib.resources.files(src_module).joinpath(source_file_name)
     includes_dir = str(importlib.resources.files(includes_module))
-    return compile(
+    return compile_cuda(
         cuda_source_file,
         includes=[includes_dir],
         arch=arch,
@@ -38,6 +52,13 @@ def compile_kernel(
 def load_kernel(
     kernel_name: str, cubin: str = None, device_ordinal: int = 0
 ) -> Tuple[Module, Function]:
+    """Load a compiled CUDA kernel from cubin.
+
+    Args:
+        kernel_name (str): Name of the kernel to load.
+        cubin (str): The CUDA binary.
+        device_ordinal (int): The device number on which to load the kernel.
+    """
     primary_context_guard.set_device(device_ordinal)
     module = Module()
     module.load_data(cubin)
@@ -46,15 +67,16 @@ def load_kernel(
 
 
 def compile_and_load_kernel(
-    kernel_name=None,
-    source_file_name=None,
-    header_dict=None,
-    src_module="spio.src",
-    includes_module="spio.include",
-    device_ordinal=0,
-    debug=False,
-    lineinfo=False,
+    kernel_name: str = None,
+    source_file_name: str = None,
+    header_dict: Dict[str, str] = None,
+    src_module: str = "spio.src",
+    includes_module: str = "spio.include",
+    device_ordinal: int = 0,
+    debug: bool = False,
+    lineinfo: bool = False,
 ):
+    """Compile and load a CUDA kernel."""
     arch = torch.cuda.get_device_capability(device_ordinal)
     if source_file_name is None:
         source_file_name = f"{kernel_name}.cu"

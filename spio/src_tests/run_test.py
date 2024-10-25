@@ -1,3 +1,4 @@
+"""Helper function for implementing kernel and operator unit tests."""
 import torch
 
 from ..compiler import compile_kernel_configs
@@ -94,6 +95,7 @@ def run_grad_kernel_test(
 
 
 def run_opcheck_test(function, params, device="cuda"):
+    """Check whether a PyTorch custom operator was registered correctly."""
     reflection = get_function_reflection(function)
     args = reflection.make_args(params, device=device)
     function_args = reflection.arrange_args(args)

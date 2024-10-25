@@ -275,7 +275,7 @@ def main():
         "--max-random-samples",
         type=int,
         default=200,
-        help="The maximum number of random samples to take from the kernel configurations.",
+        help="The number of random samples to take from kernel configs.",
     )
     args = parser.parse_args()
 
