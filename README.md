@@ -13,6 +13,10 @@ This project implements kernels for training.
 
 The first Spio kernel is for grouped convolution, a prime example of a promising layer that has fallen into disuse because of the inefficiency of the current implementation. We focus on group-width equal to eight and stride 1, as used in our ConvFirst model. Spio is compatible with NVIDIA Ampere (sm_80 and sm_86) and Ada (sm_89) GPUs.
 
+### Audience
+
+At this early stage of development, we hope Spio will already be interesting to those performing cnvnet kernel R&D. As we add support for other types of layers, we aim to make Spio helpful for model researchers too.
+
 ## Benchmarks
 
 The cuDNN conv2d kernels use an "implicit gemm" algorithm that tiles the input tensor with horizontal strips. The support halo for the convolution kernel causes overlapping reads of the input tensor, and when the tile is a 1-D strip, the overlap is larger than the tile. This results in excess global memory traffic.
