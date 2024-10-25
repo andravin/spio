@@ -12,7 +12,8 @@ class Conv2dGw8(nn.Conv2d):
     """PyTorch module for Conv2d with group width equal to 8.
 
     This module implements 2D convolution with group width equal to 8. It is derived from nn.Conv2d
-    and calls the conv2d_gw8 function for the forward pass, which in turn calls a custom CUDA kernel.
+    and calls the conv2d_gw8 function for the forward pass,
+    which in turn calls a custom CUDA kernel.
 
     The function is designed for channels last memory format and float16 precision. The weights
     are maintained in float32 and we use AMP (Automatic Mixed Precision) for conversion
@@ -25,8 +26,11 @@ class Conv2dGw8(nn.Conv2d):
     def make(*args, **kwargs) -> nn.Module:
         """Create a Conv2dGw8 module if the parameters match the requirements.
 
-        The arguments list is the same as for nn.Conv2d which is also the same as Conv2dGw8.match_args(), below.
-        Returns None if the parameters do not match the requirements. Otherwise, returns a Conv2dGw8 module.
+        The arguments list is the same as for nn.Conv2d which is also the same as
+        Conv2dGw8.match_args(), below. 
+        
+        Returns None if the parameters do not match the requirements.
+        Otherwise, returns a Conv2dGw8 module.
         """
         if Conv2dGw8.match_args(*args, **kwargs):
             return Conv2dGw8(*args, **kwargs)
