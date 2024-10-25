@@ -134,3 +134,5 @@ the local package would result in an import error. Therefore, running `cd tests`
 ## Using Spio with Timm
 
 Spio is integrated with [our fork](https://github.com/andravin/pytorch-image-models.git) of pytorch-image-models (timm) on the `spio_dev` branch. Add the `--spio` option to the command line of `benchmark.py`, `validate.py`, or `train.py`, and timm will use the Spio implementation for any supported operations.
+
+Set the environment variable `export SPIO_LOGGER=1` to cause Spio to print diagnostic info to the console.
