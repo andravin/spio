@@ -15,7 +15,7 @@ The first Spio kernel is for grouped convolution, a prime example of a promising
 
 ### Audience
 
-At this early stage of development, we hope Spio will already be interesting to those performing cnvnet kernel R&D. As we add support for other types of layers, we aim to make Spio helpful for model researchers too.
+At this early stage of development, we hope Spio will be interesting to those performing convnet kernel R&D. As we add support for other types of layers, we aim to make Spio helpful for model researchers too.
 
 ## Benchmarks
 
