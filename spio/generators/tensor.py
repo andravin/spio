@@ -7,6 +7,15 @@ from .index import _generate_index
 
 @dataclass
 class TensorSpec:
+    """Code generator for custom tensor classes in CUDA kernel source code.
+    
+    This class is used to generate custom tensor classes that map named tensor dimensions to pointers.
+    
+    Attributes:
+        class_name (str): The name of the custom tensor class.
+        data_type (str): The data type of the tensor elements (e.g., float, uint4).
+        dims (Dict[str, int]): A dictionary mapping dimension names to their sizes.
+    """
     class_name: str
     data_type: str
     dims: Dict[str, int]

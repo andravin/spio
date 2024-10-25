@@ -1,8 +1,29 @@
-from typing import Type, Callable, Union, List
+from typing import Type, Callable, Union, List, Protocol
 
 from .kernel import Kernel, get_full_kernel_name
 from .launch_params import LaunchParams
 from .kernel_cache import KernelCache
+
+
+class GenSpecs(Protocol):
+    """Protocol for kernel specs.
+
+    Kernel specs are code generators for named tensors, constant variables, macros,
+    and other kernel-specific structures that are used in the CUDA kernel source code.
+
+    See classes in spio.generators for examples."""
+
+    def generate(self) -> str: ...
+
+
+class Params(Protocol):
+    """Protocol for layer parameters."""
+
+    def encode(self) -> str: ...
+    @classmethod
+    def decode(cls, string: str) -> "Params": ...
+    def is_valid(self) -> bool: ...
+    def validate(self) -> None: ...
 
 
 class KernelFactory:
@@ -122,7 +143,7 @@ def make_kernel_factory(
     stats_cls: Type = None,
     kernel_name: Union[str, Callable[..., str]] = None,
     configs: Union[List, Callable[..., List]] = None,
-    specs: Union[List, Callable[..., List]] = None,
+    specs: Union[List, Callable[..., List[GenSpecs]]] = None,
     kernel_source_file: Union[str, Callable[..., str]] = None,
     launch_params: Union[LaunchParams, Callable[..., LaunchParams]] = None,
     src_module: str = "spio.src",
@@ -131,8 +152,8 @@ def make_kernel_factory(
     """Return a new KernelFactory object for a CUDA kernel.
 
     All callable arguments must be functions that take (params, **kwargs) arguments
-    and return the corresponding values. 
-    
+    and return the corresponding values.
+
     Args:
         params_cls: The class for the layer parameters.
         config_cls: The class for the kernel configuration.

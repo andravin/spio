@@ -5,6 +5,15 @@ from dataclasses import dataclass
 
 @dataclass
 class IndexSpec:
+    """Code generator for custom index classes in CUDA kernel source code.
+    
+    This class is used to generate custom index classes that map named tensor dimensions to offsets.
+    Conversely, it can also map offsets back to named tensor dimensions.
+    
+    Attributes:
+        class_name (str): The name of the custom index class.
+        dims (Dict[str, int]): A dictionary mapping dimension names to their sizes.
+    """
     class_name: str
     dims: Dict[str, int]
 
