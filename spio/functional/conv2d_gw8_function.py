@@ -215,10 +215,12 @@ def conv2d_gw8_setup_context(ctx, inputs, output):
     """Setup the context for the conv2d_gw8 custom op."""
     input_tensor, weight, bias, _, padding_y, padding_x, *_ = inputs
 
-    # Ensure that the tensor are float16.
+    # Ensure that the tensor are float16 ..
     assert input_tensor.dtype == torch.float16
     assert weight.dtype == torch.float16
+    assert output.dtype == torch.float16
     if bias is not None:
+        # .. except for the bias, which is float32.
         assert bias.dtype == torch.float32
 
     ctx.save_for_backward(input_tensor, weight, bias)
