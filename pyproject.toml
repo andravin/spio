@@ -1,3 +1,3 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "Cython", "nvidia-cuda-runtime-cu12"]
+requires = ["setuptools>=42", "wheel", "Cython", "nvidia-cuda-runtime-cu12", "importlib_resources"]
 build-backend = "setuptools.build_meta"

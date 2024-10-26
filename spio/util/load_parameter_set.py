@@ -3,8 +3,14 @@
 import importlib
 from typing import List, Type, TYPE_CHECKING
 from dataclasses import dataclass
+import sys
 
 from .parse_dataclass import parse_dataclass
+
+if sys.version_info >= (3, 9):
+    from importlib.resources import files as importlib_resources_files
+else:
+    from importlib_resources import files as importlib_resources_files
 
 if TYPE_CHECKING:
     from ..kernels import Params
@@ -43,7 +49,7 @@ def _load_dataclasses_from_resource(
         return []
     dataclasses = {d.__name__: d for d in dataclasses}
     params_lst = []
-    with importlib.resources.files("spio.src_tests").joinpath(resource_name).open(
+    with importlib_resources_files("spio.src_tests").joinpath(resource_name).open(
         "r"
     ) as f:
         for line in f:

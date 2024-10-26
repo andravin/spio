@@ -1,7 +1,12 @@
 """Functions for compiling and loading CUDA kernels."""
 
 from typing import Tuple, Dict
-import importlib.resources
+import sys
+
+if sys.version_info >= (3, 9):
+    from importlib.resources import files as importlib_resources_files
+else:
+    from importlib_resources import files as importlib_resources_files
 
 import torch
 
@@ -37,8 +42,8 @@ def compile_kernel(
         raise ValueError(
             "Minimum supported GPU compute capability is sm_80 (Ampere or newer)."
         )
-    cuda_source_file = importlib.resources.files(src_module).joinpath(source_file_name)
-    includes_dir = str(importlib.resources.files(includes_module))
+    cuda_source_file = importlib_resources_files(src_module).joinpath(source_file_name)
+    includes_dir = str(importlib_resources_files(includes_module))
     return compile_cuda(
         cuda_source_file,
         includes=[includes_dir],

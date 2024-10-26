@@ -7,23 +7,33 @@ work in both C++ and CUDA programs.
 
 from subprocess import CalledProcessError
 from tempfile import NamedTemporaryFile
-import importlib.resources
+import sys
 
 import pytest
 
 import spio.generators
 import spio.compiler
 
+if sys.version_info >= (3, 9):
+    from importlib.resources import files as importlib_resources_files
+else:
+    from importlib_resources import files as importlib_resources_files
+
+
 CPP_SOURCES = ["test_index.cpp"]
 
 
-def compile_cpp_tests(extra_cpp_test_files=[]):
+def compile_cpp_tests(extra_cpp_test_files=None):
     """Compile C++ tests with NVCC."""
+    if extra_cpp_test_files is None:
+        extra_cpp_test_files = []
     includes = [
-        importlib.resources.files("spio.include"),
-        importlib.resources.files("spio.srct_tests")
+        importlib_resources_files("spio.include"),
+        importlib_resources_files("spio.src_tests"),
     ]
-    sources = [spio.compiler.spio_test_src_path(src) for src in CPP_SOURCES] + extra_cpp_test_files
+    sources = [
+        importlib_resources_files("spio_src_tests") / src for src in CPP_SOURCES
+    ] + extra_cpp_test_files
     includes = [str(include) for include in includes]
     return spio.compiler.compile_with_nvcc(sources=sources, includes=includes, run=True)
 

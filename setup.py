@@ -1,15 +1,20 @@
 """Setup script for the spio package."""
 
-import importlib.resources
+import sys
 
 from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
+
+if sys.version_info >= (3, 9):
+    from importlib.resources import files as importlib_resources_files
+else:
+    from importlib_resources import files as importlib_resources_files
 
 
 def _get_cuda_rt_include_path() -> str:
     """Get the CUDA runtime include path from the nvidia.cuda_runtime package."""
     try:
-        with importlib.resources.files("nvidia.cuda_runtime.include") as path:
+        with importlib_resources_files("nvidia.cuda_runtime.include") as path:
             return str(path)
     except FileNotFoundError as e:
         raise RuntimeError("Could not find CUDA runtime include directory.") from e
