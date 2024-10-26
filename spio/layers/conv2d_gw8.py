@@ -34,8 +34,7 @@ class Conv2dGw8(nn.Conv2d):
         """
         if Conv2dGw8.match_args(*args, **kwargs):
             return Conv2dGw8(*args, **kwargs)
-        else:
-            return None
+        return None
 
     @staticmethod
     def match(module: nn.Module):
@@ -62,7 +61,7 @@ class Conv2dGw8(nn.Conv2d):
         dilation=1,
         groups=1,
         padding_mode="zeros",
-        **kwargs,
+        **_kwargs,
     ) -> bool:
         """Check if the arguments match the requirements for a Conv2dGw8 module.
 

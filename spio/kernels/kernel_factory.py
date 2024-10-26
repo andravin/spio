@@ -44,7 +44,7 @@ class KernelFactory:
         launch_params: LaunchParams = None,
         src_module: str = "spio.src",
         includes_module: str = "spio.include",
-        perf_model_skip_params: List[str] = None
+        perf_model_skip_params: List[str] = None,
     ):
         if perf_model_skip_params is None:
             perf_model_skip_params = []
@@ -65,15 +65,13 @@ class KernelFactory:
         """Return a generator for the configs of the given layer parameters."""
         if callable(self._configs):
             return self._configs(params, **kwargs)
-        else:
-            return self._configs
+        return self._configs
 
     def get_kernel_name(self, **kwargs) -> str:
         """Return the name of the kernel with the given keyword arguments."""
         if callable(self._kernel_name):
             return self._kernel_name(**kwargs)
-        else:
-            return self._kernel_name
+        return self._kernel_name
 
     def get_full_kernel_name(self, params: Params, **kwargs) -> str:
         """Return the full name of the kernel with the given keyword arguments.
@@ -96,8 +94,7 @@ class KernelFactory:
         """
         if callable(self._specs):
             return self._specs(params, config, **kwargs)
-        else:
-            return self._specs, self._launch_params
+        return self._specs, self._launch_params
 
     def get_kernel_cache(self, **kwargs) -> KernelCache:
         """Return the kernel cache for the given keryword arguments."""

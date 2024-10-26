@@ -29,7 +29,7 @@ def conv2d_gw8(
     and float16 precision.
 
     Args:
-        input: Input tensor of shape (N, C, H, W).
+        inputs: Input tensor of shape (N, C, H, W).
         weight: Weight tensor of shape (C, 8, R, S).
         bias: Optional bias tensor of shape (C,).
         stride: Stride for the convolution. Must equal 1.
@@ -62,17 +62,17 @@ def conv2d_gw8(
 
 
 # See discussion at https://github.com/pytorch/pytorch/issues/137033
-def conv2d_gw8_autocast(ks, input, weight, bias, *args, **kwargs):
+def conv2d_gw8_autocast(ks, inputs, weight, bias, *args, **kwargs):
     """Autocast wrapper for conv2d_gw8."""
-    input_dtype = input.dtype
-    input = input.to(dtype=torch.float16)
+    input_dtype = inputs.dtype
+    inputs = inputs.to(dtype=torch.float16)
     weight = weight.to(dtype=torch.float16)
     if bias is not None:
         bias = bias.to(dtype=torch.float32)
     autocast = torch._C.DispatchKeySet("AutocastCUDA")
     with torch._C._ExcludeDispatchKeyGuard(autocast):
         result = torch.ops.spio.conv2d_gw8.default.redispatch(
-            ks - autocast, input, weight, bias, *args, **kwargs
+            ks - autocast, inputs, weight, bias, *args, **kwargs
         )
     result = result.to(dtype=input_dtype)
     return result
@@ -135,7 +135,6 @@ def conv2d_gw8_backward_op(
 
     if needs_bias_grad:
         # Grad_bias also uses torch.float32.
-        # TODO: Incorporate grad_bias into the grad_weight_kernel.
         grad_bias = grad_output.sum(dim=(0, 2, 3), dtype=torch.float32)
     else:
         grad_bias = None

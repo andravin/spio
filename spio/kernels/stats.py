@@ -27,30 +27,24 @@ class Stats:
     def macs(self):
         """Return the number of multicply-accumulates performed for the output tensors."""
         return sum(
-            [
-                getattr(self, f"{output_tensor}_macs")
-                for output_tensor in self.output_names
-            ]
+            getattr(self, f"{output_tensor}_macs")
+            for output_tensor in self.output_names
         )
 
     @property
     def bytes_read(self):
         """Return the number of bytes read while computing the output tensors."""
         return sum(
-            [
-                getattr(self, f"{output_tensor}_bytes_read")
-                for output_tensor in self.output_names
-            ]
+            getattr(self, f"{output_tensor}_bytes_read")
+            for output_tensor in self.output_names
         )
 
     @property
     def bytes_written(self):
         """Return the number of bytes written while computing the output tensors."""
         return sum(
-            [
-                getattr(self, f"{output_tensor}_bytes_written")
-                for output_tensor in self.output_names
-            ]
+            getattr(self, f"{output_tensor}_bytes_written")
+            for output_tensor in self.output_names
         )
 
     @property

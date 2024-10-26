@@ -1,4 +1,4 @@
-import math
+"""Reflections for conv2d_gw8 kernels, functions, and reference functions."""
 
 import torch
 
@@ -11,6 +11,7 @@ from .reflection import Reflection, ArgInfo, register_reflection, Init
 
 
 def register_conv2d_gw8_reflections():
+    """Register reflections for conv2d_gw8."""
 
     # ---------------------------------------------------------------------------------------------
 

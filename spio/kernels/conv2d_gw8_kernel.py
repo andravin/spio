@@ -1,4 +1,5 @@
 """Create the kernel factory for the Conv2d GW8 kernel."""
+
 from dataclasses import dataclass
 from itertools import product
 from typing import Generator
@@ -17,15 +18,19 @@ from .conv2d_stats import Conv2dStats
 from .kernel_factory import make_kernel_factory
 from .kernel import get_full_kernel_name
 
+
 @dataclass(frozen=True)
 class Conv2dGw8Config:
     """Tile configuration for the Conv2d GW8 kernel."""
+
     groups: int = 8
     block_p: int = 16
     block_n: int = 1
 
 
-def _get_configs(params: Conv2dGw8Params, igrad=False) -> Generator[Conv2dGw8Config, None, None]:
+def _get_configs(
+    params: Conv2dGw8Params, **_kwargs
+) -> Generator[Conv2dGw8Config, None, None]:
     """Generate configurations for the Conv2d GW8 kernel."""
     # igrad is unused in this function
     max_groups = min(params.groups, 8)
@@ -95,7 +100,7 @@ def _get_specs(params, config=None, igrad=False):
 
     launch_params = LaunchParams(grid=blocks, block=threads)
 
-    kernel_name = _get_kernel_name(igrad=igrad) 
+    kernel_name = _get_kernel_name(igrad=igrad)
     full_kernel_name = get_full_kernel_name(kernel_name, params)
 
     kernel_has_bias = params.has_bias and not igrad
@@ -173,5 +178,5 @@ conv2d_gw8_kernel_factory = make_kernel_factory(
     kernel_source_file="conv2d_gw8.cu",
     src_module="spio.src",
     includes_module="spio.include",
-    perf_model_skip_params=["group_width", "stride"]
+    perf_model_skip_params=["group_width", "stride"],
 )

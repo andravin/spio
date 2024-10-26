@@ -1,22 +1,15 @@
 """Unit tests that compile and test CUDA kernels that use tensor cores."""
 
 import torch
-from torch import nn
 
-from spio.generators import (
-    IndexSpec,
-    TensorSpec,
-    ParamsSpec,
-    FragmentSpec,
-    generate,
-)
+from spio.generators import IndexSpec, TensorSpec, ParamsSpec, generate
 from spio.compiler import compile_and_load_kernel
 from spio.util import divup, assert_all_close_with_acc_depth
 
 
 def test_add_kernel():
     """Compile and run a simple CUDA kernel."""
-    module, add_kernel = compile_and_load_kernel(
+    _, add_kernel = compile_and_load_kernel(
         kernel_name="add", src_module="spio.src_tests"
     )
 
@@ -29,7 +22,7 @@ def test_add_kernel():
 
 def test_mma_m16_n8_k8_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k8."""
-    module, mma_kernel = compile_and_load_kernel(
+    _, mma_kernel = compile_and_load_kernel(
         kernel_name="mma_m16_n8_k8",
         source_file_name="mma.cu",
         src_module="spio.src_tests",

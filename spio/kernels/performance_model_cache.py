@@ -23,6 +23,7 @@ from ..util import (
 )
 
 from .kernel import Kernel
+
 if TYPE_CHECKING:
     from .kernel_factory import KernelFactory
 
@@ -35,6 +36,10 @@ PERFORMANCE_MODEL_EXTENSION = ".ubj"
 USER_AGENT = f"spio/{__version__}"
 
 RELEASES_URL = "https://api.github.com/repos/andravin/spio/releases"
+
+RELEASES_TIMEOUT = 10  # seconds
+
+ASSET_DOWNLOAD_TIMEOUT = 10  # seconds
 
 CACHE_DIR = Path(get_cache_dir())
 
@@ -182,13 +187,12 @@ def _get_archive_name_for_device_from_release_info(device: str, arch: str) -> st
             arch_asset = asset
     if device_asset is not None:
         return device_file
-    elif arch_asset is not None:
+    if arch_asset is not None:
         return arch_file
-    else:
-        release_version = release_info["tag"]
-        return ValueError(
-            f"No performance model archive found in release {release_version} for {device} and architecture {arch}."
-        )
+    release_version = release_info["tag"]
+    return ValueError(
+        f"No performance model archive found in release {release_version} for {device} and architecture {arch}."
+    )
 
 
 def _get_model_name_from_archive(
@@ -201,10 +205,9 @@ def _get_model_name_from_archive(
 
     if archive_name.startswith("devicemodel"):
         return get_device_performance_model_file_name(kernel_name, device, arch)
-    elif archive_name.startswith("archmodel"):
+    if archive_name.startswith("archmodel"):
         return get_arch_performance_model_file_name(kernel_name, arch)
-    else:
-        assert False, f"Invalid archive name: {archive_name}"
+    assert False, f"Invalid archive name: {archive_name}"
 
 
 @time_function("spio: predicting best kernel configuration", timer_log_level=2)
@@ -273,7 +276,9 @@ def _download_asset(asset, local_asset_path: Path):
     download_url = f"{RELEASES_URL}/assets/{asset_id}"
     headers = _get_http_headers()
     headers.update({"Accept": "application/octet-stream"})
-    response = requests.get(download_url, headers=headers, stream=True)
+    response = requests.get(
+        download_url, headers=headers, stream=True, timeout=ASSET_DOWNLOAD_TIMEOUT
+    )
     response.raise_for_status()
     with local_asset_path.open("wb") as f:
         for chunk in response.iter_content(chunk_size=8192):
@@ -287,6 +292,7 @@ def _get_release_info():
     The release info is a JSON object containing the metadata for the latest GitHub release.
     Read from disk or download from the GitHub release if it is not already loaded.
     """
+    # pylint: disable=global-statement
     global _release_info
     if _release_info is None:
         _release_info = _load_release_info()
@@ -316,7 +322,7 @@ def _download_release_info():
 
     # It wasn't, so download it.
     headers = _get_http_headers()
-    response = requests.get(RELEASES_URL, headers=headers)
+    response = requests.get(RELEASES_URL, headers=headers, timeout=RELEASES_TIMEOUT)
     response.raise_for_status()
     releases = response.json()
     if not releases:

@@ -61,8 +61,7 @@ def _random_sample_test_params(
         all_samples += _get_test_params(has_bias=False)
     if max_samples <= 0:
         return all_samples
-    else:
-        return random.sample(all_samples, max_samples)
+    return random.sample(all_samples, max_samples)
 
 
 def _get_test_params(has_bias=False) -> List[Conv2dGw8Params]:

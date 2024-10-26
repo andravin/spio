@@ -1,4 +1,5 @@
 """Protocol for kernel code generation classes."""
+
 from typing import Protocol
 
 

@@ -135,7 +135,6 @@ def _sizeof_data_type(data_type: str) -> int:
 def _strip_data_type(data_type: str) -> str:
     if data_type.startswith("const "):
         return _strip_data_type(data_type[6:])
-    elif data_type.startswith("__half"):
+    if data_type.startswith("__half"):
         return _strip_data_type("half" + data_type[6:])
-    else:
-        return data_type
+    return data_type
