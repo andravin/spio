@@ -17,7 +17,7 @@ def _preprocess_data_lines(lines):
     # Identify the header line and the first row of dashes to determine field widths
     num_dash_lines = 0
     field_widths = None
-    header_fields = None
+    header_fields = ""
 
     processed_lines = []
     for line in lines:
