@@ -43,27 +43,27 @@ def _get_configs(
     max_groups = min(params.groups, 8)
     max_warps = 32
 
-    s_up = divup(params.S, 2) * 2
+    s_up = divup(params.s, 2) * 2
     block_w = BLOCK_Q + s_up - 1
 
     # # Try configurations with warp_s = params.S.
     block_h_values = [
-        block_h for block_h in [2, 4, 8, 16, 32, 64] if block_h <= params.H
+        block_h for block_h in [2, 4, 8, 16, 32, 64] if block_h <= params.h
     ]
-    if params.H not in block_h_values:
-        block_h_values.append(params.H)
+    if params.h not in block_h_values:
+        block_h_values.append(params.h)
     groups_values = [groups for groups in [2, 4, 8] if groups <= max_groups]
     if params.groups not in groups_values and params.groups <= max_groups:
         groups_values.append(params.groups)
-    warp_s_values = [warp_s for warp_s in [1, 2] if warp_s <= params.S]
-    if params.S not in warp_s_values:
-        warp_s_values.append(params.S)
+    warp_s_values = [warp_s for warp_s in [1, 2] if warp_s <= params.s]
+    if params.s not in warp_s_values:
+        warp_s_values.append(params.s)
     block_n_iters_values = [
         block_n_iters
         for block_n_iters in [1, 2, 4, 8, 16, 32]
-        if block_n_iters <= params.N
+        if block_n_iters <= params.n
     ]
-    warp_n_values = [warp_n for warp_n in [1, 2, 4] if warp_n <= params.N]
+    warp_n_values = [warp_n for warp_n in [1, 2, 4] if warp_n <= params.n]
     yield from (
         Conv2dGw8WgradConfig(
             groups=groups,
@@ -80,9 +80,9 @@ def _get_configs(
             warp_n_values,
         )
         # Ensure that the number of groups does not exceed the hardware limit.
-        if (groups * (divup(params.S, warp_s)) <= max_warps)
+        if (groups * (divup(params.s, warp_s)) <= max_warps)
         # Ensure that a row of input values can be loaded with a single 128-bit load.
-        and (warp_n * block_w <= 32 * divup(params.S, warp_s))
+        and (warp_n * block_w <= 32 * divup(params.s, warp_s))
         # Avoid simulatenously large values of warp_n and groups.
         and (warp_n * groups <= max_groups * 2)
     )
@@ -94,10 +94,10 @@ def _get_specs(
     """Get the code gen specs and launch params."""
     params.validate()
 
-    r, s = params.R, params.S
+    r, s = params.r, params.s
 
-    n, c, h, w = params.N, params.C, params.H, params.W
-    p, q = params.P, params.Q
+    n, c, h, w = params.n, params.c, params.h, params.w
+    p, q = params.p, params.q
     padding_h, padding_w = params.padding_h, params.padding_w
     transpose_padding_h = params.transpose_padding_h
 

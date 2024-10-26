@@ -72,36 +72,36 @@ def _get_test_params(has_bias=False) -> List[Conv2dGw8Params]:
     model_tests = [replace(params, **kwargs) for params in model_tests]
 
     conv_rxs_tests = [
-        Params(N=1, C=128, H=32, W=32, R=r, S=s, padding=(r // 2, s // 2), **kwargs)
+        Params(n=1, c=128, h=32, w=32, r=r, s=s, padding=(r // 2, s // 2), **kwargs)
         for r in range(1, 6)
         for s in range(1, 6)
     ]
 
     padding_tests = [
-        Params(N=1, C=128, H=64, W=64, padding=0, **kwargs),
-        Params(N=4, C=128, H=20, W=19, padding=0, **kwargs),
-        Params(N=1, C=128, H=64, W=64, padding=2, **kwargs),
-        Params(N=1, C=128, H=64, W=64, padding=7, **kwargs),
+        Params(n=1, c=128, h=64, w=64, padding=0, **kwargs),
+        Params(n=4, c=128, h=20, w=19, padding=0, **kwargs),
+        Params(n=1, c=128, h=64, w=64, padding=2, **kwargs),
+        Params(n=1, c=128, h=64, w=64, padding=7, **kwargs),
     ]
 
     min_groups = 1
     max_groups = 16
     group_tests = [
-        Params(N=4, C=groups * 8, H=32, W=32, **kwargs)
+        Params(n=4, c=groups * 8, h=32, w=32, **kwargs)
         for groups in range(min_groups, max_groups + 1)
     ]
 
     misc_tests = [
-        Params(N=6, C=128, H=49, W=33, **kwargs),
-        Params(N=6, C=128, H=6, W=5, **kwargs),
-        Params(N=128, C=1024, H=7, W=7, **kwargs),
-        Params(N=128, C=64, H=64, W=64, **kwargs),
-        Params(N=128, C=128, H=64, W=64, **kwargs),
-        Params(N=128, C=256, H=64, W=64, **kwargs),
-        Params(N=3, C=128, H=16, W=16, **kwargs),
-        Params(N=4, C=128, H=32, W=16, **kwargs),
-        Params(N=5, C=128, H=16, W=32, **kwargs),
-        Params(N=6, C=128, H=48, W=32, **kwargs),
+        Params(n=6, c=128, h=49, w=33, **kwargs),
+        Params(n=6, c=128, h=6, w=5, **kwargs),
+        Params(n=128, c=1024, h=7, w=7, **kwargs),
+        Params(n=128, c=64, h=64, w=64, **kwargs),
+        Params(n=128, c=128, h=64, w=64, **kwargs),
+        Params(n=128, c=256, h=64, w=64, **kwargs),
+        Params(n=3, c=128, h=16, w=16, **kwargs),
+        Params(n=4, c=128, h=32, w=16, **kwargs),
+        Params(n=5, c=128, h=16, w=32, **kwargs),
+        Params(n=6, c=128, h=48, w=32, **kwargs),
     ]
 
     return model_tests + conv_rxs_tests + padding_tests + group_tests + misc_tests
@@ -109,20 +109,20 @@ def _get_test_params(has_bias=False) -> List[Conv2dGw8Params]:
 
 def test_kernel_conv2d_gw8_sanity():
     """Sanity test for the Conv2dGw8 kernel."""
-    params = Conv2dGw8Params(N=4, C=64, H=16, W=32, padding=1, R=3, S=3, has_bias=True)
+    params = Conv2dGw8Params(n=4, c=64, h=16, w=32, padding=1, r=3, s=3, has_bias=True)
     run_kernel_test(conv2d_gw8_kernel_factory, params)
 
 
 def test_kernel_conv2d_gw8_wgrad_sanity():
     """Sanity test for the Conv2dGw8 wgrad kernel."""
-    params = Conv2dGw8Params(N=4, C=64, H=16, W=32, padding=1, R=3, S=3)
+    params = Conv2dGw8Params(n=4, c=64, h=16, w=32, padding=1, r=3, s=3)
     run_grad_kernel_test(conv2d_gw8_wgrad_kernel_factory, params)
 
 
 def test_functional_conv2d_gw8_grad_sanity():
     """Sanity test for the Conv2dGw8 functional gradient."""
     params = Conv2dGw8Params(
-        N=4, C=128, H=32, W=32, padding=(2, 0), R=4, S=1, has_bias=True
+        n=4, c=128, h=32, w=32, padding=(2, 0), r=4, s=1, has_bias=True
     )
     run_grad_function_test(conv2d_gw8, params)
 
@@ -171,5 +171,5 @@ def test_conv2d_gw8_layer_torchcompile(params: Conv2dGw8Params):
 
 def test_conv2d_gw8_op_check():
     """Test whether  the conv2d_gw8 custom op has been registered with PyTorch correctly."""
-    params = Conv2dGw8Params(N=4, C=64, H=16, W=32, padding=1, R=3, S=3, has_bias=True)
+    params = Conv2dGw8Params(n=4, c=64, h=16, w=32, padding=1, r=3, s=3, has_bias=True)
     run_opcheck_test(conv2d_gw8, params)

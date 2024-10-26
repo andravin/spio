@@ -34,12 +34,12 @@ def _get_configs(
     """Generate configurations for the Conv2d GW8 kernel."""
     # igrad is unused in this function
     max_groups = min(params.groups, 8)
-    block_n_values = [block_n for block_n in [1, 2, 4] if block_n <= params.N]
+    block_n_values = [block_n for block_n in [1, 2, 4] if block_n <= params.n]
     block_p_values = [
-        block_p for block_p in [1, 2, 4, 8, 16, 32, 64] if block_p <= params.P
+        block_p for block_p in [1, 2, 4, 8, 16, 32, 64] if block_p <= params.p
     ]
-    if params.P not in block_p_values:
-        block_p_values.append(params.P)
+    if params.p not in block_p_values:
+        block_p_values.append(params.p)
     groups_values = [groups for groups in [1, 2, 4, 8] if groups <= max_groups]
     if params.groups not in groups_values and params.groups <= max_groups:
         groups_values.append(params.groups)
@@ -55,22 +55,24 @@ def _get_kernel_name(igrad=False) -> str:
     return "spio_conv2d_gw8_fprop" if not igrad else "spio_conv2d_gw8_dgrad"
 
 
-def _get_specs(params, config=None, igrad=False):
+def _get_specs(
+    params: Conv2dGw8Params, config: Conv2dGw8Config = None, igrad: bool = False
+):
     """The code generator specs and launch parameters."""
     params.validate()
 
-    r, s = params.R, params.S
+    r, s = params.r, params.s
 
     if igrad:
-        n, c, h, w = params.N, params.C, params.P, params.Q
-        p, q = params.H, params.W
+        n, c, h, w = params.n, params.c, params.p, params.q
+        p, q = params.h, params.w
         padding_h, padding_w = (
             params.transpose_padding_h,
             params.transpose_padding_w,
         )
     else:
-        n, c, h, w = params.N, params.C, params.H, params.W
-        p, q = params.P, params.Q
+        n, c, h, w = params.n, params.c, params.h, params.w
+        p, q = params.p, params.q
         padding_h, padding_w = params.padding_h, params.padding_w
 
     # Hardcoded parameter:

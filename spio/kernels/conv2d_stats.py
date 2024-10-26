@@ -81,12 +81,12 @@ class Conv2dStats(Stats):
     @property
     def grad_weight_accumulation_depth(self):
         """The depth of accumulation of the weight gradient."""
-        return self.params.N * self.params.H * self.params.W
+        return self.params.n * self.params.h * self.params.w
 
     @property
     def grad_bias_accumulation_depth(self):
         """The depth of accumulation of the bias gradient."""
-        return self.params.N * self.params.H * self.params.W
+        return self.params.n * self.params.h * self.params.w
 
     @property
     def _size_input(self):
@@ -115,7 +115,7 @@ class Conv2dStats(Stats):
         This is the number of multiply-accumulates (MACs) performed per
         output element.
         """
-        return self.params.R * self.params.S * self.params.group_width
+        return self.params.r * self.params.s * self.params.group_width
 
     @property
     def _bias_macs(self):

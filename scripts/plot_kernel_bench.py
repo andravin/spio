@@ -138,8 +138,8 @@ def main():
     plt.title("Grouped Convolution Performance")
     plt.suptitle(
         (
-            f"{params.C} channels, {params.H}x{params.W} input, "
-            f"{params.R}x{params.S} kernel, group width {params.group_width}, "
+            f"{params.c} channels, {params.h}x{params.w} input, "
+            f"{params.r}x{params.s} kernel, group width {params.group_width}, "
             f"{device_name}"
         ),
         fontsize=10,
@@ -148,7 +148,7 @@ def main():
 
     fig_file_name = (
         f"batch_size_vs_eff_bandwidth__{device_name}__{block_name}_"
-        f"{params.C}c_{params.R}r_{params.S}s_{params.group_width}gw"
+        f"{params.C}c_{params.r}r_{params.s}s_{params.group_width}gw"
     )
     if args.torch_data_dir is not None and torch_params_are_depthwise:
         fig_file_name += "__torch_depthwise"
@@ -170,8 +170,8 @@ def main():
     plt.ylabel("Latency (microseconds)")
     plt.title("Latency vs Batch Size")
     plt.suptitle(
-        f"{params.C} channels, {params.H}x{params.W} input, "
-        f"{params.R}x{params.S} kernel, group width {params.group_width}, "
+        f"{params.c} channels, {params.h}x{params.w} input, "
+        f"{params.r}x{params.s} kernel, group width {params.group_width}, "
         f"{device_name}",
         fontsize=10,
     )
@@ -179,7 +179,7 @@ def main():
 
     fig_file_name = (
         f"batch_size_vs_latency__{device_name}__{block_name}_"
-        f"{params.C}c_{params.R}r_{params.S}s_{params.group_width}gw"
+        f"{params.c}c_{params.r}r_{params.s}s_{params.group_width}gw"
     )
     if args.torch_data_dir is not None and torch_params_are_depthwise:
         fig_file_name += "__torch_depthwise"
