@@ -1,5 +1,16 @@
 """Functions for parsing torch.profile.profile results."""
+
 import re
+
+
+TIME_HEADER_FIELDS = [
+    "CUDA_time_av",
+    "CUDA_total",
+    "CPU_time_avg",
+    "Self_CUDA",
+    "CPU_total",
+    "Self_CPU",
+]
 
 
 def _preprocess_data_lines(lines):
@@ -28,13 +39,6 @@ def _preprocess_data_lines(lines):
                 if num_dash_lines == 1:
                     header_fields = fields
                 else:
-                    TIME_HEADER_FIELDS = [
-                        "CUDA_time_av",
-                        "CUDA_total",
-                        "CPU_time_avg" "Self_CUDA",
-                        "CPU_total",
-                        "Self_CPU",
-                    ]
                     field_name = header_fields[idx]
                     if field_name in TIME_HEADER_FIELDS:
                         if field.endswith("us"):
