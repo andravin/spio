@@ -1,10 +1,11 @@
+"""Profile a convolutional block."""
+
 import argparse
 import sys
 from pathlib import Path
 import datetime
 import random
-from math import prod
-from io import StringIO, BytesIO
+from io import StringIO
 from typing import Dict, List
 
 import torch
@@ -26,7 +27,6 @@ try:
 except ImportError:
     has_torchinfo = False
 
-from spio.kernels import KernelParams
 from spio.transform import transform as spio_transform
 from spio.util import get_formatted_device_name, ParseKwargs, Timer
 from spio.kernels import (
@@ -50,6 +50,8 @@ CONVOLUTIONAL_BLOCKS = ["MBConv", "ConvFirst"]
 
 
 class MBConv(nn.Module):
+    """MBConv block PyTorch module."""
+
     def __init__(
         self,
         in_channels,
@@ -89,6 +91,7 @@ class MBConv(nn.Module):
         self.has_residual = (in_channels == out_channels) and (stride == 1)
 
     def forward(self, x):
+        """Forward pass."""
         input = x
         x = self.layers(x)
         if self.has_residual:
@@ -97,6 +100,8 @@ class MBConv(nn.Module):
 
 
 class ConvFirst(nn.Module):
+    """ConvFirst block PyTorch module."""
+
     def __init__(
         self,
         in_channels,
@@ -134,6 +139,7 @@ class ConvFirst(nn.Module):
         self.has_residual = (in_channels == out_channels) and (stride == 1)
 
     def forward(self, x):
+        """Forward pass."""
         input = x
         x = self.layers(x)
         if self.has_residual:
@@ -142,6 +148,8 @@ class ConvFirst(nn.Module):
 
 
 class MLP(nn.Module):
+    """MLP block PyTorch module."""
+
     def __init__(self, in_channels, out_channels, expansion_ratio=4, act_cls=nn.SiLU):
         mid_channels = in_channels * expansion_ratio
         super().__init__()
@@ -156,6 +164,7 @@ class MLP(nn.Module):
         self.has_residual = in_channels == out_channels
 
     def forward(self, x):
+        """Forward pass."""
         input = x
         x = self.layers(x)
         if self.has_residual:
@@ -164,6 +173,7 @@ class MLP(nn.Module):
 
 
 class GroupedConvFiesta(nn.Module):
+    """Build a multi-block stage with MLPs surrounding a given block class."""
     def __init__(
         self,
         num_channels=64,
@@ -218,6 +228,7 @@ class GroupedConvFiesta(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, x):
+        """Forward pass."""
         x = self.pre(x)
         x = self.blocks(x)
         x = self.post(x)
@@ -226,6 +237,7 @@ class GroupedConvFiesta(nn.Module):
 
 
 def main():
+    """Main function to parse arguments and run the benchmark."""
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--group-width", type=int, default=GROUP_WIDTH)
@@ -295,6 +307,7 @@ def main():
 
 
 def run_benchmark(args, batch_size: int = None):
+    """Run the benchmark with the given batch size."""
     if batch_size is not None:
         args.batch_size = batch_size
 
@@ -576,10 +589,10 @@ def get_dir_name(args) -> str:
             [f"{key}__{value}" for key, value in args.timm_model_kwargs.items()]
         )
         return f"modelbench___{device_name}___{model_name}___{kwargs_str}"
-    else:
-        file_name = get_file_name_details(args, no_bs=True)
-        date_stamp = get_date_stamp()
-        return f"bench__{device_name}__{file_name}__{date_stamp}"
+
+    file_name = get_file_name_details(args, no_bs=True)
+    date_stamp = get_date_stamp()
+    return f"bench__{device_name}__{file_name}__{date_stamp}"
 
 
 def get_file_name_details(args, no_bs=False) -> str:
@@ -600,17 +613,18 @@ def get_benchmark_model_output_file_name(args) -> str:
     if args.timm_model is not None:
         date_stamp = get_date_stamp()
         return f"model_bench_{args.batch_size}__{date_stamp}.ssv"
-    else:
-        raise NotImplementedError(
-            "TODO: Implement output file name for block profiling results"
-        )
+    raise NotImplementedError(
+        "TODO: Implement output file name for block profiling results"
+    )
 
 
-def get_batch_size_file_name_details(args):
+def get_batch_size_file_name_details(args) -> str:
+    """Return a batch size label."""
     return f"bs{args.batch_size}"
 
 
-def get_date_stamp():
+def get_date_stamp() -> str:
+    """Return a formatted date stamp."""
     return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 

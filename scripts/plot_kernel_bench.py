@@ -60,8 +60,6 @@ def main():
         for root_name, group in grouped
     }
 
-    kernels = dataframes.keys()
-
     df_fprop = dataframes[fprop_kernel_name]
     df_dgrad = dataframes[dgrad_kernel_name]
     df_wgrad = dataframes[wgrad_kernel_name]
@@ -177,6 +175,7 @@ def main():
 
 
 def find_torch_grouped_conv_kernels(df, kernel_iters, depthwise=False):
+    """Find and group the PyTorch convolution kernels in the DataFrame."""
     grouped_fprop_kernels = [
         "sm86_xmma_fprop_implicit_gemm_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage3_warpsize1x4x1_g8_tensor16x8x16_t1r3s3_execute_kernel__5x_cudnn",
         "sm86_xmma_fprop_implicit_gemm_indexed_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage3_warpsize1x4x1_g8_tensor16x8x16_execute_kernel__5x_cudnn",
@@ -340,17 +339,16 @@ def extract_parameters_from_dirname(dirname):
         "batch_size",
     ]
     string_fields = ["device_name", "backend_name", "block_name"]
-    if match:
-        match_dict = dict()
-        for i, field_name in enumerate(field_names):
-            if match.group(i + 1):
-                val = match.group(i + 1)
-                if field_name not in string_fields:
-                    val = int(val)
-                match_dict[field_name] = val
-        return match_dict
-    else:
+    if not match:
         raise ValueError(f"Directory name does not match expected format: {dirname}")
+    match_dict = dict()
+    for i, field_name in enumerate(field_names):
+        if match.group(i + 1):
+            val = match.group(i + 1)
+            if field_name not in string_fields:
+                val = int(val)
+            match_dict[field_name] = val
+    return match_dict
 
 
 def collect_data_from_dir(dirname):
