@@ -81,7 +81,7 @@ def _define_nvrtc_types(nvrtc):
 try:
     lib_path = _find_libnvrtc()
 except FileNotFoundError as e:
-    raise Exception(
+    raise ValueError(
         f"Could not find {NVRTC_LIB}. Did you install PyTorch with CUDA support?"
     ) from e
 _nvrtc = ctypes.CDLL(lib_path)
