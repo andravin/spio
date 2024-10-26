@@ -1,23 +1,26 @@
-from setuptools import setup, find_packages, Extension
+"""Setup script for the spio package."""
+
 import importlib.resources
 
+from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
 
 
-try:
-    with importlib.resources.files("nvidia.cuda_runtime.include") as path:
-        cuda_rt_include_dir = str(path)
-except FileNotFoundError as e:
-    raise RuntimeError(
-        "Could not find CUDA runtime include directory. Did you install PyTorch with CUDA support?"
-    ) from e
+def _get_cuda_rt_include_path() -> str:
+    """Get the CUDA runtime include path from the nvidia.cuda_runtime package."""
+    try:
+        with importlib.resources.files("nvidia.cuda_runtime.include") as path:
+            return str(path)
+    except FileNotFoundError as e:
+        raise RuntimeError("Could not find CUDA runtime include directory.") from e
+
 
 extensions = [
     Extension(
         name="spio.cuda.driver",
         sources=["spio/cuda/driver.pyx"],
         libraries=["cuda"],
-        include_dirs=[cuda_rt_include_dir],
+        include_dirs=[_get_cuda_rt_include_path()],
     ),
 ]
 
