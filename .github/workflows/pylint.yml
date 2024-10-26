@@ -31,4 +31,7 @@ jobs:
         python -m pip install .
     - name: Analysing the code with pylint
       run: |
-        pylint $(git ls-files '*.py')
+        # Ensure pylint uses the installed spio package, not the local one.
+        mkdir temp_dir
+        cd temp_dir
+        pylint ../$(git ls-files '*.py')
