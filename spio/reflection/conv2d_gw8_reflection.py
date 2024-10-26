@@ -15,12 +15,12 @@ def register_conv2d_gw8_reflections():
 
     # ---------------------------------------------------------------------------------------------
 
-    conv2d_arg_info = dict(
-        output=ArgInfo(dtype=torch.float16, output=True, init=Init.EMPTY),
-        input=ArgInfo(dtype=torch.float16, requires_grad=True),
-        weight=ArgInfo(dtype=torch.float16, requires_grad=True),
-        bias=ArgInfo(dtype=torch.float32, requires_grad=True),
-    )
+    conv2d_arg_info = {
+        "output": ArgInfo(dtype=torch.float16, output=True, init=Init.EMPTY),
+        "input": ArgInfo(dtype=torch.float16, requires_grad=True),
+        "weight": ArgInfo(dtype=torch.float16, requires_grad=True),
+        "bias": ArgInfo(dtype=torch.float32, requires_grad=True),
+    }
 
     register_reflection(
         Reflection(
@@ -88,16 +88,16 @@ def register_conv2d_gw8_reflections():
     register_reflection(
         Reflection(
             kernel_name="spio_conv2d_gw8_wgrad",
-            arginfo=dict(
-                input=ArgInfo(dtype=torch.float16, requires_grad=True),
-                weight=ArgInfo(dtype=torch.float16, requires_grad=True),
-                bias=ArgInfo(dtype=torch.float32, requires_grad=True),
-                output=ArgInfo(dtype=torch.float16, output=True, init=Init.EMPTY),
-                grad_output=ArgInfo(dtype=torch.float16, grad_of="output"),
-                grad_weight=ArgInfo(
+            arginfo={
+                "input": ArgInfo(dtype=torch.float16, requires_grad=True),
+                "weight": ArgInfo(dtype=torch.float16, requires_grad=True),
+                "bias": ArgInfo(dtype=torch.float32, requires_grad=True),
+                "output": ArgInfo(dtype=torch.float16, output=True, init=Init.EMPTY),
+                "grad_output": ArgInfo(dtype=torch.float16, grad_of="output"),
+                "grad_weight": ArgInfo(
                     dtype=torch.float32, init=Init.ZERO, grad_of="weight"
                 ),
-            ),
+            },
             args=["grad_weight", "input", "grad_output"],
             kernel_outputs=["grad_weight"],
             reference=torch.nn.functional.conv2d,
@@ -110,18 +110,18 @@ def register_conv2d_gw8_reflections():
     register_reflection(
         Reflection(
             kernel_name="spio_conv2d_gw8_dgrad",
-            kwargs=dict(igrad=True),
-            arginfo=dict(
-                input=ArgInfo(dtype=torch.float16, requires_grad=True),
-                weight=ArgInfo(dtype=torch.float16, requires_grad=True),
-                bias=ArgInfo(dtype=torch.float32, requires_grad=True),
-                output=ArgInfo(dtype=torch.float16, output=True, init=Init.EMPTY),
-                grad_output=ArgInfo(dtype=torch.float16, grad_of="output"),
-                grad_input=ArgInfo(
+            kwargs={"igrad": True},
+            arginfo={
+                "input": ArgInfo(dtype=torch.float16, requires_grad=True),
+                "weight": ArgInfo(dtype=torch.float16, requires_grad=True),
+                "bias": ArgInfo(dtype=torch.float32, requires_grad=True),
+                "output": ArgInfo(dtype=torch.float16, output=True, init=Init.EMPTY),
+                "grad_output": ArgInfo(dtype=torch.float16, grad_of="output"),
+                "grad_input": ArgInfo(
                     dtype=torch.float16, init=Init.EMPTY, grad_of="input"
                 ),
-                none=ArgInfo(dtype=torch.float16, init=Init.NONE),
-            ),
+                "none": ArgInfo(dtype=torch.float16, init=Init.NONE),
+            },
             args=["grad_input", "grad_output", "weight", "none"],
             kernel_outputs=["grad_input"],
             reference=torch.nn.functional.conv2d,
@@ -134,27 +134,27 @@ def register_conv2d_gw8_reflections():
 
 def _torch_conv2d_kwargs(params):
     """Return the keyword arguments for torch.nn.function.conv2d"""
-    return dict(stride=params.stride, padding=params.padding, groups=params.groups)
+    return {"stride": params.stride, "padding": params.padding, "groups": params.groups}
 
 
 def _spio_conv2d_gw8_kwargs(params):
     """Return the keyword arguments for spio.functional.conv2d_gw8"""
-    return dict(
-        stride=params.stride,
-        padding_y=params.padding_h,
-        padding_x=params.padding_w,
-        groups=params.groups,
-    )
+    return {
+        "stride": params.stride,
+        "padding_y": params.padding_h,
+        "padding_x": params.padding_w,
+        "groups": params.groups,
+    }
 
 
 def _conv2d_layer_kwargs(params):
     """Return the keyword arguments for spio.layers.Conv2dGw8 and torch.nn.Conv2d"""
-    return dict(
-        in_channels=params.C,
-        out_channels=params.K,
-        kernel_size=params.kernel_size,
-        stride=params.stride,
-        padding=params.padding,
-        groups=params.groups,
-        bias=params.has_bias,
-    )
+    return {
+        "in_channels": params.C,
+        "out_channels": params.K,
+        "kernel_size": params.kernel_size,
+        "stride": params.stride,
+        "padding": params.padding,
+        "groups": params.groups,
+        "bias": params.has_bias,
+    }

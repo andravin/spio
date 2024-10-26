@@ -137,14 +137,14 @@ def _get_specs(
         TensorSpec(
             "SmemInput",
             "uint4",
-            dict(ping_pong=2, n=config.warp_n, x=block_w, c8=block_c8 + 1),
+            {"ping_pong": 2, "n": config.warp_n, "x": block_w, "c8": block_c8 + 1},
         ),
         TensorSpec(
             "SmemDelta",
             "uint4",
-            dict(ping_pong=2, n=config.warp_n, q=BLOCK_Q, k8=block_c8 + 1),
+            {"ping_pong": 2, "n": config.warp_n, "q": BLOCK_Q, "k8": block_c8 + 1},
         ),
-        TensorSpec("SmemWgrad", "float2", dict(k8=block_c8, s=s, c=8, k2=4)),
+        TensorSpec("SmemWgrad", "float2", {"k8": block_c8, "s": s, "c": 8, "k2": 4}),
     ]
 
     # TODO: ensure that the smem tensors fit in the shared memory.
@@ -155,84 +155,84 @@ def _get_specs(
     full_kernel_name = get_full_kernel_name(KERNEL_NAME, params)
 
     specs = [
-        MacroSpec(dict(SPIO_CONV_WGRAD_KERNEL=full_kernel_name)),
+        MacroSpec({"SPIO_CONV_WGRAD_KERNEL": full_kernel_name}),
         #
         # Block parameters.
         #
         ParamsSpec(
             "Block",
-            dict(
-                n=block_n,
-                h=block_h,
-                q=BLOCK_Q,
-                c8=block_c8,
-                p=block_p,
-                threads=threads,
-            ),
+            {
+                "n": block_n,
+                "h": block_h,
+                "q": BLOCK_Q,
+                "c8": block_c8,
+                "p": block_p,
+                "threads": threads,
+            },
         ),
         #
         # Constant parameters.
         #
         ParamsSpec(
             "Params",
-            dict(
-                R=r,
-                S=s,
-                PADDING_H=padding_h,
-                PADDING_W=padding_w,
-                TRANSPOSE_PADDING_H=transpose_padding_h,
-                WARP_S=config.warp_s,
-                WARP_S2=warp_s2,
-                WARP_S2_UP=warp_s2_up,
-                BLOCK_N_ITERS=config.block_n_iters,
-                WARP_N=config.warp_n,
-            ),
+            {
+                "R": r,
+                "S": s,
+                "PADDING_H": padding_h,
+                "PADDING_W": padding_w,
+                "TRANSPOSE_PADDING_H": transpose_padding_h,
+                "WARP_S": config.warp_s,
+                "WARP_S2": warp_s2,
+                "WARP_S2_UP": warp_s2_up,
+                "BLOCK_N_ITERS": config.block_n_iters,
+                "WARP_N": config.warp_n,
+            },
         ),
         #
         # Block indices.
         #
         IndexSpec(
             "BlockIdx",
-            dict(n=blocks_n, y=blocks_h, q=blocks_q, c8=blocks_c8),
+            {"n": blocks_n, "y": blocks_h, "q": blocks_q, "c8": blocks_c8},
         ),
         #
         # Input loading.
         #
-        IndexSpec("InputIdx", dict(n=config.warp_n, x=block_w, c8=block_c8)),
-        TensorSpec("Input", "const uint4", dict(n=n, y=h, x=w, c8=c8)),
+        IndexSpec("InputIdx", {"n": config.warp_n, "x": block_w, "c8": block_c8}),
+        TensorSpec("Input", "const uint4", {"n": n, "y": h, "x": w, "c8": c8}),
         IndexSpec(
             "SmemInputLoadIdx",
-            dict(
-                c8=warps_c8,
-                warp_s=warps_s,
-                repeat=32 // (2 * BLOCK_Q),
-                s=2,
-                q=BLOCK_Q,
-            ),
+            {
+                "c8": warps_c8,
+                "warp_s": warps_s,
+                "repeat": 32 // (2 * BLOCK_Q),
+                "s": 2,
+                "q": BLOCK_Q,
+            },
         ),
         #
         # Delta loading
         #
-        IndexSpec("DeltaIdx", dict(n=config.warp_n, q=BLOCK_Q, k8=block_c8)),
-        TensorSpec("Delta", "const uint4", dict(n=n, p=p, q=q, k8=c8)),
+        IndexSpec("DeltaIdx", {"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}),
+        TensorSpec("Delta", "const uint4", {"n": n, "p": p, "q": q, "k8": c8}),
         IndexSpec(
             "SmemDeltaLoadIdx",
-            dict(k8=warps_c8, repeat=(32 * warps_s) // BLOCK_Q, q=BLOCK_Q),
+            {"k8": warps_c8, "repeat": (32 * warps_s) // BLOCK_Q, "q": BLOCK_Q},
         ),
-        TensorSpec("DeltaFrag", "spio::MMA_N8_K8_F16_B", dict(n=config.warp_n, r=r)),
+        TensorSpec("DeltaFrag", "spio::MMA_N8_K8_F16_B", {"n": config.warp_n, "r": r}),
         #
         # Accumulator
         #
         FragmentSpec("Acc", "MMA_M16_N8_F32_C", "c", "k"),
-        TensorSpec("AccTensor", "spio::MMA_M16_N8_F32_C", dict(s2=warp_s2_up, r=r)),
+        TensorSpec("AccTensor", "spio::MMA_M16_N8_F32_C", {"s2": warp_s2_up, "r": r}),
         #
         # Weights storing.
         #
-        IndexSpec("SmemWgradStoreIdx", dict(k8=warps_c8, warp_s=warps_s, lane=32)),
+        IndexSpec("SmemWgradStoreIdx", {"k8": warps_c8, "warp_s": warps_s, "lane": 32}),
         # Each thread stores 8k for a particular (k8, r, s, c).
-        IndexSpec("WgradStoreIdx", dict(k8=warps_c8, s=s, c=8)),
+        IndexSpec("WgradStoreIdx", {"k8": warps_c8, "s": s, "c": 8}),
         # Reduce Wgrad through global memory using float32 precision.
-        TensorSpec("Wgrad", "float", dict(k=c, r=r, s=s, c=8)),
+        TensorSpec("Wgrad", "float", {"k": c, "r": r, "s": s, "c": 8}),
     ] + smem_tensors
     return specs, launch_params
 

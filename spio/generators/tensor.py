@@ -6,16 +6,16 @@ from math import prod
 
 from .index import _generate_index
 
-DATA_TYPE_SIZES = dict(
-    float=4,
-    float2=8,
-    float4=16,
-    unsigned=4,
-    uint2=8,
-    uint4=16,
-    half=2,
-    half2=4,
-)
+DATA_TYPE_SIZES = {
+    "float": 4,
+    "float2": 8,
+    "float4": 16,
+    "unsigned": 4,
+    "uint2": 8,
+    "uint4": 16,
+    "half": 2,
+    "half2": 4,
+}
 
 
 @dataclass

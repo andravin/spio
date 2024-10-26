@@ -67,14 +67,14 @@ class Reflection:
         self, params, training=False, device="cuda"
     ) -> Dict[str, torch.Tensor]:
         """Create arguments for the kernel or function."""
-        args = dict()
+        args = {}
         for name, info in self.arginfo.items():
             args[name] = info.make_arg(params, training=training, device=device)
         return args
 
     def make_grad_outputs(self, params, device="cuda"):
         """Create gradient outputs for the kernel or function."""
-        args = dict()
+        args = {}
         for name, info in self.arginfo.items():
             if info.output:
                 args[f"grad_{name}"] = info._randn_clip_3(params, device)
@@ -154,11 +154,11 @@ class Reflection:
         )
 
 
-reflection_kernel_registry = dict()
+reflection_kernel_registry = {}
 
-reflection_function_registry = dict()
+reflection_function_registry = {}
 
-reflection_layer_registry = dict()
+reflection_layer_registry = {}
 
 
 def register_reflection(reflection: Reflection):

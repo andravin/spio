@@ -56,7 +56,7 @@ class KernelFactory:
         self._specs = specs
         self._kernel_source_file = kernel_source_file
         self._launch_params = launch_params
-        self._kernel_caches = dict()
+        self._kernel_caches = {}
         self._src_module = src_module
         self._includes_module = includes_module
         self.per_model_skip_params = perf_model_skip_params
