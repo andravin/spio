@@ -7,17 +7,12 @@ work in both C++ and CUDA programs.
 
 from subprocess import CalledProcessError
 from tempfile import NamedTemporaryFile
-import sys
 
+from importlib_resources import files as importlib_resources_files
 import pytest
 
 import spio.generators
 import spio.compiler
-
-if sys.version_info >= (3, 9):
-    from importlib.resources import files as importlib_resources_files
-else:
-    from importlib_resources import files as importlib_resources_files
 
 
 CPP_SOURCES = ["test_index.cpp"]

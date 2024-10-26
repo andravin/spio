@@ -2,16 +2,12 @@
 
 from importlib.abc import Traversable
 from typing import List, Dict, Tuple
-import sys
+
+from importlib_resources import files as importlib_resources_files
 
 from ..cuda.nvrtc_ctypes import Program
 
 from .arch import sm_from_arch
-
-if sys.version_info >= (3, 9):
-    from importlib.resources import files as importlib_resources_files
-else:
-    from importlib_resources import files as importlib_resources_files
 
 
 def _find_cuda_runtime_include_dir() -> str:

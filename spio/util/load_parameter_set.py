@@ -1,16 +1,13 @@
 """Function to load a Params set from a resource file."""
 
-import importlib
 from typing import List, Type, TYPE_CHECKING
 from dataclasses import dataclass
-import sys
+
+
+from importlib_resources import files as importlib_resources_files
 
 from .parse_dataclass import parse_dataclass
 
-if sys.version_info >= (3, 9):
-    from importlib.resources import files as importlib_resources_files
-else:
-    from importlib_resources import files as importlib_resources_files
 
 if TYPE_CHECKING:
     from ..kernels import Params

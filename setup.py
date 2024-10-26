@@ -1,14 +1,9 @@
 """Setup script for the spio package."""
 
-import sys
-
 from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
 
-if sys.version_info >= (3, 9):
-    from importlib.resources import files as importlib_resources_files
-else:
-    from importlib_resources import files as importlib_resources_files
+from importlib_resources import files as importlib_resources_files
 
 
 def _get_cuda_rt_include_path() -> str:

@@ -1,19 +1,13 @@
 """Functions for compiling and loading CUDA kernels."""
 
 from typing import Tuple, Dict
-import sys
 
 import torch
+from importlib_resources import files as importlib_resources_files
 
 from .. import primary_context_guard
 from ..cuda.driver import Module, Function
 from .compile import compile_cuda
-
-
-if sys.version_info >= (3, 9):
-    from importlib.resources import files as importlib_resources_files
-else:
-    from importlib_resources import files as importlib_resources_files
 
 
 def compile_kernel(
