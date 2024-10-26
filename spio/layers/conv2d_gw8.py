@@ -91,7 +91,12 @@ class Conv2dGw8(nn.Conv2d):
 
     @staticmethod
     def from_torch_module(conv2d: nn.Conv2d):
-        """Create a Conv2dGw8 module from a nn.Conv2d module."""
+        """Create a Conv2dGw8 module from a nn.Conv2d module.
+
+        The Conv2dGw8 module will reference the same weight and bias
+        tensors as the original Conv2d module. The idea is that you
+        replace the original Conv2d module with a new Conv2dGw8 module.
+        """
         if not Conv2dGw8.match(conv2d):
             raise ValueError(f"Conv2d {conv2d} does not match Conv2dGw8")
         module = Conv2dGw8(
@@ -104,9 +109,9 @@ class Conv2dGw8(nn.Conv2d):
             bias=conv2d.bias is not None,
             device=conv2d.weight.device,
         ).to(memory_format=torch.channels_last)
-        module.weight.data.copy_(conv2d.weight)
-        if conv2d.bias is not None:
-            module.bias.data.copy_(conv2d.bias)
+        # Directly assign the weight and bias tensors.
+        module.weight = conv2d.weight
+        module.bias = conv2d.bias
         return module
 
     # pylint: disable=arguments-renamed
