@@ -207,7 +207,7 @@ def _get_model_name_from_archive(
         assert False, f"Invalid archive name: {archive_name}"
 
 
-@time_function("spio: predicting best kernel configuration", log_level=2)
+@time_function("spio: predicting best kernel configuration", timer_log_level=2)
 def _predict_best_config(
     performance_model: xgb.Booster,
     params: Any,

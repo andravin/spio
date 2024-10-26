@@ -21,7 +21,7 @@ def _col(lane: int) -> int:
 
 def test_ldmatrix_x1_kernel():
     """Compile and run an ldmatrix test kernel."""
-    module, ldmatrix_kernel = compile_and_load_kernel(
+    _, ldmatrix_kernel = compile_and_load_kernel(
         kernel_name="ldmatrix_x1", source_file_name="ldmatrix.cu", src_module="spio.src_tests"
     )
 
@@ -40,7 +40,7 @@ def test_ldmatrix_x1_kernel():
 
 def test_ldmatrix_x2_kernel():
     """Compile and run an ldmatrix_x2 test kernel."""
-    module, ldmatrix_x2_kernel = compile_and_load_kernel(
+    _, ldmatrix_x2_kernel = compile_and_load_kernel(
         kernel_name="ldmatrix_x2", source_file_name="ldmatrix.cu", src_module="spio.src_tests"
     )
 
@@ -60,7 +60,7 @@ def test_ldmatrix_x2_kernel():
 
 def test_ldmatrix_x4_kernel():
     """Compile and run an ldmatrix_x4 test kernel."""
-    module, ldmatrix_x4_kernel = compile_and_load_kernel(
+    _, ldmatrix_x4_kernel = compile_and_load_kernel(
         kernel_name="ldmatrix_x4", source_file_name="ldmatrix.cu", src_module="spio.src_tests"
     )
 
@@ -80,7 +80,7 @@ def test_ldmatrix_x4_kernel():
 
 def test_ldmatrix_x1_trans_kernel():
     """Compile and run an ldmatrix_x1_trans test kernel."""
-    module, ldmatrix_x1_trans_kernel = compile_and_load_kernel(
+    _, ldmatrix_x1_trans_kernel = compile_and_load_kernel(
         kernel_name="ldmatrix_x1_trans",
         source_file_name="ldmatrix.cu",
         src_module="spio.src_tests",
@@ -101,7 +101,7 @@ def test_ldmatrix_x1_trans_kernel():
 
 def test_ldmatrix_x2_trans_kernel():
     """Compile and run an ldmatrix_x2 test kernel."""
-    module, ldmatrix_x2_trans_kernel = compile_and_load_kernel(
+    _, ldmatrix_x2_trans_kernel = compile_and_load_kernel(
         kernel_name="ldmatrix_x2_trans",
         source_file_name="ldmatrix.cu",
         src_module="spio.src_tests",
@@ -123,7 +123,7 @@ def test_ldmatrix_x2_trans_kernel():
 
 def test_ldmatrix_x4_trans_kernel():
     """Compile and run an ldmatrix_x4_trans test kernel."""
-    module, ldmatrix_x4_trans_kernel = compile_and_load_kernel(
+    _, ldmatrix_x4_trans_kernel = compile_and_load_kernel(
         kernel_name="ldmatrix_x4_trans",
         source_file_name="ldmatrix.cu",
         src_module="spio.src_tests",

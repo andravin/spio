@@ -18,6 +18,7 @@ CPP_SOURCES = ["test_index.cpp"]
 
 
 def compile_cpp_tests(extra_cpp_test_files=[]):
+    """Compile C++ tests with NVCC."""
     includes = [
         importlib.resources.files("spio.include"),
         importlib.resources.files("spio.srct_tests")
@@ -33,7 +34,7 @@ def test_cpp_tests():
     test_source = _test_generate_index()
     test_source += _test_generate_tensor()
     test_source_file = NamedTemporaryFile(prefix="spio_", suffix=".cpp")
-    with open(test_source_file.name, "w") as f:
+    with open(test_source_file.name, "w", encoding="utf-8") as f:
         f.write(test_source)
     try:
         compile_cpp_tests([test_source_file.name])

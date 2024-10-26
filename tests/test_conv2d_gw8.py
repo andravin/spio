@@ -1,8 +1,9 @@
+"""Unit tests for the Conv2dGw8[Wgrad] kernels, function, and layers."""
+
 from dataclasses import replace
 import random
 import os
 from typing import List
-import importlib.resources
 
 import pytest
 
@@ -44,7 +45,8 @@ def _random_sample_test_params(
     Parameters
     ----------
     max_samples : int
-        The maximum number of test parameters to sample. If max_samples <= 0, all test parameters are returned.
+        The maximum number of test parameters to sample.
+        If max_samples <= 0, all test parameters are returned.
 
     Returns
     -------
@@ -107,16 +109,19 @@ def _get_test_params(has_bias=False) -> List[Conv2dGw8Params]:
 
 
 def test_kernel_conv2d_gw8_sanity():
+    """Sanity test for the Conv2dGw8 kernel."""
     params = Conv2dGw8Params(N=4, C=64, H=16, W=32, padding=1, R=3, S=3, has_bias=True)
     run_kernel_test(conv2d_gw8_kernel_factory, params)
 
 
 def test_kernel_conv2d_gw8_wgrad_sanity():
+    """Sanity test for the Conv2dGw8 wgrad kernel."""
     params = Conv2dGw8Params(N=4, C=64, H=16, W=32, padding=1, R=3, S=3)
     run_grad_kernel_test(conv2d_gw8_wgrad_kernel_factory, params)
 
 
 def test_functional_conv2d_gw8_grad_sanity():
+    """Sanity test for the Conv2dGw8 functional gradient."""
     params = Conv2dGw8Params(
         N=4, C=128, H=32, W=32, padding=(2, 0), R=4, S=1, has_bias=True
     )
@@ -125,44 +130,47 @@ def test_functional_conv2d_gw8_grad_sanity():
 
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_kernel_conv2d_gw8(params: Conv2dGw8Params):
+    """Test the Conv2dGw8 kernel."""
     run_kernel_test(conv2d_gw8_kernel_factory, params)
 
 
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_kernel_conv2d_gw8_wgrad(params: Conv2dGw8Params):
+    """Test the Conv2dGw8 wgrad kernel."""
     run_grad_kernel_test(conv2d_gw8_wgrad_kernel_factory, params)
 
 
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_kernel_conv2d_gw8_igrad(params: Conv2dGw8Params):
+    """Test the Conv2dGw8 dgrad kernel."""
     run_grad_kernel_test(conv2d_gw8_kernel_factory, params, igrad=True)
 
 
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_functional_conv2d_gw8(params: Conv2dGw8Params):
+    """Test the conv2d_gw8 op."""
     run_function_test(conv2d_gw8, params)
 
 
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_functional_conv2d_gw8_grad(params: Conv2dGw8Params):
-    """NOTE this test failed when it was run in isolation due to an unknown race condition that caused a CUDA_ERROR_INVALID_CONTEXT.
-    If this test was run after the tests that precede it, there is no error.
-    I added a workaround in the benchmark function to synchronize the CUDA context before loading the kernel.
-    This hack seems to have fixed the issue.
-    """
+    """Test the gradients of the conv2d_gw8 op."""
     run_grad_function_test(conv2d_gw8, params)
 
 
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_conv2d_gw8_layer(params: Conv2dGw8Params):
+    """Test the Conv2dGw8 layer."""
     run_layer_test(Conv2dGw8, params)
 
 
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_conv2d_gw8_layer_torchcompile(params: Conv2dGw8Params):
+    """Test the Conv2dGw8 layer with torchcompile."""
     run_layer_test(Conv2dGw8, params, torchcompile=True)
 
 
 def test_conv2d_gw8_op_check():
+    """Test whether  the conv2d_gw8 custom op has been registered with PyTorch correctly."""
     params = Conv2dGw8Params(N=4, C=64, H=16, W=32, padding=1, R=3, S=3, has_bias=True)
     run_opcheck_test(conv2d_gw8, params)

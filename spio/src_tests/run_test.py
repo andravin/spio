@@ -1,4 +1,7 @@
 """Helper function for implementing kernel and operator unit tests."""
+
+from typing import List
+
 import torch
 
 from ..compiler import compile_kernel_configs
@@ -119,7 +122,7 @@ def run_function_test(function, params, device="cuda"):
     reference_function = reflection.reference
     reference_reflection = get_function_reflection(reference_function)
     reference_args = _all_to_float(reference_reflection.arrange_args(args))
-    reference_kwargs = reference_reflection.get_function_kwargs(params) 
+    reference_kwargs = reference_reflection.get_function_kwargs(params)
     reference_output = reference_function(*reference_args, **reference_kwargs)
     stats = reflection.stats(params, output_names=reflection.output_names)
     acc_depth = stats.accumulation_depths[0]
@@ -209,5 +212,5 @@ def run_layer_test(layer_cls, params, device="cuda", torchcompile=False):
     )
 
 
-def _all_to_float(args):
+def _all_to_float(args: List[torch.Tensor]) -> List[torch.Tensor]:
     return [t.float() if t is not None else None for t in args]

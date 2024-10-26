@@ -1,3 +1,4 @@
+"""Functions for parsing torch.profile.profile results."""
 import re
 
 
@@ -56,7 +57,7 @@ def _preprocess_data_lines(lines):
     return processed_lines
 
 
-def preprocess_data_string(data_str) -> str:
+def preprocess_data_string(data_str: str) -> str:
     """Preprocess a torch.profile.profile table from a string.
 
     Converts to a semicolon-separated format with time values in milliseconds.
@@ -65,11 +66,11 @@ def preprocess_data_string(data_str) -> str:
     return _preprocess_data_lines(lines)
 
 
-def preprocess_data_file(file_path) -> str:
+def preprocess_data_file(file_path: str) -> str:
     """Preprocess a torch.profile.profile table from a file.
 
     Converts to a semicolon-separated format with time values in milliseconds.
     """
-    with open(file_path, "r") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
         return _preprocess_data_lines(lines)

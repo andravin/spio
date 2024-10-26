@@ -18,3 +18,4 @@ from .kernel_params_logger import (
 from .kernel_key import KernelParams, KernelKey
 from .kernel import Kernel, get_full_kernel_name
 from .kernel_factory import KernelFactory
+from .params import Params

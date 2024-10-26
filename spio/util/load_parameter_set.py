@@ -1,8 +1,13 @@
+"""Function to load a Params set from a resource file."""
+
 import importlib
-from typing import List, Type
+from typing import List, Type, TYPE_CHECKING
 from dataclasses import dataclass
 
 from .parse_dataclass import parse_dataclass
+
+if TYPE_CHECKING:
+    from ..kernels import Params
 
 
 def _load_dataclasses_from_resource(
@@ -38,7 +43,9 @@ def _load_dataclasses_from_resource(
         return []
     dataclasses = {d.__name__: d for d in dataclasses}
     params_lst = []
-    with importlib.resources.files("spio.src_tests").joinpath(resource_name).open("r") as f:
+    with importlib.resources.files("spio.src_tests").joinpath(resource_name).open(
+        "r"
+    ) as f:
         for line in f:
             if line:
                 params = parse_dataclass(line, dataclasses=dataclasses)
@@ -47,7 +54,7 @@ def _load_dataclasses_from_resource(
     return params_lst
 
 
-def load_parameter_set(params_cls: dataclass = None):
+def load_parameter_set(params_cls: Type["Params"] = None):
     """Load the parameter set for the given parameter dataclass.
 
     Paremeter sets are located in spio.data.<data_cls>.dat. They

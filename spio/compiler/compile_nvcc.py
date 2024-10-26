@@ -43,23 +43,25 @@ def nvcc_full_path():
 
 def compile_with_nvcc(
     sources,
-    includes=[],
+    includes=None,
     run=False,
     cubin=False,
-    compile=False,
+    compile_flag=False,
     arch=None,
     output_file=None,
     device_debug=False,
     lineinfo=False,
 ):
     """Deprecated. Use compile_with_nvrtc instead."""
+    if includes is None:
+        includes = []
     arch = sm_from_arch(arch)
     nvcc = nvcc_full_path()
     includes = [f"-I{path}" for path in includes]
     args = [nvcc] + includes
     if run:
         args.append("--run")
-    if compile:
+    if compile_flag:
         args.append("--compile")
     if cubin:
         args.append("--cubin")
@@ -72,6 +74,6 @@ def compile_with_nvcc(
     if lineinfo:
         args.append("-lineinfo")
     args += sources
-    r = subprocess.run(args)
+    r = subprocess.run(args, check=True)
     r.check_returncode()
     return r

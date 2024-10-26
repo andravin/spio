@@ -28,10 +28,8 @@ def register_conv2d_gw8_reflections():
             args=["output", "input", "weight", "bias"],
             kernel_outputs=["output"],
             reference=torch.nn.functional.conv2d,
-            stacking=[("output", "input")],
             stats=Conv2dStats,
             params=Conv2dGw8Params,
-            prefix_op_constructor=_make_prefix_op,
             ignore_params=["stride", "group_width"],
         )
     )
@@ -42,10 +40,8 @@ def register_conv2d_gw8_reflections():
             arginfo=conv2d_arg_info,
             args=["input", "weight", "bias"],
             reference=torch.nn.functional.conv2d,
-            stacking=[("output", "input")],
             stats=Conv2dStats,
             params=Conv2dGw8Params,
-            prefix_op_constructor=_make_prefix_op,
             get_function_kwargs=_spio_conv2d_gw8_kwargs,
         )
     )
@@ -56,7 +52,6 @@ def register_conv2d_gw8_reflections():
             arginfo=conv2d_arg_info,
             args=["input", "weight", "bias"],
             reference=None,
-            stacking=[("output", "input")],
             stats=Conv2dStats,
             params=Conv2dGw8Params,
             get_function_kwargs=_torch_conv2d_kwargs,
@@ -71,7 +66,6 @@ def register_conv2d_gw8_reflections():
             reference=torch.nn.Conv2d,
             stats=Conv2dStats,
             params=Conv2dGw8Params,
-            prefix_op_constructor=_make_prefix_op,
             get_function_kwargs=_conv2d_layer_kwargs,
             from_layer=Conv2dGw8.from_torch_module,
         )
@@ -84,7 +78,6 @@ def register_conv2d_gw8_reflections():
             args=["input"],
             stats=Conv2dStats,
             params=Conv2dGw8Params,
-            prefix_op_constructor=_make_prefix_op,
             get_function_kwargs=_conv2d_layer_kwargs,
         )
     )
@@ -107,7 +100,6 @@ def register_conv2d_gw8_reflections():
             args=["grad_weight", "input", "grad_output"],
             kernel_outputs=["grad_weight"],
             reference=torch.nn.functional.conv2d,
-            prefix_op_constructor=_make_prefix_op,
             stats=Conv2dStats,
             params=Conv2dGw8Params,
             ignore_params=["stride", "group_width"],
@@ -134,35 +126,9 @@ def register_conv2d_gw8_reflections():
             reference=torch.nn.functional.conv2d,
             stats=Conv2dStats,
             params=Conv2dGw8Params,
-            stacking=[("grad_input", "grad_output")],
-            prefix_op_constructor=_make_prefix_op,
             ignore_params=["stride", "group_width"],
         )
     )
-
-
-def _make_prefix_op(params: Conv2dGw8Params) -> torch.nn.Module:
-    """Return a prefix operation for the kernel.
-
-    Prefix operations are used to cover the latency of launching the benchmark kernels.
-    This improves the accuracy of the benchmark when the kernels have low latency.
-    """
-    TARGET_LATENCY = (
-        1e-3  # 1e-3 seconds = 1 ms (plenty of time to hide kernel launch overhead).
-    )
-    PEAK_ARITHMETIC_THROUGHPUT = 150e12  # 150 TFLOPS (realistic upper bound for GPUs)
-    TARGET_MACS = TARGET_LATENCY * PEAK_ARITHMETIC_THROUGHPUT
-
-    N, C, H, W = params.N, params.C, params.H, params.W
-    macs_per_kernel_dim = (N * C * H * W) * C
-    kernel_size = _next_odd_number(math.sqrt(TARGET_MACS / macs_per_kernel_dim))
-    padding = kernel_size // 2
-    return torch.nn.Conv2d(C, C, kernel_size=kernel_size, padding=padding).cuda().half()
-
-
-def _next_odd_number(x: float) -> int:
-    """Return the next odd number greater than or equal to x."""
-    return math.ceil(x) // 2 * 2 + 1
 
 
 def _torch_conv2d_kwargs(params):
@@ -178,6 +144,7 @@ def _spio_conv2d_gw8_kwargs(params):
         padding_x=params.padding_w,
         groups=params.groups,
     )
+
 
 def _conv2d_layer_kwargs(params):
     """Return the keyword arguments for spio.layers.Conv2dGw8 and torch.nn.Conv2d"""

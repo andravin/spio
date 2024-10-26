@@ -1,4 +1,5 @@
 """Module defining a protocol for layer parameters."""
+
 from typing import Protocol
 
 

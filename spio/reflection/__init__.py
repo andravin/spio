@@ -1,3 +1,5 @@
+"""Registry of kernel, function, and layer reflections."""
+
 from .reflection import (
     get_kernel_reflection,
     get_function_reflection,

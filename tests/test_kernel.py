@@ -58,7 +58,7 @@ def test_mma_m16_n8_k8_kernel():
 
 def test_mma_m16_n8_k16_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k16."""
-    module, mma_kernel = compile_and_load_kernel(
+    _, mma_kernel = compile_and_load_kernel(
         kernel_name="mma_m16_n8_k16",
         source_file_name="mma.cu",
         debug=True,
@@ -122,7 +122,7 @@ def test_memcpy_kernel():
         ]
     )
 
-    module, memcpy_kernel = compile_and_load_kernel(
+    _, memcpy_kernel = compile_and_load_kernel(
         kernel_name="memcpy_simple",
         debug=debug,
         lineinfo=lineinfo,
@@ -144,6 +144,7 @@ def test_memcpy_kernel():
 
 
 def test_row_memcpy_kernel():
+    """Test the row-by-row memcpy kernel."""
     debug = False
     lineinfo = True
 
@@ -212,7 +213,7 @@ def test_row_memcpy_kernel():
         ]
     )
 
-    module, kernel = compile_and_load_kernel(
+    _, kernel = compile_and_load_kernel(
         kernel_name="row_memcpy",
         debug=debug,
         lineinfo=lineinfo,

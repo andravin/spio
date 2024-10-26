@@ -1,8 +1,13 @@
+"""Functions to transform and scan PyTorch modules with Spio modules."""
+
+from typing import List
+
 import torch
 from torch.fx import symbolic_trace
 
 from ..layers import Conv2dGw8
 from ..util import get_full_name, logger_enabled
+from ..kernels import Params
 
 spio_modules_classes = [Conv2dGw8]
 
@@ -26,7 +31,9 @@ def _transform(model):
                     _replace_module(traced, n, spio_module)
                     if logger_enabled:
                         before = get_full_name(module.__class__)
-                        after = spio_module.__class__.__module__ + "." + str(spio_module)
+                        after = (
+                            spio_module.__class__.__module__ + "." + str(spio_module)
+                        )
                         print(f"spio: replaced a {before} module with {after}")
                     num_replacements += 1
                     break
@@ -37,8 +44,8 @@ def _transform(model):
     return traced, num_replacements
 
 
-def scan_modules(model, *args):
-    """Scans a PyTorch model and returns a list of parameters for every module that matches a Spio module."""
+def scan_modules(model, *args) -> List[Params]:
+    """Scans a PyTorch model and returns a list of Params for the matched Spio modules."""
     traced = symbolic_trace(model)
     interpreter = _ScanInterpreter(traced)
     interpreter.run(*args)
@@ -55,13 +62,14 @@ def _replace_module(traced, n, spio_module):
 
 
 class _ScanInterpreter(torch.fx.Interpreter):
+    """Interpreter for scanning modules in a PyTorch model."""
+
     def __init__(self, model):
         self.modules_dict = dict(model.named_modules())
         super().__init__(model)
         self._params_lst = []
 
     def call_module(self, target, args, kwargs):
-        params_lst = []
         if target in self.modules_dict:
             module = self.modules_dict[target]
             for spio_module_class in spio_modules_classes:
@@ -72,5 +80,6 @@ class _ScanInterpreter(torch.fx.Interpreter):
         return super().call_module(target, args, kwargs)
 
     @property
-    def params_lst(self):
+    def params_lst(self) -> List[Params]:
+        """Return the list of parameters recorded so far."""
         return self._params_lst

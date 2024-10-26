@@ -1,3 +1,4 @@
+"""Functions for asserting that two tensors are close to each other."""
 import torch
 
 
@@ -10,6 +11,7 @@ def assert_all_close_with_acc_depth(
     atol_fudge=3.5,
     rtol_fudge=2.0,
 ):
+    """Assert that two tensors are close to each other with a given accumulation depth."""
     float16_precision = 5e-4
     float32_precision = 1.19e-7
     atol = acc_depth * abs_mean * abs_mean * float32_precision * atol_fudge
@@ -18,6 +20,7 @@ def assert_all_close_with_acc_depth(
 
 
 def assert_all_close(actual, expected, atol=0, rtol=0, msg=None):
+    """Assert that two tensors are close to each other."""
     expected = expected.float()
     actual = actual.float()
     absdiff = torch.abs(actual - expected)
@@ -36,7 +39,6 @@ def assert_all_close(actual, expected, atol=0, rtol=0, msg=None):
             bad_absdiff[:max_errors],
             bad_absdiff_tol[:max_errors],
         ):
-            ratio = ad / abs(e)
             m += f"actual ={a:>10.6f} expected ={e:>10.6f} |diff| = {ad:>10.6f} > abs_diff_tol = {adt:>10.6f}\n"
         if len(bad_actual) > max_errors:
             m += f"... and {len(bad_actual) - max_errors} more\n"

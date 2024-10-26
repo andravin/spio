@@ -1,3 +1,5 @@
+"""Utility functions used by the Spio library."""
+
 from .load_parameter_set import _load_dataclasses_from_resource, load_parameter_set
 from .math import divup
 from .close import assert_all_close_with_acc_depth
