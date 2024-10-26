@@ -174,6 +174,7 @@ class MLP(nn.Module):
 
 class GroupedConvFiesta(nn.Module):
     """Build a multi-block stage with MLPs surrounding a given block class."""
+
     def __init__(
         self,
         num_channels=64,
