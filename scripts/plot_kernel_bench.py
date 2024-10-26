@@ -404,21 +404,21 @@ def conv2d_gw8_kernel_params_from_dirname_params(dirname_params):
     block_name = dirname_params["block_name"]
 
     if block_name == "convfirst":
-        C = dirname_params["channels"]
+        c = dirname_params["channels"]
     elif block_name == "mbconv":
-        C = dirname_params["channels"] * dirname_params["expansion_ratio"]
+        c = dirname_params["channels"] * dirname_params["expansion_ratio"]
     else:
         raise ValueError(f"Unknown block name: {block_name}")
     fprop_reflection = get_kernel_reflection("spio_conv2d_gw8_fprop")
     params_cls = fprop_reflection.params
     return params_cls(
-        N=dirname_params.get("batch_size"),
-        C=C,
-        H=dirname_params["height_width"],
-        W=dirname_params["height_width"],
+        n=dirname_params.get("batch_size"),
+        c=c,
+        h=dirname_params["height_width"],
+        w=dirname_params["height_width"],
         padding=dirname_params["kernel_size"] // 2,
-        R=dirname_params["kernel_size"],
-        S=dirname_params["kernel_size"],
+        r=dirname_params["kernel_size"],
+        s=dirname_params["kernel_size"],
         has_bias=False,
         group_width=dirname_params["group_width"],
     )
