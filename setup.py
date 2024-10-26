@@ -38,12 +38,14 @@ setup(
     install_requires=[
         "torch>=2.4.0",
         "nvidia-cuda-nvrtc-cu12",
+        "nvidia-cuda-runtime-cu12",
         "pytest",
         "xgboost",
         "appdirs",
         "requests",
         "filelock",
         "packaging",
+        "importlib_resources",
     ],
     include_package_data=True,
 )
