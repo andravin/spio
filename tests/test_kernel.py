@@ -105,12 +105,7 @@ def test_memcpy_kernel():
         [
             ParamsSpec(
                 "MyParams",
-                dict(
-                    ITERS=ITERS,
-                    BLOCK_X4=BLOCK_X4,
-                    X=X,
-                    THREADS=THREADS,
-                ),
+                {"ITERS": ITERS, "BLOCK_X4": BLOCK_X4, "X": X, "THREADS": THREADS},
             ),
         ]
     )
@@ -174,34 +169,36 @@ def test_row_memcpy_kernel():
 
     parameters_header = generate(
         [
-            ParamsSpec("Block", dict(p=BLOCK_P, q=BLOCK_Q, c4=BLOCK_C4, padding=1)),
+            ParamsSpec(
+                "Block", {"p": BLOCK_P, "q": BLOCK_Q, "c4": BLOCK_C4, "padding": 1}
+            ),
             IndexSpec(
                 "BlockIdx",
-                dict(n=BLOCKS_N, p=BLOCKS_P, q=BLOCKS_Q, c4=BLOCKS_C4),
+                {"n": BLOCKS_N, "p": BLOCKS_P, "q": BLOCKS_Q, "c4": BLOCKS_C4},
             ),
-            IndexSpec("InputIdx", dict(x=BLOCK_W, c4=BLOCK_C4)),
-            TensorSpec("Input", "const float4", dict(n=N, y=H, x=W, c4=C4)),
-            TensorSpec("Output", "float4", dict(n=N, p=H, q=W, c4=C4)),
+            IndexSpec("InputIdx", {"x": BLOCK_W, "c4": BLOCK_C4}),
+            TensorSpec("Input", "const float4", {"n": N, "y": H, "x": W, "c4": C4}),
+            TensorSpec("Output", "float4", {"n": N, "p": H, "q": W, "c4": C4}),
             TensorSpec(
                 "SmemInput",
                 "float4",
-                dict(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1),
+                {"ping_pong": 2, "x": BLOCK_W, "c4": BLOCK_C4 + 1},
             ),
             TensorSpec(
                 "ConstSmemInput",
                 "const float2",
-                dict(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1, c2=2),
+                {"ping_pong": 2, "x": BLOCK_W, "c4": BLOCK_C4 + 1, "c2": 2},
             ),
-            IndexSpec("SmemInputLoadIdx", dict(c4=BLOCK_C4, q=BLOCK_Q, c2=2)),
+            IndexSpec("SmemInputLoadIdx", {"c4": BLOCK_C4, "q": BLOCK_Q, "c2": 2}),
             TensorSpec(
                 "SmemOutput",
                 "float2",
-                dict(q=BLOCK_Q, c4=BLOCK_C4 + 1, c2=2),
+                {"q": BLOCK_Q, "c4": BLOCK_C4 + 1, "c2": 2},
             ),
             TensorSpec(
                 "ConstSmemOutput",
                 "const float4",
-                dict(q=BLOCK_Q, c4=BLOCK_C4 + 1),
+                {"q": BLOCK_Q, "c4": BLOCK_C4 + 1},
             ),
         ]
     )

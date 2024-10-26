@@ -50,7 +50,7 @@ def test_cpp_tests():
 def _test_generate_index():
     """Return the C++ source code that tests a custom index class."""
     my_index_code = spio.generators.index._generate_index(
-        "MyIndex", dict(n=4, h=32, w=64, c=128)
+        "MyIndex", {"n": 4, "h": 32, "w": 64, "c": 128}
     )
     size = 4 * 32 * 64 * 128
     header = spio.generators.index._index_header()
@@ -95,7 +95,7 @@ def _test_generate_tensor():
     C = 42
 
     my_tensor_code = spio.generators.tensor._generate_tensor(
-        "MyTensor", "const float", dict(n=N, h=H, w=W, c=C)
+        "MyTensor", "const float", {"n": N, "h": H, "w": W, "c": C}
     )
     header = spio.generators.tensor._tensor_header()
     test_code = f"""
