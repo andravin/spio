@@ -5,6 +5,7 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60  # Increase the timeout to 60 minutes
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
@@ -26,11 +27,9 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install setuptools wheel Cython
     - name: Print working directory
-      run: |
-        pwd
+      run: pwd
     - name: List contents of current directory
-      run: |
-        ls -la
+      run: ls -la
     - name: Install project in editable mode
       run: |
         pip install pylint
@@ -39,12 +38,9 @@ jobs:
       run: |
         python -c "import spio.cuda.driver; print('spio.cuda.driver imported successfully')"
     - name: List installed packages
-      run: |
-        pip list
+      run: pip list
     - name: List built extensions
-      run: |
-        ls -R .
+      run: ls -R .
     - name: Analysing the code with pylint
       run: |
         pylint --rcfile=pylintrc $(git ls-files '*.py')
-    
