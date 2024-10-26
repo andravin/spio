@@ -222,8 +222,6 @@ def conv2d_gw8_setup_context(ctx, inputs, output):
     if bias is not None:
         assert bias.dtype == torch.float32
 
-    _check_channels_last([input_tensor, weight, bias])
-
     ctx.save_for_backward(input_tensor, weight, bias)
     ctx.padding_y = padding_y
     ctx.padding_x = padding_x
@@ -248,12 +246,3 @@ def _to_channels_last(*args) -> List[Any]:
         )
         for t in args
     )
-
-
-def _check_channels_last(args: List[Any]):
-    """Assert that all 4-D tensors are in channels_last memory format."""
-    for arg in args:
-        if isinstance(arg, torch.Tensor) and len(arg.shape) == 4:
-            assert arg.is_contiguous(
-                memory_format=torch.channels_last
-            ), f"Tensor is not channels_last: {arg}"
