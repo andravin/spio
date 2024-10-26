@@ -1,7 +1,8 @@
 """This file contains an interface to the CUDA nvcc compiler.
 
-This compiler is only used by certain unit tests which are disabled by default.
-In general, Spio uses libnvrtc to compile CUDA code instead of nvcc.
+This compiler is only used by certain unit tests which are disabled by
+default. In general, Spio uses libnvrtc to compile CUDA code instead of
+nvcc.
 
 Therefore, nvcc is not requried for Spio to function correctly.
 """
@@ -16,11 +17,12 @@ from .arch import sm_from_arch
 def nvcc_full_path():
     """Return the path to nvcc or raise FileNotFoundError if not found.
 
-    This function returns the value of the CUDACXX environment variable, if it is set.
-    Else it returns "$CUDA_HOME / bin/ nvcc",  if the CUDA_HOME environment variable is set.
-    Else it returns "/usr/local/cuda/bin/nvcc" if that file exists.
-    Else it returns the result of using the "which" shell command to find "nvcc", if that returns a result.
-    Else it raises a FileNotFoundError.
+    This function returns the value of the CUDACXX environment variable,
+    if it is set. Else it returns "$CUDA_HOME / bin/ nvcc",  if the
+    CUDA_HOME environment variable is set. Else it returns
+    "/usr/local/cuda/bin/nvcc" if that file exists. Else it returns the
+    result of using the "which" shell command to find "nvcc", if that
+    returns a result. Else it raises a FileNotFoundError.
     """
     path = os.environ.get("CUDACXX")
     if path is not None:
@@ -52,7 +54,10 @@ def compile_with_nvcc(
     device_debug=False,
     lineinfo=False,
 ):
-    """Deprecated. Use compile_with_nvrtc instead."""
+    """Deprecated.
+
+    Use compile_with_nvrtc instead.
+    """
     if includes is None:
         includes = []
     arch = sm_from_arch(arch)

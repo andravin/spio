@@ -5,7 +5,7 @@ from typing import Tuple, Union
 @dataclass
 class LaunchParams:
     """Launch parameters for CUDA kernels.
-    
+
     Attributes:
         grid: The grid size.
         block: The block size.

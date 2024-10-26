@@ -1,8 +1,8 @@
-"""
-This module provides a reflection system for kernels and functions.
+"""This module provides a reflection system for kernels and functions.
 
-The reflection system is used to define the arguments and properties of a kernel or function.
-Tests and benchmarks use the reflection system to generate arguments for the kernel or function.
+The reflection system is used to define the arguments and properties of
+a kernel or function. Tests and benchmarks use the reflection system to
+generate arguments for the kernel or function.
 """
 
 from dataclasses import dataclass, field
@@ -15,7 +15,12 @@ from .arg_info import ArgInfo, Init
 
 @dataclass
 class GradName:
-    """Encode the relationship between a gradient arg and the arg it is the gradient of."""
+    """Encode the relationship between a tensor and its gradient.
+
+    Attributes:
+        name: The name of the gradient.
+        grad_of: The name of the tensor that the gradient is for.
+    """
 
     name: str
     grad_of: str
@@ -25,8 +30,9 @@ class GradName:
 class Reflection:
     """Reflection information for a kernel or function.
 
-    The reflection system is used to define the arguments and properties of a kernel,
-    function, or layer. Tests and benchmarks use the reflection system to generate arguments.
+    The reflection system is used to define the arguments and properties
+    of a kernel, function, or layer. Tests and benchmarks use the
+    reflection system to generate arguments.
     """
 
     arginfo: Dict[str, ArgInfo]
@@ -126,7 +132,7 @@ class Reflection:
 
     @property
     def grad_input_names(self) -> List[GradName]:
-        """Return the names of the gradients that this kernel computes."""
+        """The names of the gradients that this kernel computes."""
         return [
             GradName(name=name, grad_of=info.grad_of)
             for name, info in self.arginfo.items()
@@ -146,11 +152,12 @@ class Reflection:
     def kernel_is_backprop(self):
         """Return true if this reflection is for a backprop kernel.
 
-        A backprop kernel is a kernel that computes the gradient of a function.
-        A kernel is backprop kernel if any of its arguments start with "grad_".
+        A backprop kernel is a kernel that computes the gradient of a
+        function. A kernel is backprop kernel if any of its arguments
+        start with "grad_".
         """
         return self.kernel_name is not None and any(
-            [arg.startswith("grad_") for arg in self.args]
+            arg.startswith("grad_") for arg in self.args
         )
 
 

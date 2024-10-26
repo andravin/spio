@@ -1,4 +1,6 @@
-"""Code generator for custom index classes in CUDA kernel source code."""
+"""Code generator for custom index classes in CUDA kernel source
+code."""
+
 from math import prod
 from typing import Dict, Tuple, List
 from dataclasses import dataclass
@@ -6,15 +8,16 @@ from dataclasses import dataclass
 
 @dataclass
 class IndexSpec:
-    """Code generator for custom index classes in CUDA kernel source code.
-    
+    """CUDA Code generator for custom index classes.
+
     This class is used to generate custom index classes that map named tensor dimensions to offsets.
     Conversely, it can also map offsets back to named tensor dimensions.
-    
+
     Attributes:
         class_name (str): The name of the custom index class.
         dims (Dict[str, int]): A dictionary mapping dimension names to their sizes.
     """
+
     class_name: str
     dims: Dict[str, int]
 
@@ -46,11 +49,11 @@ def _generate_index(class_name: str, dims: Dict[str, int]) -> str:
 
 
 def _index_header() -> str:
-    """Return the C++ statement that includes the spio index header file.
+    """Return a C++ statement that includes the spio index header.
 
     This file implements the C++ base template classes from which the
-    custom index classes inherit. You must include this header before using
-    the code returned by the generate_index() function.
+    custom index classes inherit. You must include this header before
+    using the code returned by the generate_index() function.
     """
     return '#include "spio/index.h"'
 

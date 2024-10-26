@@ -91,7 +91,7 @@ def _get_configs(
 def _get_specs(
     params: Conv2dGw8Params, config: Conv2dGw8WgradConfig = None, **_kwargs
 ) -> Tuple[List[GenSpecs], LaunchParams]:
-    """Return the code generator specs and launch parameters for the Conv2d GW8 Wgrad kernel."""
+    """Get the code gen specs and launch params."""
     params.validate()
 
     r, s = params.R, params.S

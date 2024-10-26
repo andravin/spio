@@ -62,19 +62,19 @@ class KernelFactory:
         self.per_model_skip_params = perf_model_skip_params
 
     def configs(self, params: Params, **kwargs):
-        """Return a generator for the configs of the given layer parameters."""
+        """Return all configs of the given layer parameters."""
         if callable(self._configs):
             return self._configs(params, **kwargs)
         return self._configs
 
     def get_kernel_name(self, **kwargs) -> str:
-        """Return the name of the kernel with the given keyword arguments."""
+        """The name of the kernel with the keyword args."""
         if callable(self._kernel_name):
             return self._kernel_name(**kwargs)
         return self._kernel_name
 
     def get_full_kernel_name(self, params: Params, **kwargs) -> str:
-        """Return the full name of the kernel with the given keyword arguments.
+        """Return the full name of the kernel.
 
         The full name includes the kernel name and the parameters.
         """
@@ -106,7 +106,7 @@ class KernelFactory:
         return kernel_cache
 
     def get_kernel(self, params: Params, device, **kwargs) -> Kernel:
-        """Return the best kernel for the given layer parameters and device.
+        """Return the best kernel for the layer parameters and device.
 
         Returns a cached kernel if one is found matching the params and
         device. Otherwise, uses the kernel's performance model to
@@ -117,8 +117,7 @@ class KernelFactory:
         return kernel_cache.get(self, params, device, **kwargs)
 
     def make_kernel(self, params: Params, config, **kwargs) -> Kernel:
-        """Return a new Kernel object for the given layer parameters and
-        configuration."""
+        """Return a new Kernel object for the params and config."""
         kernel_name = self.get_full_kernel_name(params, **kwargs)
         specs, launch_params = self.get_specs(params, config, **kwargs)
         return Kernel(

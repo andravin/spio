@@ -12,13 +12,19 @@ from ..kernels import Params
 spio_modules_classes = [Conv2dGw8]
 
 
-def transform(model):
-    """Transforms a PyTorch model by replacing matching modules with their Spio counterparts."""
+def transform(model: torch.nn.Module):
+    """Transforms a PyTorch model to use Spio modules.
+
+    Repplaces any matching modules with their Spio counterparts.
+    """
     return _transform(model)[0]
 
 
-def _transform(model):
-    """Return the transformed spio model and the number of modules replaced."""
+def _transform(model: torch.nn.Module):
+    """Transform the model.
+
+    Returns the transformed model and the number of modules replaced.
+    """
     traced = symbolic_trace(model)
     num_replacements = 0
     modules_dict = dict(model.named_modules())
@@ -45,7 +51,11 @@ def _transform(model):
 
 
 def scan_modules(model, *args) -> List[Params]:
-    """Scans a PyTorch model and returns a list of Params for the matched Spio modules."""
+    """Returns a list of Params for matched Spio modules.
+
+    Scans a PyTorch model and returns a list of Params for the matched
+    Spio modules.
+    """
     traced = symbolic_trace(model)
     interpreter = _ScanInterpreter(traced)
     interpreter.run(*args)

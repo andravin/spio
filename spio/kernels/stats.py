@@ -8,6 +8,10 @@ from .params import Params
 class Stats:
     """Base class for kernel op and byte statistics.
 
+    Statistics are computed for the calculations that produce
+    the given output tensors. For example, to get statistics
+    for the gradient of the input, set output_names to "grad_input".
+
     Args:
         params: Parameters for the layer.
         unit: number of bytes per tensor element.
@@ -25,7 +29,11 @@ class Stats:
 
     @property
     def macs(self):
-        """Return the number of multicply-accumulates performed for the output tensors."""
+        """The number of MACs in the calculations.
+
+        Returns the total number of multiply-accumulates performed by
+        all of the output tensor calculations.
+        """
         return sum(
             getattr(self, f"{output_tensor}_macs")
             for output_tensor in self.output_names
@@ -33,7 +41,7 @@ class Stats:
 
     @property
     def bytes_read(self):
-        """Return the number of bytes read while computing the output tensors."""
+        """The number of bytes read in the calculations."""
         return sum(
             getattr(self, f"{output_tensor}_bytes_read")
             for output_tensor in self.output_names
@@ -41,7 +49,7 @@ class Stats:
 
     @property
     def bytes_written(self):
-        """Return the number of bytes written while computing the output tensors."""
+        """The number of bytes written in the calculations."""
         return sum(
             getattr(self, f"{output_tensor}_bytes_written")
             for output_tensor in self.output_names
@@ -59,7 +67,7 @@ class Stats:
 
     @property
     def accumulation_depths(self):
-        """Return the accumulation depths used by the compute for each output tensor."""
+        """The accumulation depths of the calculations."""
         return [
             getattr(self, f"{output_tensor}_accumulation_depth")
             for output_tensor in self.output_names

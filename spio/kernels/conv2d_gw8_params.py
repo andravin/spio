@@ -8,7 +8,8 @@ import torch
 
 @dataclass(frozen=True)
 class Conv2dGw8Params:
-    """A dataclass that holds parameters for a 2D convolution with group width 8.
+    """A dataclass that holds parameters for a 2D convolution with group
+    width 8.
 
     This class is used to validate and store parameters for a grouped convolution operation.
 
@@ -37,11 +38,13 @@ class Conv2dGw8Params:
     def encode(self) -> str:
         """Return a string representation of the parameters."""
         bias_str = "b" if self.has_bias else "nb"
-        return f"{self.N}n_{self.C}c_{self.H}h_{self.W}w_{self.padding_h}py_{self.padding_w}px_{self.R}r_{self.S}s_{bias_str}"
-
+        return (
+            f"{self.N}n_{self.C}c_{self.H}h_{self.W}w_{self.padding_h}py_"
+            f"{self.padding_w}px_{self.R}r_{self.S}s_{bias_str}"
+        )
     @classmethod
     def decode(cls, string: str) -> "Conv2dGw8Params":
-        """Return a Conv2dGw8Params instance from a string representation."""
+        """Get a Conv2dGw8Params instance from a string rep."""
         matches = re.match(
             r"(\d+)n_(\d+)c_(\d+)h_(\d+)w_(\d+)py_(\d+)px_(\d+)r_(\d+)s_(b|nb)", string
         )
@@ -62,8 +65,8 @@ class Conv2dGw8Params:
         )
 
     @staticmethod
-    def from_tensors(input, weight, bias, padding=1):
-        """Return a Conv2dGw8Params instance from input, weight, and bias tensors.
+    def from_tensors(inputs, weight, bias, padding=1):
+        """Derive a Conv2dGw8Params instance from tensor args.
 
         The tensors are arguments from a torch.nn.functional.conv2d call.
 
@@ -76,7 +79,7 @@ class Conv2dGw8Params:
         assert bias is None or (
             len(bias.shape) == 1 and bias.shape[0] == weight.shape[0]
         )
-        N, C, H, W = input.shape
+        N, C, H, W = inputs.shape
         K, group_width, R, S = weight.shape
         assert (
             group_width == Conv2dGw8Params.group_width
@@ -98,8 +101,9 @@ class Conv2dGw8Params:
 
     @staticmethod
     def from_torch_module(module, input: torch.Tensor):
+        """Derive a Conv2dGw8Params instance from a torch.nn.Module."""
         N, C, H, W = input.shape
-        K, group_width, R, S = module.weight.shape
+        K, _group_width, R, S = module.weight.shape
         has_bias = module.bias is not None
         padding = module.padding
         return Conv2dGw8Params(
@@ -185,17 +189,20 @@ class Conv2dGw8Params:
 
     @property
     def input_shape(self):
-        """Return the shape of the input tensor as a tuple (N, C, H, W)."""
+        """Return the shape of the input tensor as a tuple (N, C, H,
+        W)."""
         return (self.N, self.C, self.H, self.W)
 
     @property
     def output_shape(self):
-        """Return the shape of the output tensor as a tuple (N, C, P, Q)."""
+        """Return the shape of the output tensor as a tuple (N, C, P,
+        Q)."""
         return (self.N, self.K, self.P, self.Q)
 
     @property
     def weight_shape(self):
-        """Return the shape of the weight tensor as a tuple (K, group_width, R, S)."""
+        """Return the shape of the weight tensor as a tuple (K,
+        group_width, R, S)."""
         return (self.K, self.group_width, self.R, self.S)
 
     @property

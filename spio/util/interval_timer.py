@@ -59,16 +59,17 @@ class IntervalTimer:
     def report(self, message=""):
         """Print a report of the timer statistics."""
         print(
-            f"{message:40s}: avg: {self.average()*1e6:8.1f}us min: {self.min*1e6:8.1f}us max: {self.max*1e6:8.1f}us"
+            f"{message:40s}: avg: {self.average()*1e6:8.1f}us "
+            f"min: {self.min*1e6:8.1f}us max: {self.max*1e6:8.1f}us"
         )
 
 
 class Timer:
     """A context manager for timing code blocks."""
 
-    def __init__(self, message="", timer_log_level=0):
+    def __init__(self, message: str = "", timer_log_level: int = 0):
         """Initialize the timer.
-        
+
         Args:
             message (str, optional): A message to display when the timer starts. Defaults to "".
 

@@ -23,7 +23,6 @@ class Kernel:
     def compiler_args(self):
         """Return the arguments for the kernel compiler."""
         return (
-            self.kernel_name,
             self.kernel_source_file,
             {"parameters.h": self.parameters_header},
             self.src_module,

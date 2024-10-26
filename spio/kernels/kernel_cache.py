@@ -1,4 +1,5 @@
 """Kernel cache for compiled kernels."""
+
 from typing import Dict
 
 import torch
@@ -19,9 +20,10 @@ perf_model_cache = PerformanceModelCache()
 class KernelCache:
     """Cache for compiled kernels.
 
-    This class is used to cache compiled kernels for reuse. It also provides a mechanism to
-    select the best kernel configuration for a given set of parameters and device.
-    If the best kernel is not already in the cache, it will be compiled and loaded.
+    This class is used to cache compiled kernels for reuse. It also
+    provides a mechanism to select the best kernel configuration for a
+    given set of parameters and device. If the best kernel is not
+    already in the cache, it will be compiled and loaded.
     """
 
     def __init__(self):
@@ -29,11 +31,11 @@ class KernelCache:
         self._cache_overlay = {}
 
     def update_overlay(self, overlay: Dict[str, Kernel]):
-        """
-        Add a set of kernels to the overlay cache.
+        """Add a set of kernels to the overlay cache.
 
-        These kernels will be used instead of the main cache. A user may want to use this to
-        select specific kernel configurations for benchmarking.
+        These kernels will be used instead of the main cache. A user may
+        want to use this to select specific kernel configurations for
+        benchmarking.
 
         If an overlay is set, the main cache will not be used.
         """
@@ -51,21 +53,23 @@ class KernelCache:
     def get(self, kernel_factory, params, device, **kernel_kwargs) -> Kernel:
         """Return the best kernel for the given params and device.
 
-        If the kernel is not in the cache, it will be compiled and loaded.
-        The best kernel configuration is determined by the performance model
-        for the device and kernel class.
+        If the kernel is not in the cache, it will be compiled and
+        loaded. The best kernel configuration is determined by the
+        performance model for the device and kernel class.
         """
         key = KernelKey(device_ordinal=device.index, params=params)
         best_kernel = self._cache_overlay.get(key)
         if best_kernel is None:
             if self._cache_overlay:
                 raise ValueError(
-                    f"Kernel {kernel_factory} with params {params} and device {device} not found in overlay cache"
+                    f"Kernel {kernel_factory} with params {params} and device {device} "
+                    f"not found in overlay cache"
                 )
             best_kernel = self._cache.get(key)
             if best_kernel is None:
                 if kernel_params_logging_is_enabled():
-                    # If kernel params are being logged, the performance model might not exist for this kernel.
+                    # If kernel params are being logged, the performance model
+                    # might not exist for this kernel.
                     # We also don't care about performance in this case.
                     # So we just use the first configuration.
                     # Be careful to clear the cache when you are done logging params so
@@ -78,10 +82,12 @@ class KernelCache:
                     )
                 best_kernel = _compile_and_load_kernel(
                     kernel_factory, params, best_config, device, **kernel_kwargs
-                )                
+                )
                 self._cache[key] = best_kernel
                 if logger_enabled:
-                    print(f"spio: compiled kernel {best_kernel.kernel_name} for device {device}.")
+                    print(
+                        f"spio: compiled kernel {best_kernel.kernel_name} for device {device}."
+                    )
         return best_kernel
 
 

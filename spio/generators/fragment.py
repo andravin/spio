@@ -1,4 +1,5 @@
 """Code generator for matrix fragment with named dimensions."""
+
 from dataclasses import dataclass
 
 
@@ -20,13 +21,14 @@ class FragmentSpec:
             # Define an accumulator and initialize it to zero.
             Acc acc;
             acc.zero();
-    
+
     Attributes:
         class_name: Name of the fragment class.
         fragment_type: Type of the fragment (see spio.include.spio / fragment.cuh)
         row: Name of the row dimension.
         col: Name of the column dimension.
     """
+
     class_name: str
     fragment_type: str
     row: str

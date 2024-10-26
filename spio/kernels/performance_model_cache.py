@@ -58,9 +58,10 @@ _release_info = None
 
 
 def _get_github_access_token():
-    """Return the GitHub access token stored in the cache directory, or None if it does not exist.
+    """Return the GitHub access token stored in the cache directory.
 
-    The access token is only required when accessing a private GitHub repository.
+    Returns None if the token is not found. The access token is only
+    required when accessing a private GitHub repository.
     """
     if not GITHUB_TOKEN_FILE.exists():
         return None
@@ -82,9 +83,11 @@ class _PerformanceModelKey:
 class PerformanceModelCache:
     """A container for kernel performance models.
 
-    Performance models predict the latency of each kernel configuration for a given set of layer parameters.
-    Because such predictions are accurate, they can be used to select an efficient kernel configuration without
-    expensive auto-tuning. This greatly reduces the time to select kernels for each layer of the network.
+    Performance models predict the latency of each kernel configuration
+    for a given set of layer parameters. Because such predictions are
+    accurate, they can be used to select an efficient kernel
+    configuration without expensive auto-tuning. This greatly reduces
+    the time to select kernels for each layer of the network.
     """
 
     def __init__(self):
@@ -97,9 +100,10 @@ class PerformanceModelCache:
     def predict_best_kernel(
         self, kernel_factory: "KernelFactory", params: Any, device: str, **kernel_kwargs
     ) -> Kernel:
-        """Return the best kernel for the given kernel class and layer parameters.
+        """Return the best kernel for the kernel class and parameters.
 
-        Returns None if no performance model is available for the given kernel and device.
+        Returns None if no performance model is available for the given
+        kernel and device.
         """
         kernel_name = kernel_factory.get_kernel_name(**kernel_kwargs)
         performance_model = self._get_performance_model(kernel_name, device)
@@ -115,19 +119,24 @@ class PerformanceModelCache:
         )
 
     def _get_performance_model(self, kernel_name: str, device) -> xgb.Booster:
-        """Return the performance model for the given kernel, device, and architecture.
+        """Return a performance model for the kernel, device, and arch.
 
-        Each new version of spio has a new set of performance models stored in the release assets.
-        We download the listing of the performance model assets corresponding to the current software version
-        and store it in a .json file in the cache directory.
+        Each new version of spio has a new set of performance models
+        stored in the release assets. We download the listing of the
+        performance model assets corresponding to the current software
+        version and store it in a .json file in the cache directory.
 
-        The performance models are stored in tar.gz archives, with one archive for each device and architecture.
+        The performance models are stored in tar.gz archives, with one
+        archive for each device and architecture.
 
-        If the requested performance model is not in the memory cache, it is loaded from the disk-based cache or
-        downloaded from the GitHub release.
+        If the requested performance model is not in the memory cache,
+        it is loaded from the disk-based cache or downloaded from the
+        GitHub release.
 
-        If the architecture is supported, then it must provide a performance model for every kernel.
-        Additionally, there may be performance models for the device. We prefer device models if they exist.
+        If the architecture is supported, then it must provide a
+        performance model for every kernel. Additionally, there may be
+        performance models for the device. We prefer device models if
+        they exist.
         """
 
         device_name = get_formatted_device_name(device)
@@ -159,9 +168,9 @@ class PerformanceModelCache:
             self._model_cache[device_model_cache_key] = model
             if logger_enabled:
                 print(
-                    f"spio: loaded perf. model for {kernel_name} on {device}/{device_name}:{arch} from {archive_name}."
+                    f"spio: loaded perf. model for {kernel_name} on {device}/"
+                    f"{device_name}:{arch} from {archive_name}."
                 )
-
         assert (
             model is not None
         ), f"No performance model found for {kernel_name} on {device_name} / {device_name}:{arch}."
@@ -169,11 +178,11 @@ class PerformanceModelCache:
 
 
 def _get_archive_name_for_device_from_release_info(device: str, arch: str) -> str:
-    """Return the archive file name for the given device and architecture.
+    """Return the arch file name for the given device and arch.
 
-    The archive file name is derived from the assets listed in the release info.
-    A matching device model is preferred over an architecture model, but not all
-    devices have a performance model.
+    The archive file name is derived from the assets listed in the
+    release info. A matching device model is preferred over an
+    architecture model, but not all devices have a performance model.
     """
     release_info = _get_release_info()
     device_file = _get_device_archive_name(device, arch)
@@ -190,17 +199,19 @@ def _get_archive_name_for_device_from_release_info(device: str, arch: str) -> st
     if arch_asset is not None:
         return arch_file
     release_version = release_info["tag"]
-    return ValueError(
-        f"No performance model archive found in release {release_version} for {device} and architecture {arch}."
+    raise ValueError(
+        f"No performance model archive found in release {release_version} for "
+        f"{device} and architecture {arch}."
     )
 
 
 def _get_model_name_from_archive(
     kernel_name: str, device: str, arch: str, archive_name: str
 ) -> str:
-    """Return the performance model file name for the given kernel, device, and architecture.
+    """Performance model file name for the kernel, device, and arch.
 
-    The performance model file name is derived from the archive name and the kernel name.
+    The performance model file name is derived from the archive name and
+    the kernel name.
     """
 
     if archive_name.startswith("devicemodel"):
@@ -219,8 +230,8 @@ def _predict_best_config(
 ):
     """Return the best configuration for the given parameters.
 
-    Uses the given XGBoost performance model to predict the latency of each configuration
-    and returns the best one.
+    Uses the given XGBoost performance model to predict the latency of
+    each configuration and returns the best one.
     """
     dm = _params_and_configs_to_dmatrix(params, configs, skip_params=skip_params)
     predictions = performance_model.predict(dm)
@@ -238,7 +249,10 @@ def _load_model_from_archive(archive_name: str, model_file_name: str) -> xgb.Boo
 
 
 def _ensure_archive_is_downloaded(archive_name: str):
-    """Download the given archive if it has not already been downloaded."""
+    """Download the given archive.
+
+    If it is already in the cache directory, do nothing.
+    """
     archive_path = PERF_CACHE_DIR / archive_name
     if not archive_path.exists():
         if not _download_archive(archive_path, archive_name):
@@ -247,10 +261,11 @@ def _ensure_archive_is_downloaded(archive_name: str):
 
 @_download_lock
 def _download_archive(archive_path: str, archive_name: str) -> bool:
-    """Download the archive from the GitHub release and save it to the disk-based cache.
+    """Download the archive from the GitHub release and save it.
 
-    Acquire the download lock in case multiple processes try to download the same archive.
-    Yes, FileLock is recursive: https://py-filelock.readthedocs.io/en/latest/
+    Acquire the download lock in case multiple processes try to download
+    the same archive. Yes, FileLock is recursive:
+    https://py-filelock.readthedocs.io/en/latest/
     """
     if archive_path.exists():
         # The archive was already downloaded by another process.
@@ -271,7 +286,7 @@ def _download_archive(archive_path: str, archive_name: str) -> bool:
 
 
 def _download_asset(asset, local_asset_path: Path):
-    """Download the asset from the GitHub release and save it to the disk-base cache."""
+    """Download the asset from the GitHub release and save it."""
     asset_id = asset["id"]
     download_url = f"{RELEASES_URL}/assets/{asset_id}"
     headers = _get_http_headers()
@@ -289,8 +304,9 @@ def _download_asset(asset, local_asset_path: Path):
 def _get_release_info():
     """Return the release info for the current software version.
 
-    The release info is a JSON object containing the metadata for the latest GitHub release.
-    Read from disk or download from the GitHub release if it is not already loaded.
+    The release info is a JSON object containing the metadata for the
+    latest GitHub release. Read from disk or download from the GitHub
+    release if it is not already loaded.
     """
     # pylint: disable=global-statement
     global _release_info
@@ -311,9 +327,11 @@ def _get_release_info():
 
 @_download_lock
 def _download_release_info():
-    """Download the release info for the current software version from the GitHub release.
+    """Download the release info for the current software version.
 
-    Acquire the download lock in case multiple processes try to download the release info.
+    The release info is obtained from the the GitHub release. Acquire
+    the download lock in case multiple processes try to download the
+    release info.
     """
     # Check if the release info was already downloaded by another process.
     release_info = _load_release_info()
@@ -337,7 +355,10 @@ def _download_release_info():
 
 
 def _load_release_info() -> None:
-    """Return the release info that is stored in the cache directory, or None if it does not exist."""
+    """Get the release info that is stored in the cache directory.
+
+    Return None if it does not exist.
+    """
     if RELEASE_INFO_FILE.exists():
         with RELEASE_INFO_FILE.open("r") as f:
             return json.load(f)
@@ -372,12 +393,12 @@ def _get_http_headers() -> str:
 
 
 def _get_device_archive_name(device: str, arch: str) -> str:
-    """Return the device archive name for the given device."""
+    """Return the tar archive name for the given device."""
     return f"devicemodel__{device}__{arch}.tgz"
 
 
 def _get_arch_archive_name(arch: str) -> str:
-    """Return the architecture archive name for the given architecture."""
+    """Return the tar archive name for the arch."""
     return f"archmodel__{arch}.tgz"
 
 
@@ -387,7 +408,7 @@ def get_device_performance_model_file_name(
     arch: str = None,
     ext: str = PERFORMANCE_MODEL_EXTENSION,
 ) -> str:
-    """Return the performance model filename for the given kernel, device, and architecture."""
+    """Get the perf model filename for the kernel, device, and arch."""
     return f"devicemodel__{device}__{arch}__{kernel}{ext}"
 
 
@@ -396,7 +417,7 @@ def get_arch_performance_model_file_name(
     arch: str = None,
     ext: str = PERFORMANCE_MODEL_EXTENSION,
 ) -> str:
-    """Return the performance model filename for the given kernel, device, and architecture."""
+    """Get the perf model filename for the kernel, and arch."""
     return f"archmodel__{arch}__{kernel}{ext}"
 
 

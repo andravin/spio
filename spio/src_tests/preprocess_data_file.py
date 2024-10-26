@@ -64,7 +64,8 @@ def _preprocess_data_lines(lines):
 def preprocess_data_string(data_str: str) -> str:
     """Preprocess a torch.profile.profile table from a string.
 
-    Converts to a semicolon-separated format with time values in milliseconds.
+    Converts to a semicolon-separated format with time values in
+    milliseconds.
     """
     lines = data_str.split("\n")
     return _preprocess_data_lines(lines)
@@ -73,7 +74,8 @@ def preprocess_data_string(data_str: str) -> str:
 def preprocess_data_file(file_path: str) -> str:
     """Preprocess a torch.profile.profile table from a file.
 
-    Converts to a semicolon-separated format with time values in milliseconds.
+    Converts to a semicolon-separated format with time values in
+    milliseconds.
     """
     with open(file_path, "r", encoding="utf-8") as f:
         lines = f.readlines()

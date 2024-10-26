@@ -1,4 +1,4 @@
-"""Reflections for conv2d_gw8 kernels, functions, and reference functions."""
+"""Reflections for conv2d_gw8 kernels and functions."""
 
 import torch
 
@@ -133,12 +133,12 @@ def register_conv2d_gw8_reflections():
 
 
 def _torch_conv2d_kwargs(params):
-    """Return the keyword arguments for torch.nn.function.conv2d"""
+    """Return the keyword arguments for torch.nn.function.conv2d."""
     return {"stride": params.stride, "padding": params.padding, "groups": params.groups}
 
 
 def _spio_conv2d_gw8_kwargs(params):
-    """Return the keyword arguments for spio.functional.conv2d_gw8"""
+    """Return the keyword arguments for spio.functional.conv2d_gw8."""
     return {
         "stride": params.stride,
         "padding_y": params.padding_h,
@@ -148,7 +148,10 @@ def _spio_conv2d_gw8_kwargs(params):
 
 
 def _conv2d_layer_kwargs(params):
-    """Return the keyword arguments for spio.layers.Conv2dGw8 and torch.nn.Conv2d"""
+    """The keyword arguments for spio.layers.Conv2dGw8.
+
+    These arguments also work with torch.nn.Conv2d.
+    """
     return {
         "in_channels": params.C,
         "out_channels": params.K,

@@ -1,6 +1,6 @@
 """Helper function for implementing kernel and operator unit tests."""
 
-from typing import List
+from typing import List, Type, Callable
 
 import torch
 
@@ -12,11 +12,11 @@ from ..reflection import (
     get_layer_reflection,
 )
 from ..transform._transform import _transform as spio_transform
-from ..kernels.kernel_factory import KernelFactory
+from ..kernels import Params, KernelFactory
 
 
 def run_kernel_test(
-    kernel_factory: KernelFactory, params, device="cuda", **kernel_kwargs
+    kernel_factory: KernelFactory, params: Params, device: str = "cuda", **kernel_kwargs
 ):
     """Run a test for an forward pass kernel."""
     arch = torch.cuda.get_device_capability(device)
@@ -49,7 +49,7 @@ def run_kernel_test(
 
 
 def run_grad_kernel_test(
-    kernel_factory: KernelFactory, params, device="cuda", **kernel_kwargs
+    kernel_factory: KernelFactory, params: Params, device: str = "cuda", **kernel_kwargs
 ):
     """Run a test for a backward pass kernel."""
     arch = torch.cuda.get_device_capability(device)
@@ -98,7 +98,7 @@ def run_grad_kernel_test(
 
 
 def run_opcheck_test(function, params, device="cuda"):
-    """Check whether a PyTorch custom operator was registered correctly."""
+    """Check if a PyTorch custom operator was registered correctly."""
     reflection = get_function_reflection(function)
     args = reflection.make_args(params, device=device)
     function_args = reflection.arrange_args(args)
@@ -131,7 +131,7 @@ def run_function_test(function, params, device="cuda"):
     )
 
 
-def run_grad_function_test(function, params, device="cuda"):
+def run_grad_function_test(function: Callable, params: Params, device: str = "cuda"):
     """Run a test for a backward pass of a function."""
     reflection = get_function_reflection(function)
     args = reflection.make_args(params, device=device, training=True)
@@ -170,8 +170,13 @@ def run_grad_function_test(function, params, device="cuda"):
             )
 
 
-def run_layer_test(layer_cls, params, device="cuda", torchcompile=False):
-    """Run a test for a torch.nn.Module layer subclass that uses Spio a function."""
+def run_layer_test(
+    layer_cls: Type[torch.nn.Module],
+    params: Params,
+    device: str = "cuda",
+    torchcompile: bool = False,
+):
+    """Run a test for a Spio layer."""
     reflection = get_layer_reflection(layer_cls)
     args = reflection.make_args(params, device=device)
     layer_args = reflection.arrange_args(args)

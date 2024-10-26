@@ -130,8 +130,8 @@ def _has_arg(params, name) -> bool:
 def _to(tensor, memory_format=None) -> torch:
     """Normalize the memory format of a tensor.
 
-    channels_last is only supported for 4D tensors.
-    We leave 1D tensors unchanged.
+    channels_last is only supported for 4D tensors. We leave 1D tensors
+    unchanged.
 
     Otherwise, we raise an error if the tensor is not 4D.
     """

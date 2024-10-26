@@ -1,8 +1,9 @@
+"""Train a performance model for a given kernel."""
+
 import argparse
 import os
 import glob
 from pathlib import Path
-from dataclasses import dataclass
 from functools import partial
 
 import xgboost as xgb
@@ -46,6 +47,7 @@ pd.options.mode.chained_assignment = None
 
 
 def main():
+    """Main function to train the performance model."""
     parser = argparse.ArgumentParser(
         description="Train a performance model for a given kernel."
     )
@@ -61,8 +63,8 @@ def main():
     device = get_device_name_from_data_dir(args.data_dir)
     try:
         arch = device_arch_table[device]
-    except KeyError:
-        raise ValueError(f"Unknown device: {device}. Add to device_arch_table")
+    except KeyError as e:
+        raise ValueError(f"Unknown device: {device}. Add to device_arch_table") from e
 
     df = read_ssv_files_to_dataframe(args.data_dir, device)
 
@@ -173,8 +175,9 @@ def read_ssv_files_to_dataframe(directory: str, device: str) -> pd.DataFrame:
 
 
 def get_first_record(datafile):
+    """Return the first record from the SSV file."""
     field_names = []
-    with open(datafile, "r") as f:
+    with open(datafile, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:
@@ -191,8 +194,8 @@ def get_first_record(datafile):
 
 
 def get_device_name_from_ssv_file_name(ssv_file_name):
+    """Extract the device name from the SSV file path."""
     path = Path(ssv_file_name)
-    file_name = path.name
     parent = path.parent
     parent_dir_name = parent.name
     return get_device_name_from_data_dir(parent_dir_name)
@@ -214,9 +217,10 @@ def get_device_name_from_data_dir(dir_name):
 
 
 def drop_ignored_params(df, ignore_params=None):
-    """Automatically drop the ignored params from the DataFrame when training the performance model.
+    """Drop any ignored params from the DataFrame.
 
-    The kernel's ignored params are retrieved from the kernel reflection's "ignore_params" attribute.
+    The kernel's ignored params are retrieved from the kernel reflection's
+    "ignore_params" attribute.
     """
     if ignore_params is not None:
         ignore_fields = [f"Params_{field}" for field in ignore_params]
@@ -260,6 +264,7 @@ def _dataclass_to_series(dataclass_obj):
 
 
 def import_dataclass_column(df, col, dataclasses):
+    """Parse the dataclass column and expand it into separate columns."""
     parse_these_dataclasses = partial(parse_dataclass, dataclasses=dataclasses)
     df[col] = df[col].apply(parse_these_dataclasses)
     attributes_df = df[col].apply(_dataclass_to_series)

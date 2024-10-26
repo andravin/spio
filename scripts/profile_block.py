@@ -92,10 +92,10 @@ class MBConv(nn.Module):
 
     def forward(self, x):
         """Forward pass."""
-        input = x
+        inputs = x
         x = self.layers(x)
         if self.has_residual:
-            x = x + input
+            x = x + inputs
         return x
 
 
@@ -140,10 +140,10 @@ class ConvFirst(nn.Module):
 
     def forward(self, x):
         """Forward pass."""
-        input = x
+        inputs = x
         x = self.layers(x)
         if self.has_residual:
-            x = x + input
+            x = x + inputs
         return x
 
 
@@ -165,10 +165,10 @@ class MLP(nn.Module):
 
     def forward(self, x):
         """Forward pass."""
-        input = x
+        inputs = x
         x = self.layers(x)
         if self.has_residual:
-            x = x + input
+            x = x + inputs
         return x
 
 
@@ -599,7 +599,11 @@ def get_dir_name(args) -> str:
 def get_file_name_details(args, no_bs=False) -> str:
     """Automatically generate a file name for the benchmark results."""
     backend = "spio" if args.spio else "torch"
-    filename = f"{backend}_{args.block.lower()}_c{args.channels}_ks{args.kernel_size}_er{args.expansion_ratio}_gw{args.group_width}_hw{args.resolution}_d{args.depth}_extra{args.extra}_iters{BENCHMARK_ITERS}"
+    filename = (
+        f"{backend}_{args.block.lower()}_c{args.channels}_ks{args.kernel_size}_"
+        f"er{args.expansion_ratio}_gw{args.group_width}_hw{args.resolution}_"
+        f"d{args.depth}_extra{args.extra}_iters{BENCHMARK_ITERS}"
+    )
     if not no_bs:
         filename += f"_bs{args.batch_size}"
     if args.compile:

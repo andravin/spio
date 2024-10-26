@@ -56,7 +56,7 @@ def _get_kernel_name(igrad=False) -> str:
 
 
 def _get_specs(params, config=None, igrad=False):
-    """Return the code generator specs and launch parameters for the Conv2d GW8 kernel."""
+    """The code generator specs and launch parameters."""
     params.validate()
 
     r, s = params.R, params.S

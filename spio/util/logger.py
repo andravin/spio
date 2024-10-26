@@ -1,4 +1,4 @@
-"""spio logger configuration."""
+"""Spio logger configuration."""
 
 import os
 

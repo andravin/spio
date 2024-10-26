@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 from dataclasses import replace
 from functools import partial
+from io import StringIO
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -83,6 +84,7 @@ def main():
         linestyle="-",
     )
     block_name = dirname_params["block_name"]
+    device_name = dirname_params["device_name"]
 
     if args.torch_data_dir is not None:
         torch_dirname_params = extract_parameters_from_dirname(args.torch_data_dir)
@@ -92,11 +94,11 @@ def main():
         torch_params_are_depthwise = torch_params.group_width == 1
 
         assert (
-            dirname_params["block_name"] == torch_dirname_params["block_name"]
-        ), f"Block name mismatch: {dirname_params['block_name']} != {torch_dirname_params['block_name']}"
+            block_name == torch_dirname_params["block_name"]
+        ), f"Block name mismatch: {block_name} != {torch_dirname_params['block_name']}"
         assert (
-            dirname_params["device_name"] == torch_dirname_params["device_name"]
-        ), f"Device name mismatch: {dirname_params['device_name']} != {torch_dirname_params['device_name']}"
+            device_name == torch_dirname_params["device_name"]
+        ), f"Device name mismatch: {device_name} != {torch_dirname_params['device_name']}"
 
         df = collect_data_from_dir(args.torch_data_dir)
         df = df.sort_values(by="batch_size")
@@ -135,12 +137,19 @@ def main():
     device_name = dirname_params["device_name"]
     plt.title("Grouped Convolution Performance")
     plt.suptitle(
-        f"{params.C} channels, {params.H}x{params.W} input, {params.R}x{params.S} kernel, group width {params.group_width}, {device_name}",
+        (
+            f"{params.C} channels, {params.H}x{params.W} input, "
+            f"{params.R}x{params.S} kernel, group width {params.group_width}, "
+            f"{device_name}"
+        ),
         fontsize=10,
     )
     plt.legend()
 
-    fig_file_name = f"batch_size_vs_eff_bandwidth__{device_name}__{block_name}_{params.C}c_{params.R}r_{params.S}s_{params.group_width}gw"
+    fig_file_name = (
+        f"batch_size_vs_eff_bandwidth__{device_name}__{block_name}_"
+        f"{params.C}c_{params.R}r_{params.S}s_{params.group_width}gw"
+    )
     if args.torch_data_dir is not None and torch_params_are_depthwise:
         fig_file_name += "__torch_depthwise"
     fig_file_name += ".png"
@@ -161,12 +170,17 @@ def main():
     plt.ylabel("Latency (microseconds)")
     plt.title("Latency vs Batch Size")
     plt.suptitle(
-        f"{params.C} channels, {params.H}x{params.W} input, {params.R}x{params.S} kernel, group width {params.group_width}, {device_name}",
+        f"{params.C} channels, {params.H}x{params.W} input, "
+        f"{params.R}x{params.S} kernel, group width {params.group_width}, "
+        f"{device_name}",
         fontsize=10,
     )
     plt.legend()
 
-    fig_file_name = f"batch_size_vs_latency__{device_name}__{block_name}_{params.C}c_{params.R}r_{params.S}s_{params.group_width}gw"
+    fig_file_name = (
+        f"batch_size_vs_latency__{device_name}__{block_name}_"
+        f"{params.C}c_{params.R}r_{params.S}s_{params.group_width}gw"
+    )
     if args.torch_data_dir is not None and torch_params_are_depthwise:
         fig_file_name += "__torch_depthwise"
     fig_file_name += ".png"
@@ -176,6 +190,7 @@ def main():
 
 def find_torch_grouped_conv_kernels(df, kernel_iters, depthwise=False):
     """Find and group the PyTorch convolution kernels in the DataFrame."""
+    # pylint: disable=line-too-long
     grouped_fprop_kernels = [
         "sm86_xmma_fprop_implicit_gemm_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage3_warpsize1x4x1_g8_tensor16x8x16_t1r3s3_execute_kernel__5x_cudnn",
         "sm86_xmma_fprop_implicit_gemm_indexed_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage3_warpsize1x4x1_g8_tensor16x8x16_execute_kernel__5x_cudnn",
@@ -230,6 +245,7 @@ def find_torch_grouped_conv_kernels(df, kernel_iters, depthwise=False):
         "void cudnn::cnn::wgrad2d_c1_k1_nhwc_reduction_kernel<__half, float, 3, 7, 7>(cudnnTensorStruct, cudnnConvolutionStruct, __half*, float const*, float, float)",
         "void cudnn::cnn::wgrad2d_c1_k1_nhwc_reduction_kernel<__half, float, 1, 7, 7>(cudnnTensorStruct, cudnnConvolutionStruct, __half*, float const*, float, float)",
     ]
+    # pylint: enable=line-too-long  # Optional: re-enable at end of function
 
     if depthwise:
         fprop_kernels = dw_fprop_kernels
@@ -307,8 +323,6 @@ def read_data_file(file_path):
     batch_size = int(re.search(r"bench_bs(\d+)\.dat", file_path).group(1))
 
     # Create a DataFrame from the processed lines
-    from io import StringIO
-
     data_str = "\n".join(processed_lines)
     df = pd.read_csv(StringIO(data_str), sep=";")
 
@@ -321,7 +335,8 @@ def read_data_file(file_path):
 def extract_parameters_from_dirname(dirname):
     """Extract parameters from the directory name."""
     pattern = re.compile(
-        r"bench__(.+)__([^_]+)_([^_]+)_c(\d+)_ks(\d+)_er(\d+)_gw(\d+)_hw(\d+)_d(\d+)_extra(\d+)_iters(\d+)(_bs(\d+))?"
+        r"bench__(.+)__([^_]+)_([^_]+)_c(\d+)_ks(\d+)_er(\d+)_gw(\d+)_"
+        r"hw(\d+)_d(\d+)_extra(\d+)_iters(\d+)(_bs(\d+))?"
     )
     match = pattern.search(dirname)
     field_names = [

@@ -1,4 +1,5 @@
-"""Classes and functions for NVRTC (NVIDIA Runtime Compilation) using ctypes."""
+"""Classes and functions for NVRTC (NVIDIA Runtime Compilation) using
+ctypes."""
 
 import ctypes
 from typing import List, Tuple
@@ -11,7 +12,7 @@ NVRTC_LIB = "libnvrtc.so.12"
 
 
 def _find_libnvrtc() -> str:
-    """Find the NVRTC shared library in the nvidia.cuda_nvrtc package."""
+    """Find the NVRTC shared lib in the nvidia.cuda_nvrtc package."""
     return str(importlib_resources_files("nvidia.cuda_nvrtc.lib").joinpath(NVRTC_LIB))
 
 
@@ -131,7 +132,7 @@ class NVRTCError(Exception):
 
 
 def _check(err: int):
-    """Check the error code and raise an exception if it is not NVRTC_SUCCESS."""
+    """Check error and raise an exception if not NVRTC_SUCCESS."""
     if err != NVRTCErrorCode.NVRTC_SUCCESS.value:
         raise NVRTCError(err)
 

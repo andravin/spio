@@ -1,12 +1,13 @@
 """Code generator for constant parameters in CUDA kernel source code."""
+
 from typing import Dict, Any, Tuple
 from dataclasses import dataclass
 
 
 @dataclass
 class ParamsSpec:
-    """Code generator for constant parameters in CUDA kernel source code.
-    
+    """CUDA Code generator for constant parameters.
+
     The parameters are defined in a C++ namespace. Parameters may be of type
     bool, int, or float.
 
@@ -14,6 +15,7 @@ class ParamsSpec:
         name_space: The name of the C++ namespace.
         params: A dictionary of parameter names and their values.
     """
+
     name_space: str
     params: Dict[str, Any]
 

@@ -11,7 +11,6 @@ from .compile import compile_cuda
 
 
 def compile_kernel(
-    kernel_name: str = None,
     source_file_name: str = None,
     header_dict: Dict[str, str] = None,
     src_module: str = "spio.src",
@@ -23,7 +22,6 @@ def compile_kernel(
     """Compile a CUDA kernel from source file and return the cubin.
 
     Args:
-        kernel_name (str): Name of the kernel to compile.
         source_file_name (str): Name of the source file containing the kernel.
         header_dict (dict): Dictionary of header files to include.
         src_module (str): Module containing the source file.
@@ -81,7 +79,6 @@ def compile_and_load_kernel(
     if source_file_name is None:
         source_file_name = f"{kernel_name}.cu"
     cubin = compile_kernel(
-        kernel_name=kernel_name,
         source_file_name=source_file_name,
         src_module=src_module,
         includes_module=includes_module,

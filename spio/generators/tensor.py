@@ -1,4 +1,5 @@
-"""Code generator for custom tensor classes in CUDA kernel source code."""
+"""Code generator for custom tensor classes in CUDA kernel source
+code."""
 
 from typing import Dict, Tuple
 from dataclasses import dataclass
@@ -20,9 +21,10 @@ DATA_TYPE_SIZES = {
 
 @dataclass
 class TensorSpec:
-    """Code generator for custom tensor classes in CUDA kernel source code.
+    """CUDA Code generator for custom tensor classes.
 
-    This class is used to generate custom tensor classes that map named tensor dimensions to pointers.
+    This class is used to generate custom tensor classes that map named tensor
+    dimensions to pointers.
 
     Attributes:
         class_name (str): The name of the custom tensor class.
@@ -40,7 +42,7 @@ class TensorSpec:
 
     @property
     def num_bytes(self) -> int:
-        """Return the number of bytes required to store the tensor data."""
+        """The number of bytes required to store the tensor data."""
         return prod(self.dims.values()) * _sizeof_data_type(self.data_type)
 
 
@@ -69,11 +71,11 @@ def _generate_tensor(class_name: str, data_type: str, dims: Dict[str, int]) -> s
 
 
 def _tensor_header():
-    """Return the C++ statement that includes the spio tensor header file.
+    """The C++ statement that includes the spio tensor header file.
 
     This file implements the C++ base template classes from which the
-    custom tensor classes inherit. You must include this header before using
-    the code returned by the generate_tensor() function.
+    custom tensor classes inherit. You must include this header before
+    using the code returned by the generate_tensor() function.
     """
     return '#include "spio/tensor.h"'
 
