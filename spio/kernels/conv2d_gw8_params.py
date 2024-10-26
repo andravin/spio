@@ -102,9 +102,9 @@ class Conv2dGw8Params:
         return params
 
     @staticmethod
-    def from_torch_module(module, input: torch.Tensor):
+    def from_torch_module(module, inputs: torch.Tensor):
         """Derive a Conv2dGw8Params instance from a torch.nn.Module."""
-        n, c, h, w = input.shape
+        n, c, h, w = inputs.shape
         k, _group_width, r, s = module.weight.shape
         assert (
             k == c
