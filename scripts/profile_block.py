@@ -462,7 +462,7 @@ def benchmark_configs(model, inputs, args, data_path: Path):
 
     # For each unique KernelParams, compile all kernel configurations.
     # Store the kernels in a table.
-    kernel_table: Dict[KernelParams, List[Kernel]] = dict()
+    kernel_table: Dict[KernelParams, List[Kernel]] = {}
     for kernel_params in unique_kernel_params:
         kernel_factory = kernel_params.kernel_factory
         params = kernel_params.params
@@ -481,7 +481,7 @@ def benchmark_configs(model, inputs, args, data_path: Path):
     max_configs = max(len(kernel_lst) for kernel_lst in kernel_table.values())
     num_choices = min(max_configs, args.max_random_samples)
 
-    all_kernel_choices = dict()
+    all_kernel_choices = {}
     for kernel_params, kernel_lst in kernel_table.items():
         all_kernel_choices[kernel_params] = random_sample_with_replacement(
             kernel_lst, num_choices
@@ -501,14 +501,14 @@ def benchmark_configs(model, inputs, args, data_path: Path):
 
         for idx in tqdm(range(num_choices), desc="Profiling kernel configurations"):
             # Select a random combination of kernel configurations without replacement.
-            kernel_choices: Dict[KernelParams, Kernel] = dict()
+            kernel_choices: Dict[KernelParams, Kernel] = {}
             for kernel_params, kernel_lst in all_kernel_choices.items():
                 kernel_choices[kernel_params] = kernel_lst[idx]
 
             # Create cache overlays for each KernelCache.
-            kernel_cache_overlays = dict()
+            kernel_cache_overlays = {}
             for kernel_params in kernel_choices.keys():
-                kernel_cache_overlays[kernel_params.kernel_cache] = dict()
+                kernel_cache_overlays[kernel_params.kernel_cache] = {}
             for kernel_params, kernel in kernel_choices.items():
                 kernel_cache = kernel_params.kernel_cache
                 key: KernelKey = kernel_params.key

@@ -341,7 +341,7 @@ def extract_parameters_from_dirname(dirname):
     string_fields = ["device_name", "backend_name", "block_name"]
     if not match:
         raise ValueError(f"Directory name does not match expected format: {dirname}")
-    match_dict = dict()
+    match_dict = {}
     for i, field_name in enumerate(field_names):
         if match.group(i + 1):
             val = match.group(i + 1)

@@ -29,10 +29,11 @@ from spio.util.parse_dataclass import parse_dataclass
 from spio.reflection import get_kernel_reflection
 
 
-PARAMS_CLASSES = dict(Conv2dGw8Params=Conv2dGw8Params)
-CONFIG_CLASSES = dict(
-    Conv2dGw8Config=Conv2dGw8Config, Conv2dGw8WgradConfig=Conv2dGw8WgradConfig
-)
+PARAMS_CLASSES = {"Conv2dGw8Params": Conv2dGw8Params}
+CONFIG_CLASSES = {
+    "Conv2dGw8Config": Conv2dGw8Config,
+    "Conv2dGw8WgradConfig": Conv2dGw8WgradConfig,
+}
 
 device_arch_table = {
     "nvidia_a100-pcie-40gb": "sm_80",
@@ -182,7 +183,7 @@ def get_first_record(datafile):
                 if tokens[0] == "Kernel":
                     field_names = tokens
                     continue
-                record = dict()
+                record = {}
                 for field_name, token in zip(field_names, tokens):
                     record[field_name] = token
                 return record
@@ -214,7 +215,7 @@ def get_device_name_from_data_dir(dir_name):
 
 def drop_ignored_params(df, ignore_params=None):
     """Automatically drop the ignored params from the DataFrame when training the performance model.
-    
+
     The kernel's ignored params are retrieved from the kernel reflection's "ignore_params" attribute.
     """
     if ignore_params is not None:
