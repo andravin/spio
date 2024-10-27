@@ -2,6 +2,8 @@
 
 Efficient CUDA kernels for training convolutional neural networks with PyTorch.
 
+![Benchmark Result on NVIDIA GeForce RTX 3090](figures/batch_size_vs_eff_bandwidth__nvidia_geforce_rtx_3090__convfirst_64c_3r_3s_8gw.png)
+
 ## Introduction
 
 The goal of the Spio project is to improve the training efficiency of convolutional neural networks.
@@ -15,7 +17,7 @@ The first Spio kernel is for grouped convolution, a prime example of a promising
 
 ### Audience
 
-At this early stage of development, we hope Spio will be interesting to those performing convnet kernel R&D. As we add support for other types of layers, we aim to make Spio helpful for model researchers too.
+At this early stage of development, Spio will be interesting to performance engineers. As we add support for more layers, Spio will be helpful for model researchers too.
 
 ## Benchmarks
 
@@ -27,9 +29,7 @@ Group width 8 matches the accumulation depth of the float16 tensor core (through
 the grouped convolution is implemented just like regular planar convolution, but with scalar input elements
 replaced by 8-element vectors, scalar filter elements replaced by 8 x 8 matrices, and scalar multiplication replaced by matrix-vector multiplication. Processing 16 columns of the input row at once turns the input vectors into input matrices, so that the algorithm can use the `mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32` instruction.
 
-On the NVIDIA RTX 3090 GPU, Spio approaches the DRAM memory bandwidth limit for the Fprop, Dgrad (gradient with respect to inputs), and Wgrad (gradient with respect to weights) kernels, while the PyTorch / cuDNN kernels struggle with excess data transfers:
-
-![Benchmark Result on NVIDIA GeForce RTX 3090](figures/batch_size_vs_eff_bandwidth__nvidia_geforce_rtx_3090__convfirst_64c_3r_3s_8gw.png)
+On the NVIDIA RTX 3090 GPU (above), Spio approaches the DRAM memory bandwidth limit for the Fprop, Dgrad (gradient with respect to inputs), and Wgrad (gradient with respect to weights) kernels, while the PyTorch / cuDNN kernels struggle with excess data transfers.
 
 On the NVIDIA RTX 4090 GPU, Spio exceeds the DRAM memory bandwidth limit for small batch sizes by exploiting the fact that the activation tensors fit in the GPU's large (72 MB) L2 cache:
 
