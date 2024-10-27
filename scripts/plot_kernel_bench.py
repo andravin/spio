@@ -148,7 +148,7 @@ def main():
 
     fig_file_name = (
         f"batch_size_vs_eff_bandwidth__{device_name}__{block_name}_"
-        f"{params.C}c_{params.r}r_{params.s}s_{params.group_width}gw"
+        f"{params.c}c_{params.r}r_{params.s}s_{params.group_width}gw"
     )
     if args.torch_data_dir is not None and torch_params_are_depthwise:
         fig_file_name += "__torch_depthwise"
@@ -393,7 +393,7 @@ def add_eff_bandwidth_gb_s(df, params, stats_cls, output_names):
 
 def compute_eff_bandwidth_gb_s(row, params=None, stats_cls=None, output_names=None):
     """Compute effective bandwidth in GB/s."""
-    params = replace(params, N=row["batch_size"])
+    params = replace(params, n=row["batch_size"])
     stats = stats_cls(params=params, output_names=output_names)
     bytes_mb = stats.bytes / 1e6
     return bytes_mb / row["CUDA_time_av"]
