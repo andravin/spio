@@ -153,8 +153,8 @@ def _conv2d_layer_kwargs(params):
     These arguments also work with torch.nn.Conv2d.
     """
     return {
-        "in_channels": params.C,
-        "out_channels": params.K,
+        "in_channels": params.c,
+        "out_channels": params.k,
         "kernel_size": params.kernel_size,
         "stride": params.stride,
         "padding": params.padding,
