@@ -1,9 +1,9 @@
 """Function for compling CUDA source code into binary."""
 
-from importlib.abc import Traversable
 from typing import List, Dict, Tuple
 
 from importlib_resources import files as importlib_resources_files
+from importlib_resources.abc import Traversable
 
 from ..cuda.nvrtc_ctypes import Program
 
