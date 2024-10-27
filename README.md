@@ -52,13 +52,13 @@ Spio uses named tensors to simplify tensor indexing in CUDA source code. In Pyth
 and indexing dimensions like this
 
 ```python
-        TensorSpec("Output", "uint4", dict(n=n, p=p, q=q, k8=c8)),
+        TensorSpec("Output", "uint4", {"n": n, "p": p, "q": q, "k8": c8}),
         TensorSpec(
             "ConstSmemOutput",
             "const uint4",
-            dict(q=block_q, n=block_n, k8=block_c8 + 1),
+            {"q": block_q, "n": block_n, "k8": block_c8 + 1},
         ),
-        IndexSpec("OutputStoreIdx", dict(n=block_n, q=block_q, k8=block_c8)),
+        IndexSpec("OutputStoreIdx", {"n": block_n, "q": block_q, "k8": block_c8}),
 ```
 
 which generates CUDA/C++ classes that you use in your kernel like this
@@ -81,7 +81,7 @@ which generates CUDA/C++ classes that you use in your kernel like this
 
 ### Run Time Compilation
 
-Spio compiles kernels at run time using libnvrtc and launches them with libcuda. Unlike other packages that offer run time compilation, Spio does not depend on the CUDA toolkit. We simply use the same NVIDIA libnvrtc and cuda-runtime Python packages on which PyTorch already depends. This minimizes software dependencies and simplifies installation.
+Spio compiles kernels at run time using [libnvrtc](https://docs.nvidia.com/cuda/nvrtc/index.html) and launches them with [libcuda](https://docs.nvidia.com/cuda/cuda-driver-api/index.html). Unlike other packages that offer run time compilation, Spio does not depend on the CUDA toolkit. We simply use the same NVIDIA [libnvrtc](https://pypi.org/project/nvidia-cuda-nvrtc-cu12/) and [cuda-runtime](https://pypi.org/project/nvidia-cuda-runtime-cu12/) Python packages on which PyTorch already [depends](https://github.com/pytorch/pytorch/blob/bae3426af77be643af83f1527fb430e9ca09b058/.github/scripts/generate_binary_build_matrix.py#L71). This minimizes software dependencies and simplifies installation.
 
 ### Kernel Performance Models
 
@@ -89,7 +89,7 @@ Spio predicts the best kernel configuration for each layer with a performance mo
 
 ### Integration with torch.compile
 
-We integrate with `torch.compile` using the `custom_op` interface from PyTorch 2.4.
+We integrate with `torch.compile` using the [Python Custom Operators](https://pytorch.org/tutorials/advanced/python_custom_ops.html) interface from PyTorch 2.4. This functionality passes basic tests but is still experimental. See this [PyTorch issue](https://github.com/pytorch/pytorch/issues/137033).
 
 ## Installation from Source
 
