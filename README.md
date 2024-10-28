@@ -6,30 +6,29 @@ Efficient CUDA kernels for training convolutional neural networks with PyTorch.
 
 ## Introduction
 
-The goal of the Spio project is to improve the training efficiency of convolutional neural networks.
-While there has been a lot of progress in the design of convnet models,
-the performance of convnet kernels has languished. Today, the performance of a convnet is often limited by the efficiency of its implementation.
+The goal of the Spio project is to improve the efficiency of convolutional neural networks (ConvNets).
+While there has been a lot of progress in the design of ConvNet models,
+the performance of ConvNet kernels has languished. Today, the performance of a ConvNet is often limited by the efficiency of its implementation.
 
-In our [paper](https://arxiv.org/abs/2404.03617), we implemented efficient GPU kernels for convnet inference.
-This project implements kernels for training.
+Our [paper](https://arxiv.org/abs/2404.03617) implemented efficient GPU kernels for ConvNet inference.
+Spio implements kernels for training.
 
-The first Spio kernel is for grouped convolution, a prime example of a promising layer that has fallen into disuse because of the inefficiency of the current implementation. We focus on group-width equal to eight and stride 1, as used in our ConvFirst model. Spio is compatible with NVIDIA Ampere (sm_80 and sm_86) and Ada (sm_89) GPUs.
+The first Spio kernel is for grouped convolution, a prime example of a promising layer that has fallen into disuse because of the inefficiency of the current implementation. We focus on group width equal to eight and stride 1, as used in our ConvFirst model, and support NVIDIA Ampere (sm_80 and sm_86) and Ada (sm_89) GPUs.
 
 ### Audience
 
-At this early stage of development, Spio will be interesting to performance engineers. As we add support for more layers, Spio will be helpful for model researchers too.
+At this early stage of development, Spio is for performance engineers. As we add more kernels, Spio will become helpful for model researchers too.
 
 ## Benchmarks
 
-The cuDNN conv2d kernels use an "implicit gemm" algorithm that tiles the input tensor with horizontal strips. The support halo for the convolution kernel causes overlapping reads of the input tensor, and when the tile is a 1-D strip, the overlap is larger than the tile. This results in excess global memory traffic.
+The cuDNN Conv2d kernels use an "implicit GEMM" algorithm that tiles the input tensor with horizontal strips. The support halo for the convolution kernel causes overlapping reads of the input tensor, and when the tile is a 1D strip, the overlap is larger than the tile. This results in excess global memory traffic.
 
-The Spio conv2d kernel used 2-d tiles. This reduces the overlap between tiles and reduces global memory traffic. It processes the 2-d tile one row at a time, convolving each input row with every filter row while updating a circular buffer of output rows. The circular buffer is implemented in registers by unrolling the input-row loop by the number of filter rows.  This overlap-add style algorithm minimizes the kernel's local memory footprint, which increases occupancy and maximizes utilization of the global memory bandwidth.
+The Spio Conv2d kernel uses 2D tiles. This reduces the overlap between tiles and reduces global memory traffic. It processes the 2D tile one row at a time, convolving each input row with every filter row while updating a circular buffer of output rows. The circular buffer is implemented in registers by unrolling the input-row loop by the number of filter rows. This overlap-add style algorithm minimizes the kernel's local memory footprint, which increases occupancy and maximizes utilization of the global memory bandwidth.
 
-Group width 8 matches the accumulation depth of the float16 tensor core (through AD102, sm_89). Therefore
-the grouped convolution is implemented just like regular planar convolution, but with scalar input elements
-replaced by 8-element vectors, scalar filter elements replaced by 8 x 8 matrices, and scalar multiplication replaced by matrix-vector multiplication. Processing 16 columns of the input row at once turns the input vectors into input matrices, so that the algorithm can use the `mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32` instruction.
+Group width 8 matches the accumulation depth of the Float16 tensor core (through AD102, sm_89). Therefore, the grouped convolution is implemented just like regular planar convolution, but with scalar input elements
+replaced by 8-element vectors, scalar filter elements replaced by 8x8 matrices, and scalar multiplication replaced by matrix-vector multiplication. Processing 16 columns of the input row at once turns the input vectors into input matrices, so that the algorithm can use the `mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32` instruction.
 
-On the NVIDIA RTX 3090 GPU (above), Spio approaches the DRAM memory bandwidth limit for the Fprop, Dgrad (gradient with respect to inputs), and Wgrad (gradient with respect to weights) kernels, while the PyTorch / cuDNN kernels struggle with excess data transfers.
+On the NVIDIA RTX 3090 GPU (above), Spio approaches the DRAM memory bandwidth limit for the FProp, DGrad (gradient with respect to inputs), and WGrad (gradient with respect to weights) kernels, while the PyTorch / cuDNN kernels struggle with excess data transfers.
 
 On the NVIDIA RTX 4090 GPU, Spio exceeds the DRAM memory bandwidth limit for small batch sizes by exploiting the fact that the activation tensors fit in the GPU's large (72 MB) L2 cache:
 
@@ -43,13 +42,13 @@ ConvFirst or MBConv building block and constructing a stack of several blocks. T
 
 ## Implementation Notes
 
-Spio uses several strategies to simplify the development of high performance CUDA kernels that
+Spio uses several strategies to simplify the development of high-performance CUDA kernels that
 integrate with PyTorch.
 
 ### Named Tensors
 
-Spio uses named tensors to simplify tensor indexing in CUDA source code. In Python, you spec the tensor
-and indexing dimensions like this
+Spio uses named tensors to simplify tensor indexing in CUDA source code. In Python, you specify the tensor
+and indexing dimensions like this:
 
 ```python
         TensorSpec("Output", "uint4", {"n": n, "p": p, "q": q, "k8": c8}),
@@ -61,7 +60,7 @@ and indexing dimensions like this
         IndexSpec("OutputStoreIdx", {"n": block_n, "q": block_q, "k8": block_c8}),
 ```
 
-which generates CUDA/C++ classes that you use in your kernel like this
+which generates CUDA/C++ classes that you use in your kernel like this:
 
 ```c++
     // Output-smem to output.
@@ -81,7 +80,7 @@ which generates CUDA/C++ classes that you use in your kernel like this
 
 ### Run Time Compilation
 
-Spio compiles kernels at run time using [libnvrtc](https://docs.nvidia.com/cuda/nvrtc/index.html) and launches them with [libcuda](https://docs.nvidia.com/cuda/cuda-driver-api/index.html). Unlike other packages that offer run time compilation, Spio does not depend on the CUDA toolkit. We simply use the same NVIDIA [libnvrtc](https://pypi.org/project/nvidia-cuda-nvrtc-cu12/) and [cuda-runtime](https://pypi.org/project/nvidia-cuda-runtime-cu12/) Python packages on which PyTorch already [depends](https://github.com/pytorch/pytorch/blob/bae3426af77be643af83f1527fb430e9ca09b058/.github/scripts/generate_binary_build_matrix.py#L71). This minimizes software dependencies and simplifies installation.
+Spio compiles kernels at runtime using [libnvrtc](https://docs.nvidia.com/cuda/nvrtc/index.html) and launches them with [libcuda](https://docs.nvidia.com/cuda/cuda-driver-api/index.html). Unlike other packages that offer runtime compilation, Spio does not depend on the CUDA toolkit. We simply use the same NVIDIA [libnvrtc](https://pypi.org/project/nvidia-cuda-nvrtc-cu12/) and [cuda-runtime](https://pypi.org/project/nvidia-cuda-runtime-cu12/) Python packages on which PyTorch already [depends](https://github.com/pytorch/pytorch/blob/bae3426af77be643af83f1527fb430e9ca09b058/.github/scripts/generate_binary_build_matrix.py#L71). This minimizes software dependencies and simplifies installation.
 
 ### Kernel Performance Models
 
