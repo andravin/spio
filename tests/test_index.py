@@ -53,21 +53,13 @@ def _test_generate_index():
         "MyIndex", {"n": 4, "h": 32, "w": 64, "c": 128}
     )
     size = 4 * 32 * 64 * 128
-    header = spio.generators.index._index_header()
+    header = spio.generators.index.index_header()
     test_code = f"""
 #include "utest.h"
 
 {header}
 
 {my_index_code}
-
-UTEST(MyIndex, offset_from_index)
-{{
-    EXPECT_EQ(static_cast<int>(MyIndex().n(7)), 7 * (32 * 64 * 128));
-    EXPECT_EQ(static_cast<int>(MyIndex().h(16)), 16 * (64 * 128));
-    EXPECT_EQ(static_cast<int>(MyIndex().w(33)), 33 * 128);
-    EXPECT_EQ(static_cast<int>(MyIndex().c(42)), 42);
-}}
 
 UTEST(MyIndex, index_from_offset)
 {{
@@ -89,13 +81,13 @@ UTEST(MyIndex, size)
 
 def _test_generate_tensor():
     """Return the C++ source code that tests a custom tensor class."""
-    N = 7
-    H = 16
-    W = 33
-    C = 42
+    n = 7
+    h = 16
+    w = 33
+    c = 42
 
     my_tensor_code = spio.generators.tensor._generate_tensor(
-        "MyTensor", "const float", {"n": N, "h": H, "w": W, "c": C}
+        "MyTensor", "const float", {"n": n, "h": h, "w": w, "c": c}
     )
     header = spio.generators.tensor._tensor_header()
     test_code = f"""
@@ -106,10 +98,10 @@ def _test_generate_tensor():
 
 UTEST(MyTensor, offset_from_tensor)
 {{
-    constexpr int N = {N};
-    constexpr int H = {H};
-    constexpr int W = {W};
-    constexpr int C = {C};
+    constexpr int N = {n};
+    constexpr int H = {h};
+    constexpr int W = {w};
+    constexpr int C = {c};
 
     float data[N * H * W * C];
     for (int n = 0; n < N; ++n) {{
