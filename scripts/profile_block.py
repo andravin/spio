@@ -480,7 +480,10 @@ def benchmark_configs(model, inputs, args, data_path: Path):
     # Some kernels may have more configurations than others.
     # Therefore some kernels will be benchmarked multiple times.
     max_configs = max(len(kernel_lst) for kernel_lst in kernel_table.values())
-    num_choices = min(max_configs, args.max_random_samples)
+    if args.max_random_samples == 0:
+        num_choices = max_configs
+    else:
+        num_choices = min(max_configs, args.max_random_samples)
 
     all_kernel_choices = {}
     for kernel_params, kernel_lst in kernel_table.items():
