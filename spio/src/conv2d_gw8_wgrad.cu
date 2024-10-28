@@ -150,7 +150,7 @@ extern "C"
             MMA_N8_K8_F16_B delta_array[DeltaFrag::size];
             DeltaFrag deltas(delta_array);
 
-            // Run the pipeline, unrolling+ it R times.
+            // Run the pipeline, unrolling it R times.
             for (int iter = 0; iter < NUM_ITERS; iter += R)
             {
                 for (int phase = 0; phase < R && iter + phase < NUM_ITERS; ++phase)
