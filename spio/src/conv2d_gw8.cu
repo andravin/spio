@@ -4,6 +4,7 @@
 #include "spio/mma.cuh"
 #include "spio/ldmatrix.cuh"
 
+// Include the generated header file that contains tensor, index, parameter and macro definitions.
 #include "parameters.h"
 
 using namespace spio;
@@ -144,12 +145,17 @@ extern "C"
         {
             SmemOutputStoreIdx idx(threadIdx.x);
             int lane_qn_0 = Acc::qn(idx.lane(), 0);
+            OutputQNIdx lane_qn_0_idx(lane_qn_0);
+            int lane_q_0 = lane_qn_0_idx.q();
+            int lane_n_0 = lane_qn_0_idx.n();
+
             int lane_qn_8 = Acc::qn(idx.lane(), 1);
-            int lane_q_0 = lane_qn_0 / Block::n;
-            int lane_q_8 = lane_qn_8 / Block::n;
-            int lane_n_0 = lane_qn_0 % Block::n;
-            int lane_n_8 = lane_qn_8 % Block::n;
+            OutputQNIdx lane_qn_8_idx(lane_qn_8);
+            int lane_q_8 = lane_qn_8_idx.q();
+            int lane_n_8 = lane_qn_8_idx.n();
+
             int lane_k2 = Acc::k2(idx.lane());
+            
             auto smem_output_store = SmemOutput(reinterpret_cast<__half2 *>(smem_output_buf)).k8(idx.k8()).k2(lane_k2);
             smem_output_store_qn0 = smem_output_store.n(lane_n_0).q(lane_q_0);
             smem_output_store_qn8 = smem_output_store.n(lane_n_8).q(lane_q_8);

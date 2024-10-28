@@ -165,6 +165,7 @@ def _get_specs(
             {"q": block_q, "n": block_n, "k8": block_c8 + 1},
         ),
         IndexSpec("OutputStoreIdx", {"n": block_n, "q": block_q, "k8": block_c8}),
+        IndexSpec("OutputQNIdx", {"q": block_q, "n": block_n}),
         FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k"),
     ]
     return specs, launch_params
