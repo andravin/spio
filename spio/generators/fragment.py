@@ -39,9 +39,9 @@ class FragmentSpec:
         return f"""
 class {self.class_name} : public spio::{self.fragment_type} {{
     public:
-        DEVICE static constexpr int {self.row}(int lane_id, int idx) {{ return row(lane_id, idx); }}
-        DEVICE static constexpr int {self.col}2(int lane_id) {{ return col2(lane_id); }}
-        DEVICE static constexpr int {self.col}(int lane_id) {{ return col(lane_id); }}
+        DEVICE static constexpr int {self.row}(unsigned lane_id, int idx) {{ return row(lane_id, idx); }}
+        DEVICE static constexpr int {self.col}2(unsigned lane_id) {{ return col2(lane_id); }}
+        DEVICE static constexpr int {self.col}(unsigned lane_id) {{ return col(lane_id); }}
 }};
 """
 

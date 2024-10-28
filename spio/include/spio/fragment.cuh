@@ -114,14 +114,13 @@ namespace spio
         /// @param lane_id The thread's lane number.
         /// @param m_idx The fragment index in the M-dimension.
         /// @return
-        // TODO change lane_idx and *_idx to unsigned types.
-        __device__ static constexpr int row(int lane_id, int m_idx) { return lane_id / 4 + m_idx * 8; }
+        __device__ static constexpr int row(unsigned lane_id, int m_idx) { return static_cast<int>(lane_id / 4) + m_idx * 8; }
 
         /// @brief Return the column held by the given lane and fragment index.
         /// @param lane_id The thread's lane number.
         /// @param k_idx  The fragment index in the K-dimension.
         /// @return
-        __device__ static constexpr int col(int lane_id, int k_idx = 0) { return (lane_id % 4) * 2 + k_idx * 8; }
+        __device__ static constexpr int col(unsigned lane_id, int k_idx = 0) { return static_cast<int>(lane_id % 4) * 2 + k_idx * 8; }
     };
 
     /// @brief  Template base class for 8-column fp16 matrix fragments for operand B.
@@ -135,8 +134,8 @@ namespace spio
         static const int NumFragments = NumFragmentsK * NumFragmentsN;
         static const int NumElements = NumFragments;
 
-        __device__ static constexpr int row(int lane_id, int k_idx = 0) { return (lane_id % 4) * 2 + k_idx * 8; }
-        __device__ static constexpr int col(int lane_id) { return lane_id / 4; }
+        __device__ static constexpr int row(unsigned lane_id, int k_idx = 0) { return (lane_id % 4) * 2 + k_idx * 8; }
+        __device__ static constexpr int col(unsigned lane_id) { return lane_id / 4; }
     };
 
     /// @brief  C or D matrix with float32 elements for M16_N8_K* matrix multiplication with float32 accumulation.
@@ -149,9 +148,9 @@ namespace spio
         static const int NumFragments = NumFragmentsM * NumFragmentsN;
         static const int NumElements = NumFragments * 2;
 
-        __device__ static constexpr int row(int lane_id, int m_idx) { return lane_id / 4 + m_idx * 8; }
-        __device__ static constexpr int col2(int lane_id) { return lane_id % 4; }
-        __device__ static constexpr int col(int lane_id) { return col2(lane_id) * 2; }
+        __device__ static constexpr int row(unsigned lane_id, int m_idx) { return static_cast<int>(lane_id / 4) + m_idx * 8; }
+        __device__ static constexpr int col2(unsigned lane_id) { return lane_id % 4; }
+        __device__ static constexpr int col(unsigned lane_id) { return col2(lane_id) * 2; }
     };
 
     /// @brief A matrix with float16 elements for M16_N8_K8 matrix multiplication.
