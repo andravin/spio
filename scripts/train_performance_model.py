@@ -46,27 +46,15 @@ device_arch_table = {
 pd.options.mode.chained_assignment = None
 
 
-def main():
-    """Main function to train the performance model."""
-    parser = argparse.ArgumentParser(
-        description="Train a performance model for a given kernel."
-    )
-    parser.add_argument(
-        "--data-dir",
-        required=True,
-        type=str,
-        default=None,
-        help="Path to the directory containing samples for a device.",
-    )
-    args = parser.parse_args()
-
-    device = get_device_name_from_data_dir(args.data_dir)
+def train_performance_models(data_dir: str):
+    """Train performance models for all spio kernels found in the given data directory."""
+    device = get_device_name_from_data_dir(data_dir)
     try:
         arch = device_arch_table[device]
     except KeyError as e:
         raise ValueError(f"Unknown device: {device}. Add to device_arch_table") from e
 
-    df = read_ssv_files_to_dataframe(args.data_dir, device)
+    df = read_ssv_files_to_dataframe(data_dir, device)
 
     # Extract the "Kernel" column and split to get the root names
     df["RootName"] = df["Kernel"].str.split("__").str[0]
@@ -83,10 +71,9 @@ def main():
     kernels = dataframes.keys()
 
     print(f"Training model for kernels {list(kernels)} on {device} ({arch})")
-    print(f"Total number of sampels {len(df)}")
+    print(f"Total number of samples {len(df)}")
 
     for kernel, df in dataframes.items():
-
         print(f"Kernel {kernel} has {len(df)} total samples.")
         df = average_redundant_params_and_configs(df)
 
@@ -161,6 +148,88 @@ def main():
         bst.save_model(output_file_name)
 
 
+def regression_analysis(old_data_dir: str, new_data_dir: str):
+    """Perform regression analysis between old and new benchmark results.
+
+    Reports speedup based on average CUDA execution time for matching spio
+    kernels, parameters, and configurations.
+    """
+    old_device = get_device_name_from_data_dir(old_data_dir)
+    new_device = get_device_name_from_data_dir(new_data_dir)
+    assert (
+        old_device == new_device
+    ), f"Devices do not match: {old_device} != {new_device}"
+    device = new_device
+    assert device in device_arch_table, f"Unknown device: {device}"
+
+    old_df = read_ssv_files_to_dataframe(old_data_dir, device)
+    new_df = read_ssv_files_to_dataframe(new_data_dir, device)
+
+    # Merge old and new dataframes on Kernel, Params, and Config
+    merged_df = pd.merge(
+        old_df, new_df, on=["Kernel", "Params", "Config"], suffixes=("_old", "_new")
+    )
+
+    # Compute speedup
+    merged_df["speedup"] = (
+        merged_df["CUDA_time_avg_ms_old"] / merged_df["CUDA_time_avg_ms_new"]
+    )
+
+    print(
+        merged_df[
+            [
+                "Kernel",
+                "Params",
+                "Config",
+                "CUDA_time_avg_ms_old",
+                "CUDA_time_avg_ms_new",
+                "speedup",
+            ]
+        ]
+    )
+
+
+def main():
+    """Main function to train the performance model or perform regression analysis."""
+    parser = argparse.ArgumentParser(
+        description="Train a performance model or perform regression analysis."
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    train_parser = subparsers.add_parser(
+        "train", help="Train a performance model for a given kernel."
+    )
+    train_parser.add_argument(
+        "--data-dir",
+        required=True,
+        type=str,
+        help="Path to the directory containing samples for a device.",
+    )
+
+    regression_parser = subparsers.add_parser(
+        "regression", help="Perform regression analysis between old and new data."
+    )
+    regression_parser.add_argument(
+        "--old-data-dir",
+        required=True,
+        type=str,
+        help="Path to the directory containing old samples.",
+    )
+    regression_parser.add_argument(
+        "--new-data-dir",
+        required=True,
+        type=str,
+        help="Path to the directory containing new samples.",
+    )
+
+    args = parser.parse_args()
+
+    if args.command == "train":
+        train_performance_models(args.data_dir)
+    elif args.command == "regression":
+        regression_analysis(args.old_data_dir, args.new_data_dir)
+
+
 def read_ssv_files_to_dataframe(directory: str, device: str) -> pd.DataFrame:
     """Return a pandas dataframe containing the data from all .ssv files in the directory tree."""
     ssv_files = glob.glob(os.path.join(directory, "**", "*.ssv"), recursive=True)
@@ -174,7 +243,7 @@ def read_ssv_files_to_dataframe(directory: str, device: str) -> pd.DataFrame:
     return combined_df
 
 
-def get_first_record(datafile):
+def get_first_record(datafile: str):
     """Return the first record from the SSV file."""
     field_names = []
     with open(datafile, "r", encoding="utf-8") as f:
@@ -193,7 +262,7 @@ def get_first_record(datafile):
     return None
 
 
-def get_device_name_from_ssv_file_name(ssv_file_name):
+def get_device_name_from_ssv_file_name(ssv_file_name: str) -> str:
     """Extract the device name from the SSV file path."""
     path = Path(ssv_file_name)
     parent = path.parent
@@ -201,7 +270,7 @@ def get_device_name_from_ssv_file_name(ssv_file_name):
     return get_device_name_from_data_dir(parent_dir_name)
 
 
-def get_device_name_from_data_dir(dir_name):
+def get_device_name_from_data_dir(dir_name: str) -> str:
     """Decode the name of a results directory from a model benchmark.
 
     Returns the components of the name as a dictionary.
