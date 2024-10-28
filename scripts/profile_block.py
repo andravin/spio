@@ -7,6 +7,7 @@ import datetime
 import random
 from io import StringIO
 from typing import Dict, List
+import subprocess
 
 import torch
 from torch import nn
@@ -172,7 +173,7 @@ class MLP(nn.Module):
         return x
 
 
-class GroupedConvFiesta(nn.Module):
+class StackedBlocks(nn.Module):
     """Build a multi-block stage with MLPs surrounding a given block class."""
 
     def __init__(
@@ -332,7 +333,7 @@ def run_benchmark(args, batch_size: int = None):
         ).cuda(args.device)
         input_size = model.default_cfg["input_size"]
     else:
-        model = GroupedConvFiesta(
+        model = StackedBlocks(
             group_width=args.group_width,
             kernel_size=args.kernel_size,
             depth=args.depth,
@@ -584,16 +585,20 @@ def benchmark_configs(model, inputs, args, data_path: Path):
 def get_dir_name(args) -> str:
     """Automatically generate a directory name for the benchmark results."""
     device_name = get_formatted_device_name(f"cuda:{args.device}")
+
     if args.timm_model is not None:
         model_name = args.timm_model
         kwargs_str = "__".join(
             [f"{key}__{value}" for key, value in args.timm_model_kwargs.items()]
         )
-        return f"modelbench___{device_name}___{model_name}___{kwargs_str}"
+        return (
+            f"modelbench___{device_name}___{model_name}___{kwargs_str}___{commit_hash}"
+        )
 
     file_name = get_file_name_details(args, no_bs=True)
     date_stamp = get_date_stamp()
-    return f"bench__{device_name}__{file_name}__{date_stamp}"
+    commit_hash = get_git_commit_hash()
+    return f"bench__{device_name}__{file_name}__{date_stamp}__{commit_hash}"
 
 
 def get_file_name_details(args, no_bs=False) -> str:
@@ -615,12 +620,8 @@ def get_file_name_details(args, no_bs=False) -> str:
 
 def get_benchmark_model_output_file_name(args) -> str:
     """Automatically generate a file name for the model benchmark results."""
-    if args.timm_model is not None:
-        date_stamp = get_date_stamp()
-        return f"model_bench_{args.batch_size}__{date_stamp}.ssv"
-    raise NotImplementedError(
-        "TODO: Implement output file name for block profiling results"
-    )
+    date_stamp = get_date_stamp()
+    return f"model_bench_{args.batch_size}__{date_stamp}.ssv"
 
 
 def get_batch_size_file_name_details(args) -> str:
@@ -631,6 +632,19 @@ def get_batch_size_file_name_details(args) -> str:
 def get_date_stamp() -> str:
     """Return a formatted date stamp."""
     return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def get_git_commit_hash() -> str:
+    """Retrieve the current Git commit hash."""
+    try:
+        commit_hash = (
+            subprocess.check_output(["git", "rev-parse", "HEAD"])
+            .strip()
+            .decode("utf-8")
+        )
+        return commit_hash
+    except subprocess.CalledProcessError:
+        return "unknown_commit"
 
 
 def random_sample_with_replacement(alist, k):

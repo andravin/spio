@@ -336,7 +336,7 @@ def extract_parameters_from_dirname(dirname):
     """Extract parameters from the directory name."""
     pattern = re.compile(
         r"bench__(.+)__([^_]+)_([^_]+)_c(\d+)_ks(\d+)_er(\d+)_gw(\d+)_"
-        r"hw(\d+)_d(\d+)_extra(\d+)_iters(\d+)(_bs(\d+))?"
+        r"hw(\d+)_d(\d+)_extra(\d+)_iters(\d+)(_bs(\d+))?__(\w+)"
     )
     match = pattern.search(dirname)
     field_names = [
@@ -352,8 +352,9 @@ def extract_parameters_from_dirname(dirname):
         "extra",
         "num_iters",
         "batch_size",
+        "commit_hash",
     ]
-    string_fields = ["device_name", "backend_name", "block_name"]
+    string_fields = ["device_name", "backend_name", "block_name", "commit_hash"]
     if not match:
         raise ValueError(f"Directory name does not match expected format: {dirname}")
     match_dict = {}
