@@ -6,9 +6,7 @@ Efficient CUDA kernels for training convolutional neural networks with PyTorch.
 
 ## Introduction
 
-The goal of the Spio project is to improve the efficiency of convolutional neural networks (ConvNets).
-While there has been a lot of progress in the design of ConvNet models,
-the performance of ConvNet kernels has languished. Today, the performance of a ConvNet is often limited by the efficiency of its implementation.
+The goal of the Spio project is to improve training efficiency for convolutional neural networks (ConvNets). While there has been a lot of progress in the design of ConvNet models, the performance of ConvNet kernels has languished. Today, the performance of a ConvNet is often limited by the efficiency of its implementation.
 
 Our [paper](https://arxiv.org/abs/2404.03617) implemented efficient GPU kernels for ConvNet inference.
 Spio implements kernels for training.
