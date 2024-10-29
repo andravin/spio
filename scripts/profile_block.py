@@ -455,6 +455,9 @@ def run_benchmark(args, batch_size: int = None):
 def benchmark_configs(model, inputs, args, data_path: Path):
     """Benchmark several kernel configurations for the model."""
     # Run the model to trace the kernel parameters.
+
+    total_iters = args.warmup + args.benchmark_iters
+
     with KernelParamsLogger() as logger:
         with torch.autocast(device_type="cuda", dtype=torch.float16):
             out = model(inputs[0])
@@ -539,7 +542,7 @@ def benchmark_configs(model, inputs, args, data_path: Path):
 
             # Run the benchmark.
             schedule = torch.profiler.schedule(
-                wait=1, warmup=args.warmup - 1, active=args.args.benchmark_iters, repeat=1
+                wait=1, warmup=args.warmup - 1, active=args.benchmark_iters, repeat=1
             )
             activities = [
                 torch.profiler.ProfilerActivity.CUDA,
@@ -547,7 +550,7 @@ def benchmark_configs(model, inputs, args, data_path: Path):
             with torch.profiler.profile(
                 activities=activities, schedule=schedule
             ) as prof:
-                for i in range(TOTAL_ITERS):
+                for i in range(total_iters):
                     with torch.autocast(device_type="cuda", dtype=torch.float16):
                         out = model(inputs[i % args.corpus_size])
                     out.sum().backward()
