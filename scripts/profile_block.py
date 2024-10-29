@@ -41,9 +41,6 @@ from spio.src_tests import preprocess_data_string
 
 GROUP_WIDTH = 8
 CHANNELS_LAST = True
-WARMUP_ITERS = 5
-BENCHMARK_ITERS = 5
-TOTAL_ITERS = WARMUP_ITERS + BENCHMARK_ITERS
 CHANNELS = 64
 
 RESULTS_TABLE_MAX_COL_WIDTH = 400
@@ -291,6 +288,8 @@ def main():
         default=200,
         help="The number of random samples to take from kernel configs.",
     )
+    parser.add_argument("--warmup", type=int, default=5)
+    parser.add_argument("--benchmark-iters", type=int, default=5)
     parser.add_argument("--no-profile", action="store_true")
     args = parser.parse_args()
 
@@ -389,25 +388,27 @@ def run_benchmark(args, batch_size: int = None):
         benchmark_configs(model, inputs, args, output_path)
         sys.exit(0)
 
-    # Run the benchmark with PyTorch.
-    schedule = torch.profiler.schedule(
-        wait=1, warmup=WARMUP_ITERS - 1, active=BENCHMARK_ITERS, repeat=1
-    )
-    activities = [
-        torch.profiler.ProfilerActivity.CUDA,
-    ]
-    if args.with_stack or args.group_by_input_shape:
-        activities.append(torch.profiler.ProfilerActivity.CPU)
-        experimental_config = torch._C._profiler._ExperimentalConfig(verbose=True)
-    else:
-        experimental_config = None
+    total_iters = args.warmup + args.benchmark_iters
 
     if args.no_profile:
-        for i in range(TOTAL_ITERS):
+        for i in range(total_iters):
             with torch.autocast(device_type="cuda", dtype=torch.float16):
                 out = model(inputs[i % args.corpus_size])
             out.sum().backward()
     else:
+        # Run the benchmark with PyTorch.
+        schedule = torch.profiler.schedule(
+            wait=1, warmup=args.warmup - 1, active=args.benchmark_iters, repeat=1
+        )
+        activities = [
+            torch.profiler.ProfilerActivity.CUDA,
+        ]
+        if args.with_stack or args.group_by_input_shape:
+            activities.append(torch.profiler.ProfilerActivity.CPU)
+            experimental_config = torch._C._profiler._ExperimentalConfig(verbose=True)
+        else:
+            experimental_config = None
+
         with torch.profiler.profile(
             activities=activities,
             schedule=schedule,
@@ -415,11 +416,11 @@ def run_benchmark(args, batch_size: int = None):
             experimental_config=experimental_config,
             record_shapes=args.group_by_input_shape,
         ) as prof:
-            for i in range(TOTAL_ITERS):
+            for i in range(total_iters):
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
                     out = model(inputs[i % args.corpus_size])
                 out.sum().backward()
-                if i == WARMUP_ITERS - 1:
+                if i == args.warmup - 1:
                     torch.cuda.synchronize()
                 prof.step()
 
@@ -538,7 +539,7 @@ def benchmark_configs(model, inputs, args, data_path: Path):
 
             # Run the benchmark.
             schedule = torch.profiler.schedule(
-                wait=1, warmup=WARMUP_ITERS - 1, active=BENCHMARK_ITERS, repeat=1
+                wait=1, warmup=args.warmup - 1, active=args.args.benchmark_iters, repeat=1
             )
             activities = [
                 torch.profiler.ProfilerActivity.CUDA,
@@ -550,7 +551,7 @@ def benchmark_configs(model, inputs, args, data_path: Path):
                     with torch.autocast(device_type="cuda", dtype=torch.float16):
                         out = model(inputs[i % args.corpus_size])
                     out.sum().backward()
-                    if i == WARMUP_ITERS - 1:
+                    if i == args.warmup - 1:
                         torch.cuda.synchronize()
                     prof.step()
             torch.cuda.synchronize()
@@ -617,7 +618,7 @@ def get_file_name_details(args, no_bs=False) -> str:
     filename = (
         f"{backend}_{args.block.lower()}_c{args.channels}_ks{args.kernel_size}_"
         f"er{args.expansion_ratio}_gw{args.group_width}_hw{args.resolution}_"
-        f"d{args.depth}_extra{args.extra}_iters{BENCHMARK_ITERS}"
+        f"d{args.depth}_extra{args.extra}_iters{args.benchmark_iters}"
     )
     if not no_bs:
         filename += f"_bs{args.batch_size}"
