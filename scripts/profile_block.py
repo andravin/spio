@@ -291,6 +291,7 @@ def main():
         default=200,
         help="The number of random samples to take from kernel configs.",
     )
+    parser.add_argument("--no-profile", action="store_true")
     args = parser.parse_args()
 
     torch.backends.cudnn.benchmark = True
@@ -401,47 +402,53 @@ def run_benchmark(args, batch_size: int = None):
     else:
         experimental_config = None
 
-    with torch.profiler.profile(
-        activities=activities,
-        schedule=schedule,
-        with_stack=args.with_stack,
-        experimental_config=experimental_config,
-        record_shapes=args.group_by_input_shape,
-    ) as prof:
+    if args.no_profile:
         for i in range(TOTAL_ITERS):
             with torch.autocast(device_type="cuda", dtype=torch.float16):
                 out = model(inputs[i % args.corpus_size])
             out.sum().backward()
-            if i == WARMUP_ITERS - 1:
-                torch.cuda.synchronize()
-            prof.step()
-
-    if args.batch_start is not None and args.batch_end is not None:
-        file_name_details = get_batch_size_file_name_details(args)
     else:
-        file_name_details = get_file_name_details(args)
-    file_name = args.output_dir / f"bench_{file_name_details}"
+        with torch.profiler.profile(
+            activities=activities,
+            schedule=schedule,
+            with_stack=args.with_stack,
+            experimental_config=experimental_config,
+            record_shapes=args.group_by_input_shape,
+        ) as prof:
+            for i in range(TOTAL_ITERS):
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    out = model(inputs[i % args.corpus_size])
+                out.sum().backward()
+                if i == WARMUP_ITERS - 1:
+                    torch.cuda.synchronize()
+                prof.step()
 
-    if args.save_trace:
-        json_file_name = str(file_name.with_suffix(".json"))
-        prof.export_chrome_trace(json_file_name)
-        print(f"Trace saved to {json_file_name}")
+        if args.batch_start is not None and args.batch_end is not None:
+            file_name_details = get_batch_size_file_name_details(args)
+        else:
+            file_name_details = get_file_name_details(args)
+        file_name = args.output_dir / f"bench_{file_name_details}"
 
-    data_file_name = str(file_name.with_suffix(".dat"))
-    group_by_stack_n = 8 if args.with_stack else 0
-    with open(data_file_name, "w", encoding="utf-8") as f:
-        f.write(
-            prof.key_averages(
-                group_by_input_shape=args.group_by_input_shape,
-                group_by_stack_n=group_by_stack_n,
-            ).table(
-                sort_by="self_cuda_time_total",
-                row_limit=-1,
-                max_src_column_width=RESULTS_TABLE_MAX_COL_WIDTH,
-                max_name_column_width=RESULTS_TABLE_MAX_COL_WIDTH,
+        if args.save_trace:
+            json_file_name = str(file_name.with_suffix(".json"))
+            prof.export_chrome_trace(json_file_name)
+            print(f"Trace saved to {json_file_name}")
+
+        data_file_name = str(file_name.with_suffix(".dat"))
+        group_by_stack_n = 8 if args.with_stack else 0
+        with open(data_file_name, "w", encoding="utf-8") as f:
+            f.write(
+                prof.key_averages(
+                    group_by_input_shape=args.group_by_input_shape,
+                    group_by_stack_n=group_by_stack_n,
+                ).table(
+                    sort_by="self_cuda_time_total",
+                    row_limit=-1,
+                    max_src_column_width=RESULTS_TABLE_MAX_COL_WIDTH,
+                    max_name_column_width=RESULTS_TABLE_MAX_COL_WIDTH,
+                )
             )
-        )
-        print(f"Averages saved to {data_file_name}")
+            print(f"Averages saved to {data_file_name}")
 
 
 def benchmark_configs(model, inputs, args, data_path: Path):
@@ -588,6 +595,7 @@ def benchmark_configs(model, inputs, args, data_path: Path):
 def get_dir_name(args) -> str:
     """Automatically generate a directory name for the benchmark results."""
     device_name = get_formatted_device_name(f"cuda:{args.device}")
+    commit_hash = get_git_commit_hash()
 
     if args.timm_model is not None:
         model_name = args.timm_model
@@ -600,7 +608,6 @@ def get_dir_name(args) -> str:
 
     file_name = get_file_name_details(args, no_bs=True)
     date_stamp = get_date_stamp()
-    commit_hash = get_git_commit_hash()
     return f"bench__{device_name}__{file_name}__{date_stamp}__{commit_hash}"
 
 
