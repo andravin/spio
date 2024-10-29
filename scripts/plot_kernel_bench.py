@@ -199,10 +199,12 @@ def find_torch_grouped_conv_kernels(df, kernel_iters, depthwise=False):
     grouped_dgrad_kernels = [
         "sm80_xmma_dgrad_implicit_gemm_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage4_warpsize1x4x1_g8_tensor16x8x16_execute_kernel__5x_cudnn",
         "sm80_xmma_dgrad_implicit_gemm_indexed_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage4_warpsize1x4x1_g8_tensor16x8x16_execute_kernel__5x_cudnn",
+        "sm80_xmma_dgrad_implicit_gemm_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage4_warpsize1x4x1_g8_tensor16x8x16_t1r3s3_execute_kernel__5x_cudnn",
     ]
 
     grouped_wgrad_kernels = [
         "sm80_xmma_wgrad_implicit_gemm_indexed_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage4_warpsize1x1x4_g8_tensor16x8x16_execute_kernel__5x_cudnn",
+        "sm80_xmma_wgrad_implicit_gemm_indexed_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage4_warpsize1x1x4_g8_tensor16x8x16_execute_split_k_kernel__5x_cudnn",
     ]
 
     dw_fprop_kernels = [
@@ -305,7 +307,7 @@ def compute_num_iters_from_dirname_params(dirname_params):
         expect_conv2d_gw8_wgrad_iters = expect_conv2d_gw8_fprop_iters
     elif block_name == "convfirst":
         expect_conv2d_gw8_fprop_iters = depth * num_iters
-        expect_conv2d_gw8_dgrad_iters = (depth - 1) * num_iters
+        expect_conv2d_gw8_dgrad_iters = expect_conv2d_gw8_fprop_iters
         expect_conv2d_gw8_wgrad_iters = expect_conv2d_gw8_fprop_iters
     else:
         raise ValueError(f"Unknown block name: {block_name}")
