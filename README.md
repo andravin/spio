@@ -10,7 +10,7 @@ The goal of the Spio project is to improve training efficiency for convolutional
 
 Our [paper](https://arxiv.org/abs/2404.03617) implemented efficient GPU kernels for ConvNet inference. Spio implements kernels for training.
 
-The first Spio kernel is for grouped convolution, a prime example of a promising layer that has fallen into disuse because of the inefficiency of the current implementation. We focus on group width equal to eight and stride 1, as used in our ConvFirst model, and support NVIDIA Ampere (sm_80 and sm_86) and Ada (sm_89) GPUs.
+The first Spio kernel is for grouped convolution, a prime example of a promising layer that has fallen into disuse because of the inefficiency of the current implementation. We focus on group width equal to eight and stride 1, as used in our ConvFirst model, and support NVIDIA Ampere ([sm_80](https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf) and [sm_86](https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf)) and Ada ([sm_89](https://images.nvidia.com/aem-dam/Solutions/Data-Center/l4/nvidia-ada-gpu-architecture-whitepaper-v2.1.pdf)) GPUs.
 
 ### Audience
 
