@@ -2,3 +2,4 @@ pandas
 scikit-learn
 timm
 tqdm
+tabulate

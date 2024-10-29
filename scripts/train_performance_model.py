@@ -8,16 +8,10 @@ from functools import partial
 
 import xgboost as xgb
 
-try:
-    import pandas as pd
-except ImportError as e:
-    raise ImportError("This script requires the pandas package.") from e
-
-try:
-    from sklearn.model_selection import train_test_split, GridSearchCV
-    from sklearn.metrics import root_mean_squared_error
-except ImportError as e:
-    raise ImportError("This script requires the scikit-learn package.") from e
+import pandas as pd
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.metrics import root_mean_squared_error
+from tabulate import tabulate
 
 from spio.kernels import (
     Conv2dGw8Params,
@@ -154,8 +148,12 @@ def regression_analysis(old_data_dir: str, new_data_dir: str):
     Reports speedup based on average CUDA execution time for matching spio
     kernels, parameters, and configurations.
     """
-    old_device = get_device_name_from_data_dir(old_data_dir)
-    new_device = get_device_name_from_data_dir(new_data_dir)
+    if not os.path.exists(old_data_dir):
+        raise ValueError(f"Old data directory does not exist: {old_data_dir}")
+    if not os.path.exists(new_data_dir):
+        raise ValueError(f"New data directory does not exist: {new_data_dir}")
+    old_device = get_device_name_from_bench_dir(old_data_dir)
+    new_device = get_device_name_from_bench_dir(new_data_dir)
     assert (
         old_device == new_device
     ), f"Devices do not match: {old_device} != {new_device}"
@@ -164,6 +162,16 @@ def regression_analysis(old_data_dir: str, new_data_dir: str):
 
     old_df = read_ssv_files_to_dataframe(old_data_dir, device)
     new_df = read_ssv_files_to_dataframe(new_data_dir, device)
+
+    numeric_columns = ["CUDA_time_avg_ms"]
+
+    # Group by Kernel, Params, and Config and compute the mean of numeric columns
+    old_df = old_df.groupby(["Kernel", "Params", "Config"], as_index=False)[
+        numeric_columns
+    ].mean()
+    new_df = new_df.groupby(["Kernel", "Params", "Config"], as_index=False)[
+        numeric_columns
+    ].mean()
 
     # Merge old and new dataframes on Kernel, Params, and Config
     merged_df = pd.merge(
@@ -175,17 +183,46 @@ def regression_analysis(old_data_dir: str, new_data_dir: str):
         merged_df["CUDA_time_avg_ms_old"] / merged_df["CUDA_time_avg_ms_new"]
     )
 
-    print(
-        merged_df[
+    # Sort the DataFrame by Kernel, Params, and CUDA_time_avg_ms_new
+    merged_df = merged_df.sort_values(by=["Kernel", "Params", "CUDA_time_avg_ms_new"])
+
+    # Print the DataFrame with blank lines between groups
+    previous_kernel = None
+    previous_params = None
+    rows = []
+    for _, row in merged_df.iterrows():
+        current_kernel = row["Kernel"]
+        current_params = row["Params"]
+        if previous_kernel is not None and (
+            current_kernel != previous_kernel or current_params != previous_params
+        ):
+            rows.append([""] * len(row))
+
+        rows.append(
             [
+                row["Kernel"],
+                row["Params"],
+                row["Config"],
+                f"{row['CUDA_time_avg_ms_old']:.3f}",
+                f"{row['CUDA_time_avg_ms_new']:.3f}",
+                f"{row['speedup']:.3f}",
+            ]
+        )
+        previous_kernel = current_kernel
+        previous_params = current_params
+    print(
+        tabulate(
+            rows,
+            headers=[
                 "Kernel",
                 "Params",
                 "Config",
                 "CUDA_time_avg_ms_old",
                 "CUDA_time_avg_ms_new",
                 "speedup",
-            ]
-        ]
+            ],
+            tablefmt="plain",
+        )
     )
 
 
@@ -270,6 +307,21 @@ def get_device_name_from_ssv_file_name(ssv_file_name: str) -> str:
     return get_device_name_from_data_dir(parent_dir_name)
 
 
+def get_device_name_from_bench_dir(dir_name: str) -> str:
+    """Decode the name of a results directory from a layer benchmark.
+
+    Returns the components of the name as a dictionary.
+    """
+    child = Path(dir_name).name
+    parts = child.split("__")
+    if parts[0] != "bench":
+        raise ValueError(
+            f"Invalid benchmark directory name: {dir_name}: Expected 'bench__<device_name>..."
+        )
+    device_name = parts[1]
+    return device_name
+
+
 def get_device_name_from_data_dir(dir_name: str) -> str:
     """Decode the name of a results directory from a model benchmark.
 
@@ -278,9 +330,12 @@ def get_device_name_from_data_dir(dir_name: str) -> str:
     child = Path(dir_name).name
     parts = child.split("___")
     if parts[0] != "modelbench":
-        raise ValueError(
-            f"Invalid model benchmark file name: {dir_name}: Expected 'modelbench__<device_name>"
-        )
+        parts = child.split("__")
+        if parts[0] != "bench":
+            raise ValueError(
+                f"Invalid model benchmark directory name: {dir_name}: "
+                "Expected 'modelbench__<device_name> or bench_<device_name>..."
+            )
     device_name = parts[1]
     return device_name
 
