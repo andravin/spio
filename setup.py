@@ -27,7 +27,7 @@ extensions = [
 
 setup(
     name="spio",
-    version="0.3.0rc1",
+    version="0.3.0",
     packages=find_packages(),
     ext_modules=cythonize(extensions),
     install_requires=[
