@@ -1,0 +1,12 @@
+include LICENSE.txt
+include README.md
+include pyproject.toml
+
+recursive-include spio *.py *.pyx *.pxd *.cu *.h *.cuh *.dat
+
+# Exclude unnecessary files and directories
+exclude *.pyc
+exclude *.pyo
+exclude .DS_Store
+prune tests/__pycache__
+prune spio/__pycache__

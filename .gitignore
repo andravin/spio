@@ -1,0 +1,29 @@
+.vscode
+
+*.out
+*.cubin
+*.pyc
+*.so
+__pycache__/
+.venv/
+.fooenv/
+.torch_2_50_rc/
+
+# PyTorch profiler results.
+trace*.json
+profile_*.json
+spio_functional_*.json
+torch_*.json
+train_*.json
+inference_*.json
+*.ssv
+*.ubj
+results/
+
+# Other cruft.
+wandb/
+
+build/
+driver.c
+
+spio.egg-info/
