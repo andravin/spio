@@ -9,8 +9,7 @@ import torch
 
 @dataclass(frozen=True)
 class Conv2dGw8Params:
-    """A dataclass that holds parameters for a 2D convolution with group
-    width 8.
+    """Parameters for a 2D convolution with group width 8.
 
     This class is used to validate and store parameters for a grouped convolution operation.
 

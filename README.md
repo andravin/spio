@@ -73,6 +73,15 @@ which generates CUDA/C++ classes that you use in your kernel like this:
         output = output.n(n).p(block_p).q(q).k8(k8);
         thread_stores_output = n < Output::N && q < Output::Q && k8 < Output::K8 && threadIdx.x < OutputStoreIdx::size;
     }
+
+    # ...
+
+    if (thread_stores_output)
+    {
+        *output = *smem_output_load;
+    }
+    output = output.p(1);
+
 ```
 
 ### Run Time Compilation

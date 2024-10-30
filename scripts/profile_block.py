@@ -17,16 +17,16 @@ from tqdm import tqdm
 try:
     import timm
 
-    has_timm = True
+    HAS_TIMM = True
 except ImportError:
-    has_timm = False
+    HAS_TIMM = False
 
 try:
     import torchinfo
 
-    has_torchinfo = True
+    HAS_TORCHINFO = True
 except ImportError:
-    has_torchinfo = False
+    HAS_TORCHINFO = False
 
 from spio.transform import transform as spio_transform
 from spio.util import get_formatted_device_name, ParseKwargs, Timer
@@ -322,7 +322,7 @@ def run_benchmark(args, batch_size: int = None):
 
     device = torch.device(f"cuda:{args.device}")
     if args.timm_model is not None:
-        if not has_timm:
+        if not HAS_TIMM:
             print(
                 "The --timm-model option requires timm to be installed.",
                 file=sys.stderr,
@@ -352,7 +352,7 @@ def run_benchmark(args, batch_size: int = None):
     ]
 
     if args.summary:
-        if not has_torchinfo:
+        if not HAS_TORCHINFO:
             print(
                 "The --summary summary option requires torchinfo to be installed.",
                 file=sys.stderr,

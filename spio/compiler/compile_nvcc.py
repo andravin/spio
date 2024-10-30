@@ -53,7 +53,7 @@ def compile_with_nvcc(
     output_file=None,
     device_debug=False,
     lineinfo=False,
-):
+) -> int:
     """Deprecated.
 
     Use compile_with_nvrtc instead.

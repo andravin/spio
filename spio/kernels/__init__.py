@@ -12,7 +12,6 @@ from .performance_model_cache import (
 )
 from .kernel_params_logger import (
     KernelParamsLogger,
-    log_kernel_params,
     kernel_params_logging_is_enabled,
 )
 from .kernel_key import KernelParams, KernelKey

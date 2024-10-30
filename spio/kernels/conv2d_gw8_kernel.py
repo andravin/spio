@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from itertools import product
-from typing import Generator
+from typing import Generator, Tuple, List
 
 from ..generators import (
     MacroSpec,
@@ -10,6 +10,7 @@ from ..generators import (
     IndexSpec,
     TensorSpec,
     FragmentSpec,
+    GenSpecs,
 )
 from ..util import divup
 from .launch_params import LaunchParams
@@ -57,7 +58,7 @@ def _get_kernel_name(igrad=False) -> str:
 
 def _get_specs(
     params: Conv2dGw8Params, config: Conv2dGw8Config = None, igrad: bool = False
-):
+) -> Tuple[List[GenSpecs], LaunchParams]:
     """The code generator specs and launch parameters."""
     params.validate()
 

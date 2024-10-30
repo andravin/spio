@@ -1,8 +1,9 @@
 """Kernel key and parameters for kernel caching."""
 
 from dataclasses import dataclass
-
 from typing import Any, Tuple, TYPE_CHECKING
+
+from .params import Params
 
 if TYPE_CHECKING:
     from .kernel_cache import KernelCache
@@ -14,7 +15,7 @@ class KernelKey:
     """A key for a kernel in a KernelCache."""
 
     device_ordinal: int
-    params: object
+    params: Params
 
 
 @dataclass(frozen=True)
@@ -23,7 +24,7 @@ class KernelParams:
 
     kernel_cache: "KernelCache"
     kernel_factory: "KernelFactory"
-    params: Any
+    params: Params
     device: Any
     kernel_kwargs: Tuple[str, Any]
 

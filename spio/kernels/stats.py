@@ -28,7 +28,7 @@ class Stats:
         self.output_names = output_names
 
     @property
-    def macs(self):
+    def macs(self) -> int:
         """The number of MACs in the calculations.
 
         Returns the total number of multiply-accumulates performed by
@@ -40,7 +40,7 @@ class Stats:
         )
 
     @property
-    def bytes_read(self):
+    def bytes_read(self) -> int:
         """The number of bytes read in the calculations."""
         return sum(
             getattr(self, f"{output_tensor}_bytes_read")
@@ -48,7 +48,7 @@ class Stats:
         )
 
     @property
-    def bytes_written(self):
+    def bytes_written(self) -> int:
         """The number of bytes written in the calculations."""
         return sum(
             getattr(self, f"{output_tensor}_bytes_written")
@@ -56,17 +56,17 @@ class Stats:
         )
 
     @property
-    def bytes(self):
+    def bytes(self) -> int:
         """Return the total number of bytes read and written."""
         return self.bytes_read + self.bytes_written
 
     @property
-    def op_byte(self):
+    def op_byte(self) -> float:
         """Return the number ops per byte."""
         return 2.0 * self.macs / self.bytes
 
     @property
-    def accumulation_depths(self):
+    def accumulation_depths(self) -> int:
         """The accumulation depths of the calculations."""
         return [
             getattr(self, f"{output_tensor}_accumulation_depth")

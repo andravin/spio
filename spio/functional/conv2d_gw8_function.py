@@ -1,4 +1,4 @@
-"""Custom conv2d_gw8 function for PyTorch."""
+"""Custom conv2d_gw8 operator for PyTorch."""
 
 from typing import List, Tuple, Any
 

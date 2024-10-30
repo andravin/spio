@@ -12,7 +12,7 @@ from ..util import logger_enabled
 from .kernel_key import KernelKey
 from .performance_model_cache import PerformanceModelCache
 from .kernel import Kernel
-from .kernel_params_logger import log_kernel_params, kernel_params_logging_is_enabled
+from .kernel_params_logger import _log_kernel_params, kernel_params_logging_is_enabled
 
 perf_model_cache = PerformanceModelCache()
 
@@ -49,7 +49,7 @@ class KernelCache:
         """Clear the main cache."""
         self._cache.clear()
 
-    @log_kernel_params
+    @_log_kernel_params
     def get(self, kernel_factory, params, device, **kernel_kwargs) -> Kernel:
         """Return the best kernel for the given params and device.
 
@@ -73,7 +73,7 @@ class KernelCache:
                     # We also don't care about performance in this case.
                     # So we just use the first configuration.
                     # Be careful to clear the cache when you are done logging params so
-                    # that first config is not used for performance.
+                    # that the first config is not used for performance.
                     configs = kernel_factory.configs(params, **kernel_kwargs)
                     best_config = next(configs)
                 else:

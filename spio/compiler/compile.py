@@ -24,7 +24,7 @@ def compile_cuda(
     device_debug: bool = False,
     lineinfo: bool = False,
     header_dict: Dict[str, str] = None,
-):
+) -> bytes:
     """Compile CUDA source code and return the resulting cubin.
 
     Args:

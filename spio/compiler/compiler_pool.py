@@ -81,7 +81,7 @@ def compile_kernels(kernels: List["Kernel"], arch: Tuple[int, int] = None) -> No
         kernel.cubin = cubin
 
 
-def _compile_kernels(compiler_args, arch: Tuple[int, int] = None):
+def _compile_kernels(compiler_args, arch: Tuple[int, int] = None) -> List[bytes]:
     """Compile multiple kernels in parallel."""
     ck_with_args = partial(
         compile_kernel, arch=arch, lineinfo=lineinfo.get(), debug=debug.get()

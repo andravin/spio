@@ -10,10 +10,14 @@ from .launch_params import LaunchParams
 
 
 class Kernel:
-    """A class that encapsulates a CUDA kernel."""
+    """A class that encapsulates a CUDA kernel.
+
+    Users do not create Kernel instances directly. Instead, they should use
+    the KernelFactory class to create them.
+    """
 
     @property
-    def kernel_source_file(self):
+    def kernel_source_file(self) -> str:
         """Return the CUDA source file."""
         if self._kernel_source_file is None:
             return f"{self.kernel_name}.cu"
@@ -40,6 +44,10 @@ class Kernel:
         src_module="spio.src",
         includes_module="spio.include",
     ):
+        """Initialize the Kernel object.
+        
+        Use KernelFactory instead of creating Kernel instances directly.
+        """
         if specs is None:
             specs = []
         self._kernel_source_file = kernel_source_file
@@ -108,7 +116,7 @@ class Kernel:
         return f"{self.kernel_name} {self.params} {self.config}"
 
 
-def get_full_kernel_name(kernel_name, params):
+def get_full_kernel_name(kernel_name, params) -> str:
     """Return the full kernel name including the parameters."""
     details = params.encode()
     return f"{kernel_name}__{details}"

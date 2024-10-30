@@ -1,6 +1,6 @@
 """Kernel factory for creating Kernel objects for CUDA kernels."""
 
-from typing import Type, Callable, Union, List
+from typing import Type, Callable, Union, List, Any, TypeVar, Tuple
 
 from ..generators.gen_specs import GenSpecs
 from .params import Params
@@ -8,6 +8,66 @@ from .kernel import Kernel, get_full_kernel_name
 from .launch_params import LaunchParams
 from .kernel_cache import KernelCache
 from .stats import Stats
+
+
+# A kernel tile configuration class. Each kernel defines its own configuration dataclass.
+Config = TypeVar("Config")
+
+
+# Function prototypes for KernelFactory callbacks.
+KernelNameCallback = Callable[[Any], str]
+KernelSourceFileCallback = Callable[[Params, Any], str]
+ConfigsCallback = Callable[[Params, Any], List[Config]]
+SpecsCallback = Callable[[Params, Config, Any], List[GenSpecs]]
+
+
+def make_kernel_factory(
+    params_cls: Type = None,
+    config_cls: Type = None,
+    stats_cls: Type = None,
+    kernel_name: Union[str, KernelNameCallback] = None,
+    configs: Union[List[Config], ConfigsCallback] = None,
+    specs: Union[List[GenSpecs], SpecsCallback] = None,
+    kernel_source_file: Union[str, KernelSourceFileCallback] = None,
+    launch_params: LaunchParams = None,
+    src_module: str = "spio.src",
+    includes_module: str = "spio.include",
+    perf_model_skip_params: List[str] = None,
+) -> "KernelFactory":
+    """Return a new KernelFactory object for a CUDA kernel.
+
+    All callable arguments must be functions that take (params, **kwargs)
+    arguments and return the corresponding values.
+
+    Args:
+        params_cls: The class for the layer parameters.
+        config_cls: The class for the kernel configuration.
+        stats_cls: The class for the kernel statistics.
+        kernel_name: The name of the kernel
+          or a function that returns it.
+        configs: The list of kernel configurations
+          or a function that returns them.
+        specs: The list of kernel specs or a function
+          function that returns the specs and launch parameters.
+        kernel_source_file: The file name of the CUDA kernel source code.
+        launch_params: Optional launch parameters for the kernel.
+          These may be returned by the specs function instead.
+        src_module: The module name where the kernel_source_file is located.
+        includes_module: The module name where any include files are located.
+    """
+    return KernelFactory(
+        params_cls=params_cls,
+        config_cls=config_cls,
+        stats_cls=stats_cls,
+        kernel_name=kernel_name,
+        configs=configs,
+        specs=specs,
+        kernel_source_file=kernel_source_file,
+        launch_params=launch_params,
+        src_module=src_module,
+        includes_module=includes_module,
+        perf_model_skip_params=perf_model_skip_params,
+    )
 
 
 class KernelFactory:
@@ -22,25 +82,24 @@ class KernelFactory:
     the kernel's performance model and compiles a new kernel that uses
     it.
 
-    Users do not use this class directly. Rather, they define new
-    kernels by calling the  make_kernel_factory() function.
+    Users do not instantiate this class directly. Rather, they define new
+    kernels by calling the make_kernel_factory() function.
 
     Methods that take keyword arguments (**kwargs) use them to
-    distinguish between different instances of the kernel that use the
-    same kernel source code and configurations. For example, a forward
-    and backward kernel may use the same source code but have different
-    kernel names.
+    distinguish between different modes of the kernel. For example, a forward
+    and backward kernel may use the keyword argument (igrad:bool=False)
+    to differentiate between FPROP and BPROP versions of the kernel.
     """
 
     def __init__(
         self,
         params_cls: Type[Params] = None,
-        config_cls: Type = None,
+        config_cls: Type[Config] = None,
         stats_cls: Type[Stats] = None,
-        kernel_name: Union[str, Callable[..., str]] = None,
-        configs: Union[List, Callable[..., List]] = None,
-        specs: Union[List, Callable[..., List]] = None,
-        kernel_source_file: Union[str, Callable[..., str]] = None,
+        kernel_name: Union[str, KernelNameCallback] = None,
+        configs: Union[List[Config], ConfigsCallback] = None,
+        specs: Union[List[GenSpecs], SpecsCallback] = None,
+        kernel_source_file: Union[str, KernelSourceFileCallback] = None,
         launch_params: LaunchParams = None,
         src_module: str = "spio.src",
         includes_module: str = "spio.include",
@@ -61,7 +120,7 @@ class KernelFactory:
         self._includes_module = includes_module
         self.per_model_skip_params = perf_model_skip_params
 
-    def configs(self, params: Params, **kwargs):
+    def configs(self, params: Params, **kwargs) -> List[Config]:
         """Return all configs of the given layer parameters."""
         if callable(self._configs):
             return self._configs(params, **kwargs)
@@ -81,7 +140,9 @@ class KernelFactory:
         kernel_name = self.get_kernel_name(**kwargs)
         return get_full_kernel_name(kernel_name, params)
 
-    def get_specs(self, params: Params, config, **kwargs):
+    def get_specs(
+        self, params: Params, config: Config, **kwargs
+    ) -> Tuple[List[GenSpecs], LaunchParams]:
         """Return the kernel specs and launch parameters.
 
         Kernel specs are code generators for named tensors, constant
@@ -130,52 +191,3 @@ class KernelFactory:
             src_module=self._src_module,
             includes_module=self._includes_module,
         )
-
-
-def make_kernel_factory(
-    params_cls: Type = None,
-    config_cls: Type = None,
-    stats_cls: Type = None,
-    kernel_name: Union[str, Callable[..., str]] = None,
-    configs: Union[List, Callable[..., List]] = None,
-    specs: Union[List, Callable[..., List[GenSpecs]]] = None,
-    kernel_source_file: Union[str, Callable[..., str]] = None,
-    launch_params: Union[LaunchParams, Callable[..., LaunchParams]] = None,
-    src_module: str = "spio.src",
-    includes_module: str = "spio.include",
-    perf_model_skip_params: List[str] = None,
-) -> KernelFactory:
-    """Return a new KernelFactory object for a CUDA kernel.
-
-    All callable arguments must be functions that take (params, **kwargs)
-    arguments and return the corresponding values.
-
-    Args:
-        params_cls: The class for the layer parameters.
-        config_cls: The class for the kernel configuration.
-        stats_cls: The class for the kernel statistics.
-        kernel_name: The name of the kernel
-          or a function that returns it.
-        configs: The list of kernel configurations
-          or a function that returns them.
-        specs: The list of kernel specs and launch parameters
-          or a function that returns them and the launch parameters.
-        kernel_source_file: The file name of the CUDA kernel source code.
-        launch_params: Optional launch parameters for the kernel.
-          These may be returned by the specs function instead.
-        src_module: The module name where the kernel_source_file is located.
-        includes_module: The module name where any include files are located.
-    """
-    return KernelFactory(
-        params_cls=params_cls,
-        config_cls=config_cls,
-        stats_cls=stats_cls,
-        kernel_name=kernel_name,
-        configs=configs,
-        specs=specs,
-        kernel_source_file=kernel_source_file,
-        launch_params=launch_params,
-        src_module=src_module,
-        includes_module=includes_module,
-        perf_model_skip_params=perf_model_skip_params,
-    )

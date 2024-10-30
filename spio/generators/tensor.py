@@ -1,5 +1,4 @@
-"""Code generator for custom tensor classes in CUDA kernel source
-code."""
+"""Code generator for custom tensor classes in CUDA source code."""
 
 from typing import Dict, Tuple
 from dataclasses import dataclass

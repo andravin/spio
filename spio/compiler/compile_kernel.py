@@ -19,11 +19,11 @@ def compile_kernel(
     debug: bool = False,
     lineinfo: bool = False,
 ):
-    """Compile a CUDA kernel from source file and return the cubin.
+    """Compile a CUDA kernel from a source file and return the cubin.
 
     Args:
         source_file_name (str): Name of the source file containing the kernel.
-        header_dict (dict): Dictionary of header files to include.
+        header_dict (dict): Dictionary of header file names and sources.
         src_module (str): Module containing the source file.
         includes_module (str): Module containing the include files.
         arch (tuple): GPU architecture (e.g., (8, 0) for sm_80).
