@@ -6,3 +6,4 @@ https://pytorch.org/tutorials/advanced/python_custom_ops.html
 """
 
 from .conv2d_gw8_function import conv2d_gw8
+from .layernorm_2d_function import layernorm_2d

@@ -1,10 +1,15 @@
 """Subpackage for kernels."""
+
 from .conv2d_gw8_params import Conv2dGw8Params
 from .conv2d_gw8_kernel import conv2d_gw8_kernel_factory, Conv2dGw8Config
 from .conv2d_gw8_wgrad_kernel import (
     conv2d_gw8_wgrad_kernel_factory,
     Conv2dGw8WgradConfig,
 )
+
+from .layernorm_2d_params import LayerNorm2dParams
+from .layernorm_2d_kernel import layernorm_2d_kernel_factory, LayerNorm2dConfig
+
 from .stats import Stats
 from .performance_model_cache import (
     get_device_performance_model_file_name,

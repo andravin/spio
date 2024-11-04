@@ -36,6 +36,7 @@ from spio.kernels import (
     KernelKey,
     Kernel,
 )
+import spio.layers
 from spio.compiler import compile_kernels
 from spio.src_tests import preprocess_data_string
 
@@ -44,7 +45,81 @@ CHANNELS_LAST = True
 CHANNELS = 64
 
 RESULTS_TABLE_MAX_COL_WIDTH = 400
-CONVOLUTIONAL_BLOCKS = ["MBConv", "ConvFirst"]
+CONVOLUTIONAL_BLOCKS = ["MBConv", "ConvFirst", "ConvNeXt"]
+
+# pylint: disable=invalid-name
+use_spio = False
+
+
+class LayerNorm2d(nn.Module):
+    """Reference implementation of LayerNorm2d."""
+
+    def __init__(self, num_features, eps=1e-5, elementwise_affine=True, bias=True):
+        super().__init__()
+        self.layer_norm = nn.LayerNorm(
+            num_features, eps=eps, elementwise_affine=elementwise_affine, bias=bias
+        )
+
+    def forward(self, x):
+        """Forward pass."""
+        x = x.permute(0, 2, 3, 1)
+        x = self.layer_norm(x)
+        x = x.permute(0, 3, 1, 2)
+        return x
+
+
+def make_layernorm_2d(*args, **kwargs):
+    """Create a LayerNorm2d block.
+
+    Uses spio.layers.LayerNorm2d is use_spio is set.
+    Otherwise, uses the LayerNorm2d reference implementation.
+    """
+    if use_spio:
+        return spio.layers.make_layernorm_2d(*args, **kwargs)
+    else:
+        return LayerNorm2d(*args, **kwargs)
+
+
+class ConvNeXt(nn.Module):
+    """ConvNeXt block PyTorch module."""
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=7,
+        group_width=1,
+        expansion_ratio=4,
+        act_cls=torch.nn.GELU,
+    ):
+        """Initialize the ConvNeXt block."""
+        super().__init__()
+        padding = kernel_size // 2
+        mid_channels = in_channels * expansion_ratio
+        assert in_channels % group_width == 0
+        groups = in_channels // group_width
+        self.conv = nn.Conv2d(
+            in_channels,
+            in_channels,
+            kernel_size=kernel_size,
+            padding=padding,
+            groups=groups,
+        )
+        self.norm = make_layernorm_2d(in_channels)
+        self.exp = nn.Conv2d(in_channels, mid_channels, kernel_size=1)
+        self.act = act_cls()
+        self.prj = nn.Conv2d(mid_channels, out_channels, kernel_size=1)
+        self.gamma = nn.Parameter(torch.zeros(1) * 1e-6)
+
+    def forward(self, inputs):
+        """Forward pass."""
+        x = inputs
+        x = self.norm(x)
+        x = self.exp(x)
+        x = self.act(x)
+        x = self.prj(x)
+        x = x * self.gamma.view(1, -1, 1, 1)
+        return x + inputs
 
 
 class MBConv(nn.Module):
@@ -237,6 +312,7 @@ class StackedBlocks(nn.Module):
 
 def main():
     """Main function to parse arguments and run the benchmark."""
+    global use_spio
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--group-width", type=int, default=GROUP_WIDTH)
@@ -291,9 +367,14 @@ def main():
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--benchmark-iters", type=int, default=5)
     parser.add_argument("--no-profile", action="store_true")
+    parser.add_argument("--inference", action="store_true")
     args = parser.parse_args()
 
     torch.backends.cudnn.benchmark = True
+
+    if args.spio:
+        timm.layers.set_use_spio(True)
+        use_spio = True
 
     if args.output_dir is None:
         args.output_dir = "."
@@ -317,6 +398,8 @@ def run_benchmark(args, batch_size: int = None):
         block_cls = MBConv
     elif args.block == "ConvFirst":
         block_cls = ConvFirst
+    elif args.block == "ConvNeXt":
+        block_cls = ConvNeXt
     else:
         raise ValueError(f"Unknown block type: {args.block}")
 
@@ -391,10 +474,16 @@ def run_benchmark(args, batch_size: int = None):
     total_iters = args.warmup + args.benchmark_iters
 
     if args.no_profile:
-        for i in range(total_iters):
-            with torch.autocast(device_type="cuda", dtype=torch.float16):
-                out = model(inputs[i % args.corpus_size])
-            out.sum().backward()
+        if args.inference:
+            with torch.no_grad():
+                for i in range(total_iters):
+                    with torch.autocast(device_type="cuda", dtype=torch.float16):
+                        _out = model(inputs[i % args.corpus_size])
+        else:
+            for i in range(total_iters):
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    out = model(inputs[i % args.corpus_size])
+                out.sum().backward()
     else:
         # Run the benchmark with PyTorch.
         schedule = torch.profiler.schedule(
@@ -416,13 +505,22 @@ def run_benchmark(args, batch_size: int = None):
             experimental_config=experimental_config,
             record_shapes=args.group_by_input_shape,
         ) as prof:
-            for i in range(total_iters):
-                with torch.autocast(device_type="cuda", dtype=torch.float16):
-                    out = model(inputs[i % args.corpus_size])
-                out.sum().backward()
-                if i == args.warmup - 1:
-                    torch.cuda.synchronize()
-                prof.step()
+            if args.inference:
+                with torch.no_grad():
+                    for i in range(total_iters):
+                        with torch.autocast(device_type="cuda", dtype=torch.float16):
+                            _out = model(inputs[i % args.corpus_size])
+                        if i == args.warmup - 1:
+                            torch.cuda.synchronize()
+                        prof.step()
+            else:
+                for i in range(total_iters):
+                    with torch.autocast(device_type="cuda", dtype=torch.float16):
+                        out = model(inputs[i % args.corpus_size])
+                    out.sum().backward()
+                    if i == args.warmup - 1:
+                        torch.cuda.synchronize()
+                    prof.step()
 
         if args.batch_start is not None and args.batch_end is not None:
             file_name_details = get_batch_size_file_name_details(args)
@@ -459,9 +557,14 @@ def benchmark_configs(model, inputs, args, data_path: Path):
     total_iters = args.warmup + args.benchmark_iters
 
     with KernelParamsLogger() as logger:
-        with torch.autocast(device_type="cuda", dtype=torch.float16):
-            out = model(inputs[0])
-        out.sum().backward()
+        if args.inference:
+            with torch.no_grad():
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    _out = model(inputs[0])
+        else:
+            with torch.autocast(device_type="cuda", dtype=torch.float16):
+                out = model(inputs[0])
+            out.sum().backward()
         logged_kernel_params = logger.get_logged_params()
         unique_kernel_params = set(logged_kernel_params)
 
@@ -550,13 +653,24 @@ def benchmark_configs(model, inputs, args, data_path: Path):
             with torch.profiler.profile(
                 activities=activities, schedule=schedule
             ) as prof:
-                for i in range(total_iters):
-                    with torch.autocast(device_type="cuda", dtype=torch.float16):
-                        out = model(inputs[i % args.corpus_size])
-                    out.sum().backward()
-                    if i == args.warmup - 1:
-                        torch.cuda.synchronize()
-                    prof.step()
+                if args.inference:
+                    with torch.no_grad():
+                        for i in range(total_iters):
+                            with torch.autocast(
+                                device_type="cuda", dtype=torch.float16
+                            ):
+                                _out = model(inputs[i % args.corpus_size])
+                            if i == args.warmup - 1:
+                                torch.cuda.synchronize()
+                            prof.step()
+                else:
+                    for i in range(total_iters):
+                        with torch.autocast(device_type="cuda", dtype=torch.float16):
+                            out = model(inputs[i % args.corpus_size])
+                        out.sum().backward()
+                        if i == args.warmup - 1:
+                            torch.cuda.synchronize()
+                        prof.step()
             torch.cuda.synchronize()
 
             # Clear the overlays

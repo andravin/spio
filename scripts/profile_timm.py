@@ -57,6 +57,9 @@ def main():
 
     torch.backends.cudnn.benchmark = True
 
+    if args.spio:
+        timm.layers.set_use_spio(True)
+
     memory_format = (
         torch.channels_last if args.channels_last else torch.contiguous_format
     )
