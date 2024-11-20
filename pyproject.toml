@@ -1,3 +1,22 @@
 [build-system]
 requires = ["setuptools>=42", "wheel", "Cython", "nvidia-cuda-runtime-cu12", "importlib_resources"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "spio"
+version = "0.3.0"
+authors = [
+    { name = "Andrew Lavin", email = "alavin@acm.org" },
+]
+description = "Efficient CUDA kernels for training convolutional neural networks with PyTorch."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/andravin/spio"
+Issues = "https://github.com/andravin/spio/issues"
