@@ -12,10 +12,6 @@ Our [paper](https://arxiv.org/abs/2404.03617) implemented efficient GPU kernels 
 
 The first Spio kernel is for grouped convolution, a promising layer that has fallen into disuse because of the inefficiency of the current implementation. We focus on group width equal to eight and stride 1, as used in our ConvFirst model, and support NVIDIA Ampere ([sm_80](https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf) and [sm_86](https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf)) and Ada ([sm_89](https://images.nvidia.com/aem-dam/Solutions/Data-Center/l4/nvidia-ada-gpu-architecture-whitepaper-v2.1.pdf)) GPUs.
 
-### Audience
-
-At this early stage of development, Spio is for performance engineers and other heroes. As we add more kernels, Spio will guide model researchers to safety, like the Nereid Spio guiding sailors through treacherous waters.
-
 ## Benchmarks
 
 The cuDNN Conv2d kernels use an "implicit GEMM" algorithm that tiles the input tensor with horizontal strips. The support halo for the convolution kernel causes overlapping reads of the input tensor, and when the tile is a 1D strip, the overlap is larger than the tile. This results in excess global memory traffic.
