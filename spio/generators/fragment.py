@@ -2,6 +2,12 @@
 
 from dataclasses import dataclass
 
+from .fragment_index import (
+    FragmentLoadIndexSpec,
+    FragmentIndexSpec,
+    fragment_load_supported,
+)
+
 
 @dataclass
 class FragmentSpec:
@@ -10,13 +16,15 @@ class FragmentSpec:
     Example:
 
         Define a FragmentSpec in your kernel factory's specs like this:
-            FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k")
+            FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k2")
 
         Use the generated class in your CUDA kernel like this:
             # Get element coordinates for this thread.
-            auto lane_k2 = Acc::k2(idx.lane());
-            auto lane_qn_0 = Acc::qn(idx.lane(), 0);
-            auto lane_qn_8 = Acc::qn(idx.lane(), 1);
+            int lane = threadIdx.x % 32;
+            Acc:Index acc_idx(lane);
+            auto lane_k2 = acc_idx.k2();
+            auto lane_qn_0 = acc_idx.qn(0);
+            auto lane_qn_8 = acc_idx.qn(0);
 
             # Define an accumulator and initialize it to zero.
             Acc acc;
@@ -36,30 +44,37 @@ class FragmentSpec:
 
     def generate(self) -> str:
         """Generate the fragment class code."""
+        index_class = self.generate_index()
+
+        load_index_class = self.generate_load_index()
+
         return f"""
 class {self.class_name} : public spio::{self.fragment_type} {{
     public:
-        DEVICE static constexpr int {self.row}(unsigned lane_id, int idx) {{ return row(lane_id, idx); }}
-        DEVICE static constexpr int {self.col}2(unsigned lane_id) {{ return col2(lane_id); }}
-        DEVICE static constexpr int {self.col}(unsigned lane_id) {{ return col(lane_id); }}
+        {index_class}
+
+        {load_index_class}
 }};
 """
+
+    def generate_index(self) -> str:
+        """Generate the fragment index class code."""
+        return FragmentIndexSpec(
+            "Index", self.fragment_type, self.row, self.col
+        ).generate()
+
+    def generate_load_index(self) -> str:
+        """Generate the fragment load index class code."""
+        if not fragment_load_supported(self.fragment_type):
+            return ""
+        return FragmentLoadIndexSpec(
+            "LoadIndex", self.fragment_type, self.row, self.col
+        ).generate()
 
 
 def _fragment_header() -> str:
     return """
-#include "spio/mma.cuh"
-"""
-
-
-def _start_namespace(namespace: str) -> str:
-    return f"""
-
-namespace {namespace} {{
-"""
-
-
-def _end_namespace() -> str:
-    return """
-}
+#include "spio/fragment.cuh"
+#include "spio/fragment_index.h"
+#include "spio/fragment_load_index.h"
 """

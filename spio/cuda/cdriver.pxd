@@ -44,6 +44,9 @@ cdef extern from "cuda.h":
         CU_POINTER_ATTRIBUTE_P2P_TOKENS = 5
         CU_POINTER_ATTRIBUTE_SYNC_MEMOPS = 6
         CU_POINTER_ATTRIBUTE_BUFFER_ID = 7
+        CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16
+        CU_DEVICE_ATTRIBUTE_L2_CACHE_SIZE = 38
+
 
     ctypedef enum CUstream_flags:
         CU_STREAM_DEFAULT = 0
@@ -73,6 +76,8 @@ cdef extern from "cuda.h":
 
     CUresult cuInit(unsigned int Flags)
     CUresult cuDeviceGet(CUdevice *device, int ordinal)
+    CUresult cuDeviceGetAttribute(int *pi, int attrib, CUdevice dev)
+    CUresult cuDeviceGetName(char* name, int  len, CUdevice dev)
     CUresult cuDevicePrimaryCtxRetain(CUcontext *pctx, CUdevice dev)
     CUresult cuDevicePrimaryCtxRelease(CUdevice dev)
 

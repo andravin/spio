@@ -9,6 +9,9 @@ __pycache__/
 .fooenv/
 .torch_2_50_rc/
 
+# pypi distribution
+dist/
+
 # PyTorch profiler results.
 trace*.json
 profile_*.json

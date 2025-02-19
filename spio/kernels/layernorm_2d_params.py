@@ -66,7 +66,7 @@ class LayerNorm2dParams:
 
     @staticmethod
     def from_tensors(
-        inputs,
+        inputs: torch.Tensor,
         weight: torch.Tensor = None,
         bias: torch.Tensor = None,
         eps: float = 1e-5,

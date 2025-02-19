@@ -1,8 +1,10 @@
 #include <cuda_pipeline.h>
 
 #include "spio/pipeline.h"
+#include "spio/fragment.cuh"
 #include "spio/mma.cuh"
 #include "spio/ldmatrix.cuh"
+#include "spio/mathutil.h"
 
 // Include the generated header file that contains tensor, index, parameter and macro definitions.
 #include "parameters.h"
@@ -13,12 +15,6 @@ using WeightsReg = _MMA_M16_N8_F16_B<Weights::R * Weights::S>;
 
 namespace
 {
-    /// @brief  Return the maximum of two integers. Is a constexpr.
-    __device__ constexpr int _max(int a, int b)
-    {
-        return a > b ? a : b;
-    }
-
     /// @brief igrad use the transpose of the weights.
     __device__ inline uint4 ld_weights_x4(const void *p)
     {
@@ -71,7 +67,7 @@ extern "C"
         // Define the shared memory buffers.
         //
         __shared__ uint4 smem_input_buf[SmemInput::size];
-        __shared__ uint4 smem_buf[_max(SmemWeights::size, SmemOutput::size)];
+        __shared__ uint4 smem_buf[spio::max(SmemWeights::size, SmemOutput::size)];
         uint4 *smem_weights_buf = smem_buf;
         uint4 *smem_output_buf = smem_buf;
 
@@ -91,9 +87,11 @@ extern "C"
         if constexpr (Mode::has_bias)
         {
             BiasIdx idx(threadIdx.x);
-            int lane_k2 = Acc::k2(idx.lane());
+            Acc::Index acc_idx(idx.lane());
+            int lane_k2 = acc_idx.k2();
             int k8 = block_c8 + idx.k8();
-            if (k8 < Output::K8) {
+            if (k8 < Output::K8)
+            {
                 bias_f32 = *Bias(bias_ptr).k8(k8).k2(lane_k2);
             }
         }
@@ -143,22 +141,13 @@ extern "C"
         SmemOutput smem_output_store_qn0;
         SmemOutput smem_output_store_qn8;
         {
-            SmemOutputStoreIdx idx(threadIdx.x);
-            int lane_qn_0 = Acc::qn(idx.lane(), 0);
-            OutputQNIdx lane_qn_0_idx(lane_qn_0);
-            int lane_q_0 = lane_qn_0_idx.q();
-            int lane_n_0 = lane_qn_0_idx.n();
-
-            int lane_qn_8 = Acc::qn(idx.lane(), 1);
-            OutputQNIdx lane_qn_8_idx(lane_qn_8);
-            int lane_q_8 = lane_qn_8_idx.q();
-            int lane_n_8 = lane_qn_8_idx.n();
-
-            int lane_k2 = Acc::k2(idx.lane());
-            
-            auto smem_output_store = SmemOutput(reinterpret_cast<__half2 *>(smem_output_buf)).k8(idx.k8()).k2(lane_k2);
-            smem_output_store_qn0 = smem_output_store.n(lane_n_0).q(lane_q_0);
-            smem_output_store_qn8 = smem_output_store.n(lane_n_8).q(lane_q_8);
+            SmemOutputStoreIdx thread_idx(threadIdx.x);
+            Acc::Index acc_idx(thread_idx.lane());
+            BlockQNIdx block_qn_0_idx(acc_idx.qn(0));
+            BlockQNIdx block_qn_8_idx(acc_idx.qn(1));
+            auto smem_output_store = SmemOutput(reinterpret_cast<__half2 *>(smem_output_buf)).k8(thread_idx.k8()).k2(acc_idx.k2());
+            smem_output_store_qn0 = smem_output_store.n(block_qn_0_idx.n()).q(block_qn_0_idx.q());
+            smem_output_store_qn8 = smem_output_store.n(block_qn_8_idx.n()).q(block_qn_8_idx.q());
         }
 
         // Output-smem to output.
@@ -183,7 +172,7 @@ extern "C"
         {
             Weights::Index weight_idx(idx);
             int k = block_c + weight_idx.k();
-            int zfill = k < Weights::K ? 0 : sizeof(Weights::data_type);            
+            int zfill = k < Weights::K ? 0 : sizeof(Weights::data_type);
             __pipeline_memcpy_async(
                 smem_weights_buf + idx,
                 weight.get() + idx,
@@ -199,13 +188,12 @@ extern "C"
         constexpr unsigned COMPUTE_STAGE = 1 << 1;
         constexpr unsigned NUM_STAGES = 2;
 
-        int num_p = min(Block::p, Output::P - block_p);
+        int num_p = spio::min(Block::p, Output::P - block_p);
         int num_y = num_p + Weights::R - 1;
         int num_iters = num_y + NUM_STAGES - 1;
         int ping_pong = 0;
 
         int y = block_p - Block::padding_h;
-        input = input.y(y);
 
         Pipeline pipeline;
 
@@ -221,13 +209,12 @@ extern "C"
             {
                 __pipeline_memcpy_async(
                     smem_input_store.ping_pong(ping_pong).get(),
-                    input.get(),
+                    input.y(y).get(),
                     sizeof(Input::data_type),
                     zfill | y_fill);
             }
             __pipeline_commit();
             ++y;
-            input = input.y(1);
         }
         ping_pong = 1 - ping_pong;
 
@@ -247,7 +234,6 @@ extern "C"
         {
             wgts.reg(rs) = ld_weights_x1(smem_weights_load.rs(rs).get());
         }
-
 
         //
         // Declare the accumulators.
@@ -275,13 +261,12 @@ extern "C"
                 {
                     __pipeline_memcpy_async(
                         smem_input_store.ping_pong(ping_pong).get(),
-                        input.get(),
+                        input.y(y).get(),
                         sizeof(Input::data_type),
                         zfill | y_fill);
                 }
                 __pipeline_commit();
                 ++y;
-                input = input.y(1);
             }
             ping_pong = 1 - ping_pong;
             if (pipeline.active(COMPUTE_STAGE))
@@ -340,13 +325,12 @@ extern "C"
                     {
                         __pipeline_memcpy_async(
                             smem_input_store.ping_pong(ping_pong).get(),
-                            input.get(),
+                            input.y(y).get(),
                             sizeof(Input::data_type),
                             zfill | y_fill);
                     }
                     __pipeline_commit();
                     ++y;
-                    input = input.y(1);
                 }
                 ping_pong = 1 - ping_pong;
                 if (pipeline.active(COMPUTE_STAGE))

@@ -4,76 +4,25 @@
 /// Define classes for the matrix fragments used with tensor core arithmetic.
 #include <cuda_fp16.h>
 
+#include "spio/fragment_index.h"
+#include "spio/fragment_load_index.h"
+#include "spio/ldmatrix.cuh"
+
 namespace spio
 {
-    /// @brief Base class for half-precision matrix fragments.
-    /// @tparam NUM_FRAGMENTS The number of 8x8 matrix fragments.
-    template <int NUM_FRAGMENTS>
-    class _MMA_F16
+    template <int NUM_FRAGMENTS, typename T>
+    class _MMA
     {
     public:
-        __device__ constexpr int size() const { return NUM_FRAGMENTS; }
+        __device__ static constexpr int size() { return NUM_FRAGMENTS; }
 
-        __device__ __half2 &fragment(int idx) { return _data[idx]; }
-        __device__ __half2 fragment(int idx) const { return _data[idx]; }
+        __device__ T &fragment(int idx) { return _data[idx]; }
+        __device__ T fragment(int idx) const { return _data[idx]; }
 
-        __device__ unsigned &reg(int idx = 0) { return reinterpret_cast<unsigned *>(_data)[idx]; }
-        __device__ unsigned reg(int idx = 0) const { return reinterpret_cast<const unsigned *>(_data)[idx]; }
+        __device__ T *data() { return _data; }
+        __device__ const T *data() const { return _data; }
 
-        __device__ uint2 &reg2(int idx = 0) { return reinterpret_cast<uint2 *>(_data)[idx]; }
-        __device__ uint2 reg2(int idx = 0) const { return reinterpret_cast<const uint2 *>(_data)[idx]; }
-
-        __device__ uint4 &reg4(int idx = 0) { return reinterpret_cast<uint4 *>(_data)[idx]; }
-        __device__ uint4 reg4(int idx = 0) const { return reinterpret_cast<const uint4 *>(_data)[idx]; }
-
-        __device__ __half2 &operator()(int idx = 0) { return _data[idx]; }
-        __device__ __half2 operator()(int idx = 0) const { return _data[idx]; }
-
-        __device__ void *data() { return _data; }
-        __device__ const void *data() const { return _data; }
-
-        __device__ unsigned *array() { return reinterpret_cast<unsigned *>(_data); }
-        __device__ const unsigned *array() const { return reinterpret_cast<unsigned *>(_data); }
-
-    private:
-        __half2 _data[NUM_FRAGMENTS];
-    };
-
-    /// @brief Base class for single-precision matrix fragments.
-    /// @tparam NUM_FRAGMENTS The number of 8x8 matrix fragments.
-    template <int NUM_FRAGMENTS>
-    class _MMA_F32
-    {
-    public:
-        static __device__ constexpr int size() { return NUM_FRAGMENTS; }
-
-        __device__ float2 &fragment(int idx) { return _data[idx]; }
-        __device__ float2 fragment(int idx) const { return _data[idx]; }
-
-        __device__ __half2 to_half2(int idx) const { return __float22half2_rn(fragment(idx)); }
-
-        __device__ float &operator()(int idx) { return reinterpret_cast<float *>(_data)[idx]; }
-        __device__ float operator()(int idx) const { return reinterpret_cast<const float *>(_data)[idx]; }
-
-        __device__ float *array() { return reinterpret_cast<float *>(_data); }
-        __device__ const float *array() const { return reinterpret_cast<const float *>(_data); }
-
-        __device__ float2 &vec2(int idx = 0) { return _data[idx]; }
-        __device__ float2 vec2(int idx = 0) const { return _data[idx]; }
-
-        __device__ float4 &vec4(int idx = 0) { return reinterpret_cast<float4 *>(_data)[idx]; }
-        __device__ float4 vec4(int idx = 0) const { return reinterpret_cast<const float4 *>(_data)[idx]; }
-
-        /// Set all matrix elements equal to zero.
-        __device__ void zero()
-        {
-            for (int idx = 0; idx < NUM_FRAGMENTS; ++idx)
-            {
-                _data[idx] = make_float2(0, 0);
-            }
-        }
-
-        __device__ void fill(float2 value)
+        __device__ void fill(T value)
         {
             for (int idx = 0; idx < NUM_FRAGMENTS; ++idx)
             {
@@ -81,17 +30,73 @@ namespace spio
             }
         }
 
-        __device__ void add(float2 value)
+        /// Set all matrix elements equal to zero.
+        __device__ void zero()
+        {
+            fill(T{0});
+        }
+
+        __device__ void add(T value)
         {
             for (int idx = 0; idx < NUM_FRAGMENTS; ++idx)
             {
-                _data[idx].x += value.x;
-                _data[idx].y += value.y;
+                _data[idx] += value;
             }
         }
 
     private:
-        float2 _data[NUM_FRAGMENTS];
+        T _data[NUM_FRAGMENTS];
+    };
+
+    /// @brief Base class for half-precision matrix fragments.
+    /// @tparam NUM_FRAGMENTS The number of 8x8 matrix fragments.
+    template <int NUM_FRAGMENTS>
+    class _MMA_F16 : public _MMA<NUM_FRAGMENTS, __half2>
+    {
+    public:
+        using Base = _MMA<NUM_FRAGMENTS, __half2>;
+        using Base::data;
+        using Base::fragment;
+
+        __device__ unsigned &reg(int idx = 0) { return reinterpret_cast<unsigned *>(data())[idx]; }
+        __device__ unsigned reg(int idx = 0) const { return reinterpret_cast<const unsigned *>(data())[idx]; }
+
+        __device__ uint2 &reg2(int idx = 0) { return reinterpret_cast<uint2 *>(data())[idx]; }
+        __device__ uint2 reg2(int idx = 0) const { return reinterpret_cast<const uint2 *>(data())[idx]; }
+
+        __device__ uint4 &reg4(int idx = 0) { return reinterpret_cast<uint4 *>(data())[idx]; }
+        __device__ uint4 reg4(int idx = 0) const { return reinterpret_cast<const uint4 *>(data())[idx]; }
+
+        __device__ __half2 &operator()(int idx = 0) { return fragment(idx); }
+        __device__ __half2 operator()(int idx = 0) const { return fragment(idx); }
+
+        __device__ unsigned *array() { return reinterpret_cast<unsigned *>(data()); }
+        __device__ const unsigned *array() const { return reinterpret_cast<unsigned *>(data()); }
+    };
+
+    /// @brief Base class for single-precision matrix fragments.
+    /// @tparam NUM_FRAGMENTS The number of 8x8 matrix fragments.
+    template <int NUM_FRAGMENTS>
+    class _MMA_F32 : public _MMA<NUM_FRAGMENTS, float2>
+    {
+    public:
+        using Base = _MMA<NUM_FRAGMENTS, float2>;
+        using Base::data;
+        using Base::fragment;
+
+        __device__ __half2 to_half2(int idx) const { return __float22half2_rn(fragment(idx)); }
+
+        __device__ float &operator()(int idx) { return reinterpret_cast<float *>(data())[idx]; }
+        __device__ float operator()(int idx) const { return reinterpret_cast<const float *>(data())[idx]; }
+
+        __device__ float *array() { return reinterpret_cast<float *>(data()); }
+        __device__ const float *array() const { return reinterpret_cast<const float *>(data()); }
+
+        __device__ float2 &vec2(int idx = 0) { return data()[idx]; }
+        __device__ float2 vec2(int idx = 0) const { return data()[idx]; }
+
+        __device__ float4 &vec4(int idx = 0) { return reinterpret_cast<float4 *>(data())[idx]; }
+        __device__ float4 vec4(int idx = 0) const { return reinterpret_cast<const float4 *>(data())[idx]; }
     };
 
     /// @brief  Template base class for 16-row fp16 matrix fragments for operand A.
@@ -100,27 +105,7 @@ namespace spio
     class _MMA_M16_N8_F16_A : public _MMA_F16<2 * _NUM_FRAGMENTS_K>
     {
     public:
-        /// @brief The number of matrix fragments in the M-dimension.
-        static const int NumFragmentsM = 2;
-
-        /// @brief The number of matrix fragments in the K-dimension.
-        static const int NumFragmentsK = _NUM_FRAGMENTS_K;
-
-        static const int NumFragments = NumFragmentsM * NumFragmentsK;
-
-        static const int NumElements = NumFragments;
-
-        /// @brief Return the row held by the given lane and fragment index.
-        /// @param lane_id The thread's lane number.
-        /// @param m_idx The fragment index in the M-dimension.
-        /// @return
-        __device__ static constexpr int row(unsigned lane_id, int m_idx) { return static_cast<int>(lane_id / 4) + m_idx * 8; }
-
-        /// @brief Return the column held by the given lane and fragment index.
-        /// @param lane_id The thread's lane number.
-        /// @param k_idx  The fragment index in the K-dimension.
-        /// @return
-        __device__ static constexpr int col(unsigned lane_id, int k_idx = 0) { return static_cast<int>(lane_id % 4) * 2 + k_idx * 8; }
+        using Index = MMA_A_88_F16_Index;
     };
 
     /// @brief  Template base class for 8-column fp16 matrix fragments for operand B.
@@ -129,13 +114,7 @@ namespace spio
     class _MMA_M16_N8_F16_B : public _MMA_F16<_NUM_FRAGMENTS_K>
     {
     public:
-        static const int NumFragmentsK = _NUM_FRAGMENTS_K;
-        static const int NumFragmentsN = 1;
-        static const int NumFragments = NumFragmentsK * NumFragmentsN;
-        static const int NumElements = NumFragments;
-
-        __device__ static constexpr int row(unsigned lane_id, int k_idx = 0) { return (lane_id % 4) * 2 + k_idx * 8; }
-        __device__ static constexpr int col(unsigned lane_id) { return lane_id / 4; }
+        using Index = MMA_B_88_F16_Index;
     };
 
     /// @brief  C or D matrix with float32 elements for M16_N8_K* matrix multiplication with float32 accumulation.
@@ -143,14 +122,13 @@ namespace spio
     class MMA_M16_N8_F32_C : public _MMA_F32<2>
     {
     public:
-        static const int NumFragmentsM = 2;
-        static const int NumFragmentsN = 1;
-        static const int NumFragments = NumFragmentsM * NumFragmentsN;
-        static const int NumElements = NumFragments * 2;
+        using Index = MMA_C_88_F32_Index;
+    };
 
-        __device__ static constexpr int row(unsigned lane_id, int m_idx) { return static_cast<int>(lane_id / 4) + m_idx * 8; }
-        __device__ static constexpr int col2(unsigned lane_id) { return lane_id % 4; }
-        __device__ static constexpr int col(unsigned lane_id) { return col2(lane_id) * 2; }
+    class MMA_M16_N16_F32_C : public _MMA_F32<4>
+    {
+    public:
+        using Index = MMA_C_88_F32_Index;
     };
 
     /// @brief A matrix with float16 elements for M16_N8_K8 matrix multiplication.
@@ -158,10 +136,13 @@ namespace spio
     {
     public:
         using Vector = uint2;
+        using LoadIndex = MMA_A_M16_K8_F16_LoadIndex;
         MMA_M16_K8_F16_A() = default;
-        __device__ Vector &vector() { return *static_cast<Vector *>(data()); }
-        __device__ const Vector &vector() const { return *static_cast<const Vector *>(data()); }
+        __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
+        __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
         __device__ MMA_M16_K8_F16_A(const Vector &v) { vector() = v; }
+        __device__ void load(const void *p) { vector() = ldmatrix_x2(p); }
+        __device__ void load_trans(const void *p) { vector() = ldmatrix_x2_trans(p); }
     };
 
     /// @brief A matrix with float16 elements for M16_N8_K16 matrix multiplication.
@@ -169,20 +150,26 @@ namespace spio
     {
     public:
         using Vector = uint4;
+        using LoadIndex = MMA_A_M16_K16_F16_LoadIndex;
         MMA_M16_K16_F16_A() = default;
-        __device__ Vector &vector() { return *static_cast<Vector *>(data()); }
-        __device__ const Vector &vector() const { return *static_cast<const Vector *>(data()); }
+        __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
+        __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
         __device__ MMA_M16_K16_F16_A(const Vector &v) { vector() = v; }
+        __device__ void load(const void *p) { vector() = ldmatrix_x4(p); }
+        __device__ void load_trans(const void *p) { vector() = ldmatrix_x4_trans(p); }
     };
 
     class MMA_N8_K8_F16_B : public _MMA_M16_N8_F16_B<1>
     {
     public:
         using Vector = unsigned;
+        using LoadIndex = MMA_B_N8_K8_F16_LoadIndex;
         MMA_N8_K8_F16_B() = default;
-        __device__ Vector &vector() { return *static_cast<Vector *>(data()); }
-        __device__ const Vector &vector() const { return *static_cast<const Vector *>(data()); }
+        __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
+        __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
         __device__ MMA_N8_K8_F16_B(const Vector &v) { vector() = v; }
+        __device__ void load(const void *p) { vector() = ldmatrix_x1(p); }
+        __device__ void load_trans(const void *p) { vector() = ldmatrix_x1_trans(p); }
     };
 
     /// @brief B matrix with float16 elements for M16_N8_K16 matrix multiplication.
@@ -191,9 +178,27 @@ namespace spio
     {
     public:
         using Vector = uint2;
-        __device__ Vector &vector() { return *static_cast<Vector *>(data()); }
-        __device__ const Vector &vector() const { return *static_cast<const Vector *>(data()); }
+        using LoadIndex = MMA_B_N16_K16_F16_LoadIndex;
+        __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
+        __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
+        __device__ void load(const void *p) { vector() = ldmatrix_x2(p); }
+        __device__ void load_trans(const void *p) { vector() = ldmatrix_x2_trans(p); }
     };
+
+    class MMA_N16_K16_F16_B : public _MMA_F16<4>
+    {
+    public:
+        using Vector = uint4;
+        using Index = MMA_B_88_F16_Index;
+        using LoadIndex = MMA_B_N16_K16_F16_LoadIndex;
+
+        MMA_N16_K16_F16_B() = default;
+        __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
+        __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
+        __device__ void load(const void *p) { vector() = ldmatrix_x4(p); }
+        __device__ void load_trans(const void *p) { vector() = ldmatrix_x4_trans(p); }
+    };
+
 }
 
 #endif

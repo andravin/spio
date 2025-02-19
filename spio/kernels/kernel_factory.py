@@ -2,13 +2,15 @@
 
 from typing import Type, Callable, Union, List, Any, TypeVar, Tuple
 
+import torch
+
 from ..generators.gen_specs import GenSpecs
 from .params import Params
 from .kernel import Kernel, get_full_kernel_name
 from .launch_params import LaunchParams
 from .kernel_cache import KernelCache
 from .stats import Stats
-
+from ..util import check_channels_last
 
 # A kernel tile configuration class. Each kernel defines its own configuration dataclass.
 Config = TypeVar("Config")
@@ -19,55 +21,7 @@ KernelNameCallback = Callable[[Any], str]
 KernelSourceFileCallback = Callable[[Params, Any], str]
 ConfigsCallback = Callable[[Params, Any], List[Config]]
 SpecsCallback = Callable[[Params, Config, Any], List[GenSpecs]]
-
-
-def make_kernel_factory(
-    params_cls: Type = None,
-    config_cls: Type = None,
-    stats_cls: Type = None,
-    kernel_name: Union[str, KernelNameCallback] = None,
-    configs: Union[List[Config], ConfigsCallback] = None,
-    specs: Union[List[GenSpecs], SpecsCallback] = None,
-    kernel_source_file: Union[str, KernelSourceFileCallback] = None,
-    launch_params: LaunchParams = None,
-    src_module: str = "spio.src",
-    includes_module: str = "spio.include",
-    perf_model_skip_params: List[str] = None,
-) -> "KernelFactory":
-    """Return a new KernelFactory object for a CUDA kernel.
-
-    All callable arguments must be functions that take (params, **kwargs)
-    arguments and return the corresponding values.
-
-    Args:
-        params_cls: The class for the layer parameters.
-        config_cls: The class for the kernel configuration.
-        stats_cls: The class for the kernel statistics.
-        kernel_name: The name of the kernel
-          or a function that returns it.
-        configs: The list of kernel configurations
-          or a function that returns them.
-        specs: The list of kernel specs or a function
-          function that returns the specs and launch parameters.
-        kernel_source_file: The file name of the CUDA kernel source code.
-        launch_params: Optional launch parameters for the kernel.
-          These may be returned by the specs function instead.
-        src_module: The module name where the kernel_source_file is located.
-        includes_module: The module name where any include files are located.
-    """
-    return KernelFactory(
-        params_cls=params_cls,
-        config_cls=config_cls,
-        stats_cls=stats_cls,
-        kernel_name=kernel_name,
-        configs=configs,
-        specs=specs,
-        kernel_source_file=kernel_source_file,
-        launch_params=launch_params,
-        src_module=src_module,
-        includes_module=includes_module,
-        perf_model_skip_params=perf_model_skip_params,
-    )
+ArgsChecker = Callable[[List[torch.Tensor]], None]
 
 
 class KernelFactory:
@@ -83,7 +37,7 @@ class KernelFactory:
     it.
 
     Users do not instantiate this class directly. Rather, they define new
-    kernels by calling the make_kernel_factory() function.
+    kernels by calling the KernelFactory() function.
 
     Methods that take keyword arguments (**kwargs) use them to
     distinguish between different modes of the kernel. For example, a forward
@@ -104,6 +58,7 @@ class KernelFactory:
         src_module: str = "spio.src",
         includes_module: str = "spio.include",
         perf_model_skip_params: List[str] = None,
+        args_checker: ArgsChecker = check_channels_last,
     ):
         if perf_model_skip_params is None:
             perf_model_skip_params = []
@@ -119,6 +74,7 @@ class KernelFactory:
         self._src_module = src_module
         self._includes_module = includes_module
         self.per_model_skip_params = perf_model_skip_params
+        self._args_checker = args_checker
 
     def configs(self, params: Params, **kwargs) -> List[Config]:
         """Return all configs of the given layer parameters."""
@@ -190,4 +146,5 @@ class KernelFactory:
             config=config,
             src_module=self._src_module,
             includes_module=self._includes_module,
+            args_checker=self._args_checker,
         )

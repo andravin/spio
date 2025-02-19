@@ -38,6 +38,7 @@ def assert_all_close(
     atol: float = 0,
     rtol: float = 0,
     msg: str = None,
+    max_errors: int = 128,
 ):
     """Assert that two tensors are close to each other."""
     expected = expected.float()
@@ -51,15 +52,16 @@ def assert_all_close(
         bad_actual = actual[baddies]
         bad_absdiff_tol = absdiff_tol[baddies]
         m = f"Tensors not close: atol={atol}, rtol={rtol}\n"
-        max_errors = 30
-        for a, e, ad, adt in zip(
+        bad_indices = [tuple(int(x) for x in v) for v in zip(*baddies)]
+        for a, e, ad, adt, idx in zip(
             bad_actual[:max_errors],
             bad_expected[:max_errors],
             bad_absdiff[:max_errors],
             bad_absdiff_tol[:max_errors],
+            bad_indices[:max_errors],
         ):
             m += (
-                f"actual ={a:>10.6f} expected ={e:>10.6f} |diff| = {ad:>10.6f} > "
+                f"{list(idx)} actual ={a:>10.6f} expected ={e:>10.6f} |diff| = {ad:>10.6f} > "
                 f"abs_diff_tol = {adt:>10.6f}\n"
             )
         if len(bad_actual) > max_errors:
