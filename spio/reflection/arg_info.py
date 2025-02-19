@@ -7,6 +7,7 @@ from typing import Any
 import torch
 
 from ..kernels import Params
+from ..util import SixteenChannelsLast
 
 
 class Init(Enum):
@@ -69,25 +70,22 @@ class ArgInfo:
             self._shape(params),
             dtype=self.dtype,
             device=device,
-            memory_format=self.memory_format,
         )
 
     def _zero(self, params: Any, device: str) -> torch.Tensor:
-        t = torch.zeros(self._shape(params), dtype=self.dtype, device=device)
-        return _to(t, memory_format=self.memory_format)
+        return torch.zeros(self._shape(params), dtype=self.dtype, device=device)
 
     def _ones(self, params: Any, device: str) -> torch.Tensor:
-        t = (
+        return (
             torch.ones(self._shape(params), dtype=self.dtype, device=device)
             * self.scale
         )
-        return _to(t, memory_format=self.memory_format)
 
     def _randn_clip_3(self, params: Any, device: str) -> torch.Tensor:
         shape = self._shape(params)
         t = torch.randn(shape, dtype=self.dtype, device=device)
         t = torch.clip(t, -3, 3) * self.scale
-        return _to(t, memory_format=self.memory_format)
+        return t
 
     def make_arg(self, params: Params, training=False, device="cuda") -> torch.Tensor:
         """Make an argument tensor based on the ArgInfo settings."""
@@ -106,9 +104,18 @@ class ArgInfo:
             raise ValueError(
                 f"Invalid init value for argument {self.name}: {self.init}"
             )
+        tensor = _to(tensor, memory_format=self.memory_format)
+
         if self.requires_grad and training and has_arg:
             tensor.requires_grad = True
         return tensor
+
+    def format(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Format the given tensor based on the ArgInfo settings.
+        
+        Assume the given tensor is in channels last format.
+        """
+        return _to(tensor, memory_format=self.memory_format)
 
     def initialize(self, tensor: torch.Tensor) -> torch.Tensor:
         """Initialize the given tensor based on the ArgInfo settings."""
@@ -127,20 +134,21 @@ def _has_arg(params, name) -> bool:
     return getattr(params, f"has_{name}", True)
 
 
-def _to(tensor, memory_format=None) -> torch:
-    """Normalize the memory format of a tensor.
+def _to(tensor: torch.Tensor, memory_format=None) -> torch:
+    """Return a tensor with the given memory format.
 
-    channels_last is only supported for 4D tensors. We leave 1D tensors
+    channels_last is only supported for 4D tensors. We leave other shapes
     unchanged.
 
-    Otherwise, we raise an error if the tensor is not 4D.
+    If tensor is None, return None.
     """
-    if tensor.dim() < 2:
-        # You didn't really mean it.
-        return tensor
+    if tensor is None:
+        return None
 
-    if memory_format == torch.channels_last and tensor.dim() != 4:
-        # You meant it, but it's not supported.
-        raise ValueError("channels_last memory format is only supported for 4D tensors")
+    if memory_format == SixteenChannelsLast:
+        return SixteenChannelsLast.to(tensor)
 
-    return tensor.to(memory_format=memory_format)
+    if tensor.dim() == 4:
+        return tensor.to(memory_format=memory_format)
+
+    return tensor

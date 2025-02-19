@@ -1,4 +1,4 @@
-"""Creat the kernel factor for the LayerNorm2d kernel."""
+"""Create the kernel factory for the LayerNorm2d kernel."""
 
 from dataclasses import dataclass
 from typing import Generator, Tuple, List
@@ -15,7 +15,7 @@ from ..util import divup
 from .launch_params import LaunchParams
 from .layernorm_2d_params import LayerNorm2dParams
 from .layernorm_2d_stats import LayerNorm2dStats
-from .kernel_factory import make_kernel_factory
+from .kernel_factory import KernelFactory
 from .kernel import get_full_kernel_name
 
 
@@ -165,7 +165,7 @@ def _get_specs(
     return specs, launch_params
 
 
-layernorm_2d_kernel_factory = make_kernel_factory(
+layernorm_2d_kernel_factory = KernelFactory(
     LayerNorm2dParams,
     LayerNorm2dConfig,
     LayerNorm2dStats,

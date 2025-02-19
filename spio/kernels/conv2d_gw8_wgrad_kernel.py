@@ -12,11 +12,11 @@ from ..generators import (
     TensorSpec,
     FragmentSpec,
 )
-from ..util import divup
+from ..util import divup, next_relative_prime
 from .launch_params import LaunchParams
 from .conv2d_gw8_params import Conv2dGw8Params
 from .conv2d_stats import Conv2dStats
-from .kernel_factory import make_kernel_factory
+from .kernel_factory import KernelFactory
 from .kernel import get_full_kernel_name
 
 
@@ -133,16 +133,23 @@ def _get_specs(
     warp_s2 = config.warp_s // 2
     warp_s2_up = divup(config.warp_s, 2)
 
+    # There are effectively 8 shared memory banks when storing 16-byte elements (8c float16).
+    num_smem_banks = 8
+
+    smem_x_stride = next_relative_prime(block_c8, num_smem_banks)
+
     smem_tensors = [
         TensorSpec(
             "SmemInput",
             "uint4",
-            {"ping_pong": 2, "n": config.warp_n, "x": block_w, "c8": block_c8 + 1},
+            {"ping_pong": 2, "n": config.warp_n, "x": block_w, "c8": block_c8},
+            strides={"x" : smem_x_stride}
         ),
         TensorSpec(
             "SmemDelta",
             "uint4",
-            {"ping_pong": 2, "n": config.warp_n, "q": BLOCK_Q, "k8": block_c8 + 1},
+            {"ping_pong": 2, "n": config.warp_n, "q": BLOCK_Q, "k8": block_c8},
+            strides={"x" : smem_x_stride}
         ),
         TensorSpec("SmemWgrad", "float2", {"k8": block_c8, "s": s, "c": 8, "k2": 4}),
     ]
@@ -237,7 +244,7 @@ def _get_specs(
     return specs, launch_params
 
 
-conv2d_gw8_wgrad_kernel_factory = make_kernel_factory(
+conv2d_gw8_wgrad_kernel_factory = KernelFactory(
     Conv2dGw8Params,
     Conv2dGw8WgradConfig,
     Conv2dStats,

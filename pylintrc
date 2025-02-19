@@ -87,6 +87,8 @@ disable=raw-checker-failed,
         deprecated-pragma,
         use-symbolic-message-instead,
         protected-access,
+        invalid-name,  # We like to capitalize tensor names.
+        use-dict-literal, # We think dict(key=value,...) syntax is more readable than {"key": value, ...}
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option

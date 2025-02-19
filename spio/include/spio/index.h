@@ -1,13 +1,7 @@
 #ifndef SPIO_INDEX_H_
-#define SPIO_INDEX_H
+#define SPIO_INDEX_H_
 
-#ifndef DEVICE
-#ifdef __CUDACC__
-#define DEVICE __device__
-#else
-#define DEVICE
-#endif
-#endif
+#include "spio/macros.h"
 namespace spio
 {
     /// A base class for all Index* classes.

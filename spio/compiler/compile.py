@@ -56,7 +56,7 @@ def compile_cuda(
         include_names = []
 
     src = src_file.read_text()
-    program = Program(src, "spio.cu", headers=headers, include_names=include_names)
+    program = Program(src, src_file.name, headers=headers, include_names=include_names)
     try:
         program.compile(options)
     except Exception as e:

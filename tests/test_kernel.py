@@ -2,7 +2,12 @@
 
 import torch
 
-from spio.generators import IndexSpec, TensorSpec, ParamsSpec, generate
+from spio.generators import (
+    IndexSpec,
+    TensorSpec,
+    ParamsSpec,
+    generate,
+)
 from spio.compiler import compile_and_load_kernel
 from spio.util import divup, assert_all_close_with_acc_depth
 
@@ -20,72 +25,13 @@ def test_add_kernel():
     assert_all_close_with_acc_depth(y, x1 + x2, acc_depth=25)
 
 
-def test_mma_m16_n8_k8_kernel():
-    """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k8."""
-    _, mma_kernel = compile_and_load_kernel(
-        kernel_name="mma_m16_n8_k8",
-        source_file_name="mma.cu",
-        src_module="spio.src_tests",
-    )
-
-    A = torch.zeros((16, 8), dtype=torch.float16, device="cuda")
-
-    for i in range(16):
-        for k in range(8):
-            A[i, k] = (i * 8 + k) % 17
-
-    B = torch.zeros((8, 8), dtype=torch.float16, device="cuda")
-    for k in range(8):
-        for j in range(8):
-            B[k, j] = (k * 8 + j) % 19
-
-    C = torch.zeros((16, 8), dtype=torch.float32, device="cuda")
-
-    B_trans = torch.transpose(B, 0, 1).contiguous()
-    mma_kernel.launch((1, 1, 1), (32, 1, 1), (C, A, B_trans))
-
-    C_ref = torch.matmul(A.float(), B.float())
-
-    assert_all_close_with_acc_depth(C, C_ref, acc_depth=8)
-
-
-def test_mma_m16_n8_k16_kernel():
-    """Compile and run a GPU kernel that tests tensor core mma with shape m16_n8_k16."""
-    _, mma_kernel = compile_and_load_kernel(
-        kernel_name="mma_m16_n8_k16",
-        source_file_name="mma.cu",
-        debug=True,
-        src_module="spio.src_tests",
-    )
-
-    A = torch.zeros((16, 16), dtype=torch.float16, device="cuda")
-
-    for i in range(16):
-        for k in range(16):
-            A[i, k] = (i * 16 + k) % 17
-
-    B = torch.zeros((16, 8), dtype=torch.float16, device="cuda")
-    for k in range(16):
-        for j in range(8):
-            B[k, j] = (k * 8 + j) % 19
-
-    C = torch.zeros((16, 8), dtype=torch.float32, device="cuda")
-
-    B_trans = torch.transpose(B, 0, 1).contiguous()
-    mma_kernel.launch((1, 1, 1), (32, 1, 1), (C, A, B_trans))
-
-    C_ref = torch.matmul(A.float(), B.float())
-
-    assert_all_close_with_acc_depth(C, C_ref, acc_depth=16)
-
-
 def test_memcpy_kernel():
     """This kernel achives 92% of peak DRAM memory bandwidth on NVIDIA RTX 4090."""
     debug = False
     lineinfo = True
 
     N = 128
-    C = 32
+    C = 128
     H = 64
     W = 64
 

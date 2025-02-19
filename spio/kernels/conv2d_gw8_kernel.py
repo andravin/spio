@@ -12,11 +12,11 @@ from ..generators import (
     FragmentSpec,
     GenSpecs,
 )
-from ..util import divup
+from ..util import divup, next_relative_prime
 from .launch_params import LaunchParams
 from .conv2d_gw8_params import Conv2dGw8Params
 from .conv2d_stats import Conv2dStats
-from .kernel_factory import make_kernel_factory
+from .kernel_factory import KernelFactory
 from .kernel import get_full_kernel_name
 
 
@@ -108,6 +108,11 @@ def _get_specs(
 
     kernel_has_bias = params.has_bias and not igrad
 
+    # With 16 bytes-per-element, smem effectively has 8 banks.
+    num_smem_banks = 8
+
+    smem_x_stride = next_relative_prime(block_n * block_c8, num_smem_banks)
+
     specs = [
         MacroSpec({"SPIO_CONV_KERNEL": full_kernel_name}),
         ParamsSpec(
@@ -143,12 +148,20 @@ def _get_specs(
         TensorSpec(
             "SmemInput",
             "uint4",
-            {"ping_pong": 2, "x": block_w, "n": block_n, "c8": block_c8 + 1},
+            {
+                "ping_pong": 2,
+                "x": block_w,
+                "n": block_n,
+                "c8": block_c8,
+            },
+            strides={"x": smem_x_stride},
         ),
         IndexSpec(
             "SmemInputLoadIdx",
             {
                 "c8": block_c8,
+
+                # TODO: this should be a FragmentLoadIndex spec:
                 "repeat": 32 // (block_q * block_n),
                 "q": block_q,
                 "n": block_n,
@@ -166,13 +179,13 @@ def _get_specs(
             {"q": block_q, "n": block_n, "k8": block_c8 + 1},
         ),
         IndexSpec("OutputStoreIdx", {"n": block_n, "q": block_q, "k8": block_c8}),
-        IndexSpec("OutputQNIdx", {"q": block_q, "n": block_n}),
+        IndexSpec("BlockQNIdx", {"q": block_q, "n": block_n}),
         FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k"),
     ]
     return specs, launch_params
 
 
-conv2d_gw8_kernel_factory = make_kernel_factory(
+conv2d_gw8_kernel_factory = KernelFactory(
     Conv2dGw8Params,
     Conv2dGw8Config,
     Conv2dStats,

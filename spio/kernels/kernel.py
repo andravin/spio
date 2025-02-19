@@ -5,9 +5,9 @@ import torch
 from .. import primary_context_guard
 from ..generators import generate
 from ..compiler import compile_kernel, load_kernel
+from ..util import check_channels_last
 from .kernel_util import get_first_device_in_args
 from .launch_params import LaunchParams
-
 
 class Kernel:
     """A class that encapsulates a CUDA kernel.
@@ -43,9 +43,10 @@ class Kernel:
         config=None,
         src_module="spio.src",
         includes_module="spio.include",
+        args_checker=check_channels_last,
     ):
         """Initialize the Kernel object.
-        
+
         Use KernelFactory instead of creating Kernel instances directly.
         """
         if specs is None:
@@ -61,6 +62,7 @@ class Kernel:
         self.cubin = None
         self.src_module = src_module
         self.includes_module = includes_module
+        self.args_checker = args_checker
 
     def compile(self):
         """Compile the kernel."""
@@ -98,13 +100,17 @@ class Kernel:
     def launch(self, *args):
         """Launch the kernel with the given arguments."""
         try:
-            _check_channels_last(args)
+            if self.args_checker is not None:
+                self.args_checker(args)
             device = get_first_device_in_args(args)
             _check_device(args, device)
             kernel_args = _kernel_args(args)
             primary_context_guard.set_device(device.index)
             self.function.launch(
-                self.launch_params.grid, self.launch_params.block, kernel_args
+                self.launch_params.grid,
+                self.launch_params.block,
+                kernel_args,
+                self.launch_params.shared_mem_bytes,
             )
         except Exception as e:
             raise ValueError(f"Error in kernel {self}") from e
@@ -120,14 +126,6 @@ def get_full_kernel_name(kernel_name, params) -> str:
     """Return the full kernel name including the parameters."""
     details = params.encode()
     return f"{kernel_name}__{details}"
-
-
-def _check_channels_last(args):
-    for arg in args:
-        if isinstance(arg, torch.Tensor) and len(arg.shape) == 4:
-            assert arg.is_contiguous(
-                memory_format=torch.channels_last
-            ), f"Tensor is not channels_last: {arg}"
 
 
 def _check_device(args, device):

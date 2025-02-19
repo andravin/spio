@@ -1,13 +1,7 @@
 #ifndef SPIO_PIPELINE_H_
 #define SPIO_PIPELINE_H_
 
-#ifndef DEVICE
-#ifdef __CUDACC__
-#define DEVICE __device__
-#else
-#define DEVICE
-#endif
-#endif
+#include "spio/macros.h"
 
 namespace spio
 {

@@ -21,13 +21,16 @@ def run_kernel_test(
     """Run a test for an forward pass kernel."""
     arch = torch.cuda.get_device_capability(device)
 
+
     kernel_name = kernel_factory.get_kernel_name(**kernel_kwargs)
     reflection = get_kernel_reflection(kernel_name)
-    args = reflection.make_args(params, device=device)
-    kernel_args = reflection.arrange_args(args)
 
     reference_function = reflection.reference
     reference_reflection = get_function_reflection(reference_function)
+
+    args = reference_reflection.make_args(params, device=device)
+    kernel_args = reflection.arrange_args(args)
+
     reference_args = _all_to_float(reference_reflection.arrange_args(args))
     torch_kwargs = reference_reflection.get_function_kwargs(params)
 

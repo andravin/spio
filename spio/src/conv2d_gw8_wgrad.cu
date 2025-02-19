@@ -2,21 +2,15 @@
 #include <cuda_fp16.h>
 
 #include "spio/pipeline.h"
+#include "spio/fragment.cuh"
 #include "spio/mma.cuh"
 #include "spio/ldmatrix.cuh"
+#include "spio/mathutil.h"
 
 #include "parameters.h"
 
 using namespace spio;
 using namespace Params;
-
-namespace
-{
-    __device__ constexpr int _max(int a, int b)
-    {
-        return a > b ? a : b;
-    }
-}
 
 extern "C"
 {
@@ -30,7 +24,7 @@ extern "C"
         //
         // Overlap the wgrad shared memory buffer with the other smem buffers.
         //
-        __shared__ uint4 smem_buf[_max(SmemInput::size + SmemDelta::size, SmemWgrad::num_bytes / sizeof(uint4))];
+        __shared__ uint4 smem_buf[spio::max(SmemInput::size + SmemDelta::size, SmemWgrad::num_bytes / sizeof(uint4))];
         uint4 *smem_input_buf = smem_buf;
         uint4 *smem_delta_buf = smem_buf + SmemInput::size;
         float2 *smem_wgrad_buf = reinterpret_cast<float2 *>(smem_buf);
@@ -229,9 +223,8 @@ extern "C"
         {
             SmemWgradStoreIdx idx(threadIdx.x);
             warp_s = idx.warp_s() * WARP_S;
-            int lane_c = Acc::c(idx.lane(), 0);
-            int lane_k2 = Acc::k2(idx.lane());
-            smem_wgrad_store = smem_wgrad_store.k8(idx.k8()).k2(lane_k2).s(warp_s).c(lane_c);
+            Acc::Index acc_idx(idx.lane());
+            smem_wgrad_store = smem_wgrad_store.k8(idx.k8()).k2(acc_idx.k2()).s(warp_s).c(acc_idx.c());
         }
 
 #pragma unroll R

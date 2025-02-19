@@ -45,7 +45,6 @@ CHANNELS_LAST = True
 CHANNELS = 64
 
 RESULTS_TABLE_MAX_COL_WIDTH = 400
-CONVOLUTIONAL_BLOCKS = ["MBConv", "ConvFirst", "ConvNeXt"]
 
 # pylint: disable=invalid-name
 use_spio = False
@@ -256,7 +255,6 @@ class StackedBlocks(nn.Module):
         expansion_ratio=4,
         depth=16,
         block_cls=MBConv,
-        act_cls=nn.SiLU,
         extra_depth=1,
     ):
         super().__init__()
@@ -269,7 +267,6 @@ class StackedBlocks(nn.Module):
                 num_channels,
                 num_channels,
                 expansion_ratio=expansion_ratio,
-                act_cls=act_cls,
             )
             for _ in range(num_pre)
         ]
@@ -281,7 +278,6 @@ class StackedBlocks(nn.Module):
                 kernel_size=kernel_size,
                 group_width=group_width,
                 expansion_ratio=expansion_ratio,
-                act_cls=act_cls,
             )
             for _ in range(depth)
         ]
@@ -291,7 +287,6 @@ class StackedBlocks(nn.Module):
                 num_channels,
                 num_channels,
                 expansion_ratio=expansion_ratio,
-                act_cls=act_cls,
             )
             for _ in range(num_post)
         ]
@@ -308,6 +303,12 @@ class StackedBlocks(nn.Module):
         x = self.post(x)
         x = self.pool(x)
         return x
+
+
+CONVOLUTIONAL_BLOCK_LIST = [MBConv, ConvFirst, ConvNeXt]
+CONVOLUTIONAL_BLOCKS_DICT = {
+    block.__name__: block for block in CONVOLUTIONAL_BLOCK_LIST
+}
 
 
 def main():
@@ -344,7 +345,7 @@ def main():
         "--block",
         type=str,
         default="MBConv",
-        choices=CONVOLUTIONAL_BLOCKS,
+        choices=CONVOLUTIONAL_BLOCKS_DICT.keys(),
         help="The type of convolutional block to use.",
     )
     parser.add_argument("--output-dir", type=str, default=None)
@@ -394,14 +395,7 @@ def run_benchmark(args, batch_size: int = None):
     if batch_size is not None:
         args.batch_size = batch_size
 
-    if args.block == "MBConv":
-        block_cls = MBConv
-    elif args.block == "ConvFirst":
-        block_cls = ConvFirst
-    elif args.block == "ConvNeXt":
-        block_cls = ConvNeXt
-    else:
-        raise ValueError(f"Unknown block type: {args.block}")
+    block_cls = CONVOLUTIONAL_BLOCKS_DICT[args.block]
 
     device = torch.device(f"cuda:{args.device}")
     if args.timm_model is not None:

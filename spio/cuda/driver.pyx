@@ -2,6 +2,17 @@
 from spio.cuda cimport cdriver
 from cpython.bytes cimport PyBytes_FromString
 
+from dataclasses import dataclass
+
+@dataclass
+class DeviceAttributes:
+    """Attributes of a CUDA device."""
+
+    multiprocessor_count: int
+    l2_cache_size: int
+    name: str = None
+
+
 cdef _check(cdriver.CUresult status):
     cdef const char *err_str
     if status != cdriver.CUDA_SUCCESS:
@@ -19,7 +30,7 @@ cdef class Function:
     cdef set_c_function(self, cdriver.CUfunction c_function):
         self._c_function = c_function
 
-    def launch(self, grid, block, args):
+    def launch(self, grid, block, args, shared_mem_bytes=0):
         """Launch the CUDA kernel function."""
         cdef cdriver.CUdeviceptr arg_ptrs[16]
         cdef int arg_ints[16]
@@ -49,7 +60,7 @@ cdef class Function:
             self._c_function,
             grid[0], grid[1], grid[2],
             block[0], block[1], block[2],
-            0, # shared memory size
+            shared_mem_bytes,
             NULL, # stream
             kernel_params,
             NULL # extra
@@ -128,14 +139,54 @@ def ctx_synchronize():
     """Synchronize the current CUDA context."""
     _check(cdriver.cuCtxSynchronize())
 
+
 def get_ctx_api_version():
     """Get the CUDA context API version."""
     cdef unsigned int version
     _check(cdriver.cuCtxGetApiVersion(NULL, &version))
     return version
 
+
 def get_driver_version():
     """Get the CUDA driver version."""
     cdef int version
     _check(cdriver.cuDriverGetVersion(&version))
     return version
+
+
+def get_multiprocessor_count(device_ordinal=0):
+    """Get the number of multiprocessors on the given device."""
+    cdef int count
+    cdef cdriver.CUdevice device
+    _check(cdriver.cuDeviceGet(&device, device_ordinal))
+    _check(cdriver.cuDeviceGetAttribute(
+        &count, cdriver.CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, device))
+    return count
+
+
+def get_l2_cache_size(device_ordinal=0):
+    """Get the size of the L2 cache on the given device."""
+    cdef int size
+    cdef cdriver.CUdevice device
+    _check(cdriver.cuDeviceGet(&device, device_ordinal))
+    _check(cdriver.cuDeviceGetAttribute(
+        &size, cdriver.CU_DEVICE_ATTRIBUTE_L2_CACHE_SIZE, device))
+    return size
+
+
+def get_device_name(device_ordinal=0):
+    """Get the name of the given device."""
+    cdef char name[256]
+    cdef cdriver.CUdevice device
+    _check(cdriver.cuDeviceGet(&device, device_ordinal))
+    _check(cdriver.cuDeviceGetName(name, 256, device))
+    return name.decode('utf-8')
+
+
+def get_device_attributes(device_ordinal=0):
+    """Return a dataclass with the device attributes."""
+    return DeviceAttributes(
+        name=get_device_name(device_ordinal),
+        multiprocessor_count=get_multiprocessor_count(device_ordinal),
+        l2_cache_size=get_l2_cache_size(device_ordinal),
+    )
