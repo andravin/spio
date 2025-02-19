@@ -23,7 +23,7 @@ extern "C"
     /// The checkerboard is a 16x2 grid with a vector
     /// of 8 half2 elements per cell. See checkerboard.h for details.
     ///
-    /// @param c_ptr result matrix with float32 precision.
+    /// @param c_ptr result matrix with float16 precision.
     /// @param a_ptr operand A matrix with float16 precision.
     /// @param b_ptr operand B matrix with float16 precision.
     __global__ void mma_checkerboard_16c(
