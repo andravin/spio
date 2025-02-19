@@ -12,6 +12,10 @@ from .layernorm_2d_params import LayerNorm2dParams
 from .layernorm_2d_stats import LayerNorm2dStats
 from .layernorm_2d_kernel import layernorm_2d_kernel_factory, LayerNorm2dConfig
 
+from .mlp_params import MlpParams
+from .mlp_stats import MlpStats
+from .mlp_kernel import mlp_kernel_factory, MlpConfig
+
 from .stats import Stats
 from .performance_model_cache import (
     get_device_performance_model_file_name,

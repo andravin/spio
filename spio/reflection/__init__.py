@@ -7,7 +7,8 @@ from .reflection import (
 )
 from .conv2d_gw8_reflection import register_conv2d_gw8_reflections
 from .layernorm_2d_reflection import register_layernorm_2d_reflections
+from .mlp_reflection import register_mlp_reflections
 
 register_conv2d_gw8_reflections()
 register_layernorm_2d_reflections()
-
+register_mlp_reflections()
