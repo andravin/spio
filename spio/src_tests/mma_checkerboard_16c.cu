@@ -57,8 +57,8 @@ extern "C"
         A_Fragment::LoadIndex a_load_idx(compute_idx.lane());
         B_Fragment::LoadIndex b_load_idx(compute_idx.lane());
 
-        auto smem_a_load = SmemA(smem_a).i16(compute_idx.i32() * 2).checkers(a_load_idx.i(), a_load_idx.k8());
-        auto smem_b_load = SmemB(smem_b).j16(compute_idx.j64() * 4).checkers(b_load_idx.j(), b_load_idx.k8());
+        auto smem_a_load = SmemA(smem_a).i32(compute_idx.i32()).checkers(a_load_idx.i(), a_load_idx.k8());
+        auto smem_b_load = SmemB(smem_b).j64(compute_idx.j64()).checkers(b_load_idx.j(), b_load_idx.k8());
 
         int ping_pong = 0;
 
@@ -147,7 +147,7 @@ extern "C"
             {
                 for (int f = 0; f < C_Fragment::size(); ++f)
                 {
-                    *smem_c_store.j8(j16 * 2 + c_idx.j8(f)).i(i16 * 16 + c_idx.i(f)) = c_tensor.i16(i16).j16(j16)->to_half2(f);
+                    *smem_c_store.j16(j16).j8(c_idx.j8(f)).i16(i16).i(c_idx.i(f)) = c_tensor.i16(i16).j16(j16)->to_half2(f);
                 }
             }
         }

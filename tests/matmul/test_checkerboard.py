@@ -56,6 +56,8 @@ def _make_checkerboard_kernel_params(
     n8 = n // 8
 
     block_x16 = block_x // 16
+    block_x32 = block_x // 32
+    block_x64 = block_x // 64
 
     if sixteen_channels_last:
         tensor_a = TensorSpec("A", "const uint4", dict(k16=k16, i=m, k8m2=2))
@@ -74,7 +76,8 @@ def _make_checkerboard_kernel_params(
         dict(
             ping_pong=2,
             k16=chunk_k16,
-            i16=block_x16,
+            i32=block_x32,
+            i16=2,
             checkers=CheckerboardIndexSpec(i=16, k8=2),
         ),
     )
@@ -84,7 +87,8 @@ def _make_checkerboard_kernel_params(
         dict(
             ping_pong=2,
             k16=chunk_k16,
-            j16=block_x16,
+            j64=block_x64,
+            j16=4,
             checkers=CheckerboardIndexSpec(j=16, k8=2),
         ),
     )
@@ -103,7 +107,7 @@ def _make_checkerboard_kernel_params(
         TensorSpec(
             "SmemCStore",
             "__half2",
-            dict(i32=4, j64=2, j8=8, i=32, j2=4),
+            dict(i32=4, j64=2, j16=4, j8=2, i16=2, i=16, j2=4),
             strides=dict(j8=(32 + 1) * 4),
         ),
         TensorSpec(
