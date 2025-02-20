@@ -15,12 +15,19 @@ from ..transform._transform import _transform as spio_transform
 from ..kernels import Params, KernelFactory
 
 
+# Pre-fill output tensors with this value to ensure every element is written by the kernel.
+DEAD_VALUE = -42.0
+
+
 def run_kernel_test(
-    kernel_factory: KernelFactory, params: Params, device: str = "cuda", **kernel_kwargs
+    kernel_factory: KernelFactory,
+    params: Params,
+    device: str = "cuda",
+    configs=None,
+    **kernel_kwargs,
 ):
     """Run a test for an forward pass kernel."""
     arch = torch.cuda.get_device_capability(device)
-
 
     kernel_name = kernel_factory.get_kernel_name(**kernel_kwargs)
     reflection = get_kernel_reflection(kernel_name)
@@ -36,23 +43,28 @@ def run_kernel_test(
 
     torch_output = reference_function(*reference_args, **torch_kwargs)
     kernels = compile_kernel_configs(
-        kernel_factory, params, arch=arch, **reflection.kwargs
+        kernel_factory, params, arch=arch, configs=configs, **reflection.kwargs
     )
     stats = reflection.stats(params, output_names=reflection.output_names)
     acc_depth = stats.accumulation_depths[0]
+    output_name = reflection.output_names[0]
+    output = args[output_name]
     for kernel in kernels:
         kernel.load()
+        output.fill_(DEAD_VALUE)
         reflection.init_zeros(args)
         kernel(*kernel_args)
-        output_name = reflection.output_names[0]
-        output = args[output_name]
         assert_all_close_with_acc_depth(
             output, torch_output, msg=str(kernel), acc_depth=acc_depth
         )
 
 
 def run_grad_kernel_test(
-    kernel_factory: KernelFactory, params: Params, device: str = "cuda", **kernel_kwargs
+    kernel_factory: KernelFactory,
+    params: Params,
+    device: str = "cuda",
+    configs=None,
+    **kernel_kwargs,
 ):
     """Run a test for a backward pass kernel."""
     arch = torch.cuda.get_device_capability(device)
@@ -87,7 +99,9 @@ def run_grad_kernel_test(
     acc_depths = [stats.accumulation_depths[0] for stats in grad_input_stats]
 
     kernel_args = reflection.arrange_args(args)
-    kernels = compile_kernel_configs(kernel_factory, params, arch=arch, **kernel_kwargs)
+    kernels = compile_kernel_configs(
+        kernel_factory, params, arch=arch, configs=configs, **kernel_kwargs
+    )
     for kernel in kernels:
         kernel.load()
         reflection.init_zeros(args)
@@ -114,21 +128,25 @@ def run_opcheck_test(function, params, device="cuda"):
 def run_function_test(function, params, device="cuda"):
     """Run a test for the forward pass of a function."""
     reflection = get_function_reflection(function)
-    args = reflection.make_args(params, device=device)
+
+    reference_function = reflection.reference
+    reference_reflection = get_function_reflection(reference_function)
+
+    args = reference_reflection.make_args(params, device=device)
     function_args = reflection.arrange_args(args)
     function_args = _all_to_float(function_args)
     function_kwargs = reflection.get_function_kwargs(params)
 
-    with torch.autocast(device_type=device, dtype=torch.float16):
-        output = function(*function_args, **function_kwargs)
-
-    reference_function = reflection.reference
-    reference_reflection = get_function_reflection(reference_function)
     reference_args = _all_to_float(reference_reflection.arrange_args(args))
     reference_kwargs = reference_reflection.get_function_kwargs(params)
     reference_output = reference_function(*reference_args, **reference_kwargs)
+
     stats = reflection.stats(params, output_names=reflection.output_names)
     acc_depth = stats.accumulation_depths[0]
+
+    with torch.autocast(device_type=device, dtype=torch.float16):
+        output = function(*function_args, **function_kwargs)
+
     assert_all_close_with_acc_depth(
         output, reference_output, msg=str(params), acc_depth=acc_depth
     )

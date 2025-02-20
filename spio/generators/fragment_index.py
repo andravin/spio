@@ -1,6 +1,9 @@
 """Code generator for fragment index that maps lanes to named dimensions."""
 
 from dataclasses import dataclass
+from typing import Tuple
+
+from .dim import dim_name_to_dim_or_fold_class_name
 
 
 @dataclass
@@ -47,7 +50,7 @@ FRAGMENT_DESCRIPTORS = {
         "MMA_A_88_F16_Index", "MMA_A_M16_K16_F16_LoadIndex", "i", "k", 4
     ),
     "MMA_N8_K8_F16_B": _Desc(
-        "MMA_B_88_F16_Index", "MMA_B_N8_K8_F16_LoadIndex", "k", "j", 1
+        "MMA_B_88_F16_Index", "MMA_B_N8_K8_F16_LoadIndex", "k", "j", 1, col_major=True
     ),
     "MMA_N8_K16_F16_B": _Desc(
         "MMA_B_88_F16_Index", "MMA_B_N8_K16_F16_LoadIndex", "k", "j", 2, col_major=True
@@ -110,18 +113,26 @@ class FragmentIndexSpec:
         minor_mod = _decorate_dim_name(
             minor_name, INDEX_MINOR_AXIS_VECLEN, MINOR_AXIS_VECS_PER_FRAGMENT
         )
+        major_dim_class = dim_name_to_dim_or_fold_class_name(major)
+        minor_dim_class = dim_name_to_dim_or_fold_class_name(minor)
+        minor_fragment_dim_class = dim_name_to_dim_or_fold_class_name(minor_fragment)
         return f"""
 class {self.class_name} : public spio::{desc.fragment_index} {{
     public:
         using Base = spio::{desc.fragment_index};
-        using Base::Base;
-        DEVICE constexpr int {major}(int idx = 0) const {{ return Base::{base_major}(idx); }}
-        DEVICE constexpr int {minor}(int idx = 0) const {{ return Base::{base_minor}(idx); }}
-        DEVICE constexpr int {minor_fragment}(int idx = 0) const {{ return Base::{base_minor_fragment}(idx); }}
-        DEVICE constexpr int {minor_mod}() const {{ return Base::{base_minor_mod}(); }}
+        DEVICE constexpr {self.class_name}(LANE_Dim lane) : Base(lane.get()) {{}}
+        DEVICE constexpr {major_dim_class} {major}(int idx = 0) const {{ return Base::{base_major}(idx); }}
+        DEVICE constexpr {minor_dim_class} {minor}(int idx = 0) const {{ return Base::{base_minor}(idx); }}
+        DEVICE constexpr {minor_fragment_dim_class} {minor_fragment}(int idx = 0) const {{ return Base::{base_minor_fragment}(idx); }}
+        DEVICE constexpr {minor_dim_class} {minor_mod}() const {{ return Base::{base_minor_mod}(); }}
         DEVICE static constexpr int size() {{ return {desc.num_fragments}; }}
 }};
 """
+
+    @property
+    def dim_names(self) -> Tuple[str, str]:
+        """Return the names of the dimensions."""
+        return (self.row_name, self.col_name, "lane")
 
 
 class FragmentLoadIndexSpec(FragmentIndexSpec):
@@ -140,13 +151,15 @@ class FragmentLoadIndexSpec(FragmentIndexSpec):
         major = self._major_axis(desc.col_major)
         minor_name = self._minor_axis(desc.col_major)
         minor = _decorate_dim_name(minor_name, LOAD_INDEX_MINOR_AXIS_VECLEN)
+        major_dim_class = dim_name_to_dim_or_fold_class_name(major)
+        minor_dim_class = dim_name_to_dim_or_fold_class_name(minor)
         return f"""
 class {self.class_name} : public spio::{desc.fragment_load_index} {{
     public:
         using Base = spio::{desc.fragment_load_index};
-        using Base::Base;
-        DEVICE constexpr int {major}() const {{ return Base::{base_major}(); }}
-        DEVICE constexpr int {minor}() const {{ return Base::{base_minor}(); }}
+        DEVICE constexpr {self.class_name}(LANE_Dim lane) : Base(lane.get()) {{}}
+        DEVICE constexpr {major_dim_class} {major}() const {{ return Base::{base_major}(); }}
+        DEVICE constexpr {minor_dim_class} {minor}() const {{ return Base::{base_minor}(); }}
 }};
 """
 

@@ -11,7 +11,7 @@
 namespace spio
 {
     template <int NUM_FRAGMENTS, typename T>
-    class _MMA
+    class alignas(8) _MMA
     {
     public:
         __device__ static constexpr int size() { return NUM_FRAGMENTS; }

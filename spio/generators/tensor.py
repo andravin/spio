@@ -1,10 +1,11 @@
 """Code generator for custom tensor classes in CUDA source code."""
 
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple, Union, Generator
 from dataclasses import dataclass
 
 from .index import _generate_index
 from .subindex_protocol import SubindexProtocol
+from .dim import dim_name_to_dim_or_fold_class_name
 
 DATA_TYPE_SIZES = {
     "float": 4,
@@ -46,7 +47,9 @@ class TensorSpec:
 
     @classmethod
     def _compute_full_strides(
-        cls, dims: Dict[str, Union[int, SubindexProtocol]], given_strides: Dict[str, int]
+        cls,
+        dims: Dict[str, Union[int, SubindexProtocol]],
+        given_strides: Dict[str, int],
     ) -> Dict[str, int]:
         """Compute the full strides for the given dimensions."""
         if given_strides is None:
@@ -86,6 +89,15 @@ class TensorSpec:
     def num_bytes(self) -> int:
         """The number of bytes required to store the tensor data."""
         return self.size * _sizeof_data_type(self.data_type)
+
+    @property
+    def dim_names(self) -> Generator[str, None, None]:
+        """Return the names of the dimensions in the tensor."""
+        for name, value in self.dims.items():
+            if isinstance(value, SubindexProtocol):
+                yield from value.dim_names
+            else:
+                yield name
 
 
 def _generate_tensor(
@@ -143,8 +155,8 @@ def _generate_tensor(
     code += _class(class_name, data_type, tuple(sizes), tuple(strides.values()))
     code += _using_index(index_class_name)
     code += _size_and_bytes(size)
-    for name, size in zip(dims.keys(), sizes):
-        code += _dim(name, size)
+    for (name, value), size in zip(dims.items(), sizes):
+        code += _dim(name, value, size)
     for name in dims.keys():
         code += _stride(name, strides[name])
     for d, (name, value) in enumerate(dims.items()):
@@ -187,7 +199,14 @@ def _class(
     num_dims = len(shape)
     shape_str = ", ".join([str(d) for d in shape[1:]])
     stride_str = ", ".join([str(d) for d in stride])
-    base = f"Tensor{num_dims}D<{data_type}, {shape_str}, {stride_str}>"
+    if shape_str and stride_str:
+        template_pars_str = f"<{data_type}, {shape_str}, {stride_str}>"
+    else:
+        assert (
+            stride_str == "1"
+        ), f"Unexpected template parameters: shape:{shape_str} stride:{stride_str}"
+        template_pars_str = f"<{data_type}>"
+    base = f"Tensor{num_dims}D{template_pars_str}"
     return f"""
     class {class_name} : public spio::{base} {{
     public:
@@ -201,22 +220,30 @@ def _class(
  """
 
 
-def _dim(name: str, value: int) -> str:
+def _dim(name: str, value: Union[int, SubindexProtocol], size: int) -> str:
+    name = name.upper()
+    dim_type = (
+        "int"
+        if isinstance(value, SubindexProtocol)
+        else dim_name_to_dim_or_fold_class_name(name)
+    )
+    return f"""
+        static constexpr {dim_type} {name} = {size};
+"""
+
+
+def _stride(name: str, value: int) -> str:
     name = name.upper()
     return f"""
-        constexpr static int {name} = {value};
+        static constexpr int {name}_Stride = {value};
     """
 
-def _stride(name:str, value: int) -> str:
-    name = name.upper()
-    return f"""
-        constexpr static int {name}_Stride = {value};
-    """
 
 def _dim_to_pointer(
     class_name: str, d: int, name: str, value: Union[int, SubindexProtocol]
 ) -> str:
     name_in = f"{name}_in"
+    dim_class_name = dim_name_to_dim_or_fold_class_name(name)
     dim_d = f"_d{d}"
     if isinstance(value, SubindexProtocol):
         decl_str = value.generate_offset_function_declaration(
@@ -231,8 +258,13 @@ def _dim_to_pointer(
 """
     else:
         return f"""
-        DEVICE constexpr {class_name} {name}(int {name_in}) const {{ return {dim_d}({name_in}); }}
-"""
+        /// Return a {dim_class_name} object that points to the element at the given index.
+        DEVICE constexpr {class_name} {name}({dim_class_name} {name_in}) const {{ return {dim_d}({name_in}.get()); }}
+
+        /// Return a {dim_class_name} object that points to the element at the given index.
+        /// This overloads the subscript operator "[]".
+        DEVICE constexpr {class_name} operator[]({dim_class_name} {name_in}) const {{ return {dim_d}({name_in}.get()); }}
+"""   
 
 
 def _tail() -> str:

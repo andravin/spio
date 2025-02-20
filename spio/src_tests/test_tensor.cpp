@@ -1,6 +1,22 @@
 #include "utest.h"
 #include "spio/tensor.h"
 
+UTEST(Tensor1D, indexing)
+{
+    constexpr int D0 = 8;
+
+    using Tensor = spio::Tensor1D<float>;
+
+    float data[D0];
+
+    for (int d0 = 0; d0 < D0; ++d0)
+    {
+        auto p1 = Tensor(data)._d0(d0).get();
+        auto p2 = data + d0;
+        EXPECT_EQ(p1, p2);
+    }
+}
+
 UTEST(Tensor2D, indexing)
 {
     constexpr int D0 = 8;

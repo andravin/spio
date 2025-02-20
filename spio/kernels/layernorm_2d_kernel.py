@@ -10,6 +10,7 @@ from ..generators import (
     IndexSpec,
     TensorSpec,
     GenSpecs,
+    FoldSpec,
 )
 from ..util import divup
 from .launch_params import LaunchParams
@@ -112,10 +113,11 @@ def _get_specs(
 
     specs = [
         MacroSpec({"SPIO_LAYERNORM_2D_KERNEL": full_kernel_name}),
+        FoldSpec("block_x", "x", config.block_x),
+        FoldSpec("warp_c", "c", warp_c),
         ParamsSpec(
             "Block",
             {
-                "x": config.block_x,
                 "warps_x": config.warps_x,
                 "warps_c": config.warps_c,
                 "threads": threads,
@@ -158,7 +160,7 @@ def _get_specs(
             "ThreadIdx", {"warp_x": config.warps_x, "warp_c": config.warps_c, "c2": 32}
         ),
         TensorSpec(
-            "SmemSum", "float", {"warp_x": config.warp_x, "warps_c": config.warps_c}
+            "SmemSum", "float", {"warp_x": config.warps_x, "warp_c": config.warps_c}
         ),
     ]
 

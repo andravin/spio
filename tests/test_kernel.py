@@ -6,6 +6,7 @@ from spio.generators import (
     IndexSpec,
     TensorSpec,
     ParamsSpec,
+    FoldSpec,
     generate,
 )
 from spio.compiler import compile_and_load_kernel
@@ -115,12 +116,18 @@ def test_row_memcpy_kernel():
 
     parameters_header = generate(
         [
-            ParamsSpec(
-                "Block", {"p": BLOCK_P, "q": BLOCK_Q, "c4": BLOCK_C4, "padding": 1}
-            ),
+            FoldSpec("block_p", "p", BLOCK_P),
+            FoldSpec("block_q", "q", BLOCK_Q),
+            FoldSpec("block_c", "c", BLOCK_C),
+            ParamsSpec("Block", {"padding": 1, "c4": BLOCK_C4}),
             IndexSpec(
                 "BlockIdx",
-                {"n": BLOCKS_N, "p": BLOCKS_P, "q": BLOCKS_Q, "c4": BLOCKS_C4},
+                {
+                    "n": BLOCKS_N,
+                    "block_p": BLOCKS_P,
+                    "block_q": BLOCKS_Q,
+                    "block_c": BLOCKS_C4,
+                },
             ),
             IndexSpec("InputIdx", {"x": BLOCK_W, "c4": BLOCK_C4}),
             TensorSpec("Input", "const float4", {"n": N, "y": H, "x": W, "c4": C4}),

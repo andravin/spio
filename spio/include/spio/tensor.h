@@ -11,6 +11,7 @@ namespace spio
     {
     public:
         using data_type = DataType;
+        static constexpr int element_size = sizeof(DataType);
         DEVICE constexpr TensorBase(DataType *data = nullptr) : _data(data) {}
         DEVICE constexpr DataType *get() const { return _data; }
         DEVICE void reset(DataType *data) { _data = data; }
@@ -19,6 +20,16 @@ namespace spio
 
     private:
         DataType *_data;
+    };
+
+    template <typename DataType>
+    class Tensor1D : public TensorBase<DataType>
+    {
+    public:
+        using TensorBase<DataType>::TensorBase;
+        using TensorBase<DataType>::get;
+
+        DEVICE constexpr Tensor1D _d0(int d0) const { return Tensor1D(get() + d0); }
     };
 
     /// A base class for a 2-dimensional index.

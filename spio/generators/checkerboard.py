@@ -2,6 +2,8 @@
 
 from .subindex_protocol import SubindexProtocol
 
+from .dim import dim_name_to_dim_or_fold_class_name
+
 
 class CheckerboardIndexSpec(SubindexProtocol):
     """CUDA / C++ code generator for checkerboard index classes."""
@@ -26,6 +28,8 @@ class CheckerboardIndexSpec(SubindexProtocol):
 
     def generate(self) -> str:
         """Return the CUDA / C++ source code for the checkerboard index subclass."""
+        pairs_dim_class_name = dim_name_to_dim_or_fold_class_name(self.pairs_name)
+        colors_dim_class_name = dim_name_to_dim_or_fold_class_name(self.colors_name)
         return f"""
 class {self.class_name} : public spio::CheckerboardIndex<{self.ranks}> {{
 public:
@@ -33,12 +37,12 @@ public:
 
     using Base::Base;
 
-    static constexpr unsigned {self.pairs_name.upper()} = {self.num_pairs};
-    static constexpr unsigned {self.colors_name.upper()} = 2;
+    static constexpr {pairs_dim_class_name} {self.pairs_name.upper()} = {self.num_pairs};
+    static constexpr {colors_dim_class_name} {self.colors_name.upper()} = 2;
     static constexpr unsigned size = {self.size};
 
-    DEVICE constexpr int {self.pairs_name}() const {{ return Base::pair(); }}
-    DEVICE constexpr int {self.colors_name}() const {{ return Base::color(); }}
+    DEVICE constexpr {pairs_dim_class_name} {self.pairs_name}() const {{ return Base::pair(); }}
+    DEVICE constexpr {colors_dim_class_name} {self.colors_name}() const {{ return Base::color(); }}
 }};
 """
 
@@ -46,11 +50,18 @@ public:
         self, return_type: str, function_name: str
     ) -> str:
         """Return the CUDA / C++ source code for the checkerboard offset function declaration."""
-        return f"DEVICE constexpr {return_type} {function_name}(int {self.pairs_name}, int {self.colors_name}) const {{"
+        pairs_dim_class_name = dim_name_to_dim_or_fold_class_name(self.pairs_name)
+        colors_dim_class_name = dim_name_to_dim_or_fold_class_name(self.colors_name)
+        return f"DEVICE constexpr {return_type} {function_name}({pairs_dim_class_name} {self.pairs_name}, {colors_dim_class_name} {self.colors_name}) const {{"
 
     def generate_offset_function_call(self) -> str:
         """Return the CUDA / C++ source code for the checkerboard offset function call."""
-        return f"spio::CheckerboardIndex<{self.ranks}>::offset({self.pairs_name}, {self.colors_name})"
+        return f"spio::CheckerboardIndex<{self.ranks}>::offset({self.pairs_name}.get(), {self.colors_name}.get())"
+
+    @property
+    def dim_names(self):
+        """Return the names of the dimensions."""
+        return (self.pairs_name, self.colors_name)
 
 
 def _checkerboard_header():

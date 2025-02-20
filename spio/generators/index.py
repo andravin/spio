@@ -1,11 +1,12 @@
 """Code generator for custom index classes in CUDA / C++."""
 
 from math import prod
-from typing import Dict, Tuple, List, Union
+from typing import Dict, Tuple, List, Union, Generator
 from dataclasses import dataclass
 
 from .gen_specs import GenSpecs
 from .subindex_protocol import SubindexProtocol
+from .dim import dim_name_to_dim_or_fold_class_name
 
 
 @dataclass
@@ -32,6 +33,15 @@ class IndexSpec(GenSpecs):
         """Return the total number of elements in the index."""
         return _calc_size(_sizes_gen(self.dims))
 
+    @property
+    def dim_names(self) -> Generator[str, None, None]:
+        """Return the names of the dimensions in the index."""
+        for name, value in self.dims.items():
+            if isinstance(value, SubindexProtocol):
+                yield from value.dim_names
+            else:
+                yield name
+
 
 def index_header() -> str:
     """Return a C++ statement that includes the spio index header.
@@ -42,7 +52,9 @@ def index_header() -> str:
     return '#include "spio/index.h"'
 
 
-def _generate_index(class_name: str, dims: Dict[str, Union[int, SubindexProtocol]]) -> str:
+def _generate_index(
+    class_name: str, dims: Dict[str, Union[int, SubindexProtocol]]
+) -> str:
     """Return the C++ source code that implements a custom index class.
 
     Custom index classes use named tensor dimensions.
@@ -58,8 +70,8 @@ def _generate_index(class_name: str, dims: Dict[str, Union[int, SubindexProtocol
         if isinstance(value, SubindexProtocol):
             value.class_name = _fused_dim_class_name(name)
             code += value.generate()
-    for name, size in zip(dims.keys(), sizes):
-        code += _dim(name, size)
+    for (name, value), size in zip(dims.items(), sizes):
+        code += _dim(name, value, size)
     for d, (name, value) in enumerate(dims.items()):
         code += _offset_to_index(d, name, value)
     code += _size(_calc_size(sizes))
@@ -70,7 +82,8 @@ def _generate_index(class_name: str, dims: Dict[str, Union[int, SubindexProtocol
 def _class(class_name: str, shape: Tuple[int, ...]) -> str:
     num_dims = len(shape)
     shape_str = ", ".join([str(d) for d in shape[1:]])
-    base = f"Index{num_dims}D<{shape_str}>"
+    template_pars_str = f"<{shape_str}>" if shape_str else ""
+    base = f"Index{num_dims}D{template_pars_str}"
     return f"""
     class {class_name} : public spio::{base} {{
     public:
@@ -86,10 +99,13 @@ def _fused_dim_class_name(fused_dim_name: str) -> str:
     return f"_{fused_dim_name.capitalize()}Idx"
 
 
-def _dim(name: str, size: int) -> str:
-    name = name.upper()
+def _dim(name: str, value: Union[int, SubindexProtocol], size: int) -> str:
+    if isinstance(value, SubindexProtocol):
+        return_type = "unsigned"
+    else:
+        return_type = dim_name_to_dim_or_fold_class_name(name)
     return f"""
-        static constexpr unsigned {name} = {size};
+        static constexpr {return_type} {name.upper()} = {size};
     """
 
 
@@ -103,13 +119,14 @@ def _offset_to_index(d: int, name: str, value: Union[int, SubindexProtocol]) -> 
     if isinstance(value, SubindexProtocol):
         return _offset_to_fused_idx(d, name, value)
     else:
-        return _offset_to_int_index(d, name)
+        return _offset_to_dim(d, name)
 
 
-def _offset_to_int_index(d: int, name: str) -> str:
+def _offset_to_dim(d: int, name: str) -> str:
     dim_d = f"_d{d}"
+    dim_or_fold_class_name = dim_name_to_dim_or_fold_class_name(name)
     return f"""
-        DEVICE constexpr int {name}() const {{ return {dim_d}(); }}
+        DEVICE constexpr {dim_or_fold_class_name} {name}() const {{ return {dim_or_fold_class_name}({dim_d}()); }}
 """
 
 

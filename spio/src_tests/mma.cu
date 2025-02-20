@@ -39,7 +39,7 @@ extern "C"
         C c;
         c.zero();
 
-        matmul_trans(c, a, b, c);
+        mma_trans(c, a, b, c);
 
         C::Index idx(lane);       
         c_ptr[idx.i(0) * 4 + idx.j2(0)] = c.fragment(0);
@@ -76,7 +76,7 @@ extern "C"
         C c;
         c.zero();
 
-        matmul_trans(c, a, b, c);
+        mma_trans(c, a, b, c);
 
         C::Index idx(lane);
         for (int f = 0; f < c.size(); ++f) {
@@ -110,7 +110,7 @@ extern "C"
         C c;
         c.zero();
 
-        matmul_trans(c, a, b, c);
+        mma_trans(c, a, b, c);
 
         C::Index idx(lane);
 

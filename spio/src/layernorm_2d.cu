@@ -73,12 +73,12 @@ namespace
             int warp_c_idx = threadIdx.x % 32;
             if (warp_c_idx == 0)
             {
-                *smem_sum.warps_c(tidx.warp_c()) = sum;
+                *smem_sum.warp_c(tidx.warp_c()) = sum;
             }
             __syncthreads();
             if (warp_c_idx < Block::warps_c)
             {
-                sum = *smem_sum.warps_c(warp_c_idx);
+                sum = *smem_sum.warp_c(warp_c_idx);
             }
             else
             {
@@ -112,13 +112,18 @@ extern "C"
         //
         // Define the tile mappings.
         //
-        int bx; 
-        if constexpr (Mode::reverse_x) {
-            bx = Block::blocks - 1 - blockIdx.x;
-        } else {
-            bx = blockIdx.x;
-        };
-        int block_x = bx * Block::x;
+        int bx = []()
+        {
+            if constexpr (Mode::reverse_x)
+            {
+                return Block::blocks - 1 - blockIdx.x;
+            }
+            else
+            {
+                return blockIdx.x;
+            };
+        }();
+        auto block_x = BLOCK_X_Dim(bx);
 
         // input -> smem
         Input input(input_ptr);
@@ -126,10 +131,10 @@ extern "C"
 
         // smem -> registers
         ThreadIdx tidx(threadIdx.x);
-        int c2_warp_lane = tidx.warp_c() * Params::warp_c2 + tidx.c2();
+        auto c2_warp_lane = tidx.warp_c().fold<2>() + tidx.c2();
         SmemInputLoad smem_input_load(reinterpret_cast<const __half2 *>(smem_input_buf));
         {
-            smem_input_load = smem_input_load.x(tidx.warp_x());
+            smem_input_load = smem_input_load.x(tidx.warp_x().get());
         }
 
         // Load the weight and bias.
@@ -139,18 +144,20 @@ extern "C"
         {
             for (int c64 = 0; c64 < Params::c2_per_thread; ++c64)
             {
-                int c2 = c2_warp_lane + c64 * 32;
+                auto c2 = c2_warp_lane + c64 * 32;
                 if (c2 < Output::C2)
                 {
-                    weight[c64] = weight_ptr[c2];
-                    if constexpr (Params::has_bias) {
-                        bias[c64] = bias_ptr[c2];
+                    weight[c64] = weight_ptr[c2.get()];
+                    if constexpr (Params::has_bias)
+                    {
+                        bias[c64] = bias_ptr[c2.get()];
                     }
                 }
                 else
                 {
                     weight[c64] = make_float2(0.0f, 0.0f);
-                    if constexpr (Params::has_bias) {
+                    if constexpr (Params::has_bias)
+                    {
                         bias[c64] = make_float2(0.0f, 0.0f);
                     }
                 }
@@ -163,14 +170,12 @@ extern "C"
             if (iter < Params::warp_x)
             {
                 // Load the next input tile to shared memory asynchronously.
-                int x_iter = block_x + Block::warps_x * iter;
+                auto x_iter = block_x.unfold() + Block::warps_x * iter;
                 auto input_iter = input.x(x_iter);
                 for (int idx = threadIdx.x; idx < SmemInputStore::size / 2; idx += Block::threads)
                 {
                     SmemInputStore::Index smem_store_idx(idx);
-                    int thread_x = smem_store_idx.x();
-                    int x = x_iter + thread_x;
-                    bool thread_inbounds = x < Input::X;
+                    bool thread_inbounds = (x_iter + smem_store_idx.x()) < Input::X;
                     int zfill = thread_inbounds ? 0 : sizeof(Input::data_type);
                     __pipeline_memcpy_async(
                         smem_input_store.ping_pong(iter % 2).get() + idx,
@@ -192,10 +197,13 @@ extern "C"
                 __syncthreads();
                 for (int c64 = 0; c64 < Params::c2_per_thread; ++c64)
                 {
-                    int c2 = c2_warp_lane + c64 * 32;
-                    if (c2 < Output::C2) {
+                    auto c2 = c2_warp_lane + c64 * 32;
+                    if (c2 < Output::C2)
+                    {
                         input_tile[c64] = *smem_input_load.ping_pong(compute_iter % 2).c2(c2);
-                    } else {
+                    }
+                    else
+                    {
                         input_tile[c64] = __float22half2_rn(make_float2(0.0f, 0.0f));
                     }
                 }
@@ -226,8 +234,9 @@ extern "C"
                     // Sum over registers.
                     for (int c64 = 0; c64 < Params::c2_per_thread; ++c64)
                     {
-                        int c2 = c2_warp_lane + c64 * 32;
-                        if (c2 < Output::C2) {
+                        auto c2 = c2_warp_lane + c64 * 32;
+                        if (c2 < Output::C2)
+                        {
                             sum_diff_sq += halves_diff_sq(input_tile[c64], mean);
                         }
                     }
@@ -242,16 +251,16 @@ extern "C"
                 // Compute and store the LayerNorm output.
                 //
                 {
-                    int x_iter = block_x + Block::warps_x * compute_iter;
-                    int c2_warp_lane = tidx.warp_c() * Params::warp_c2 + tidx.c2();
-                    int x = x_iter + tidx.warp_x();
+                    auto x_iter = block_x.unfold() + Block::warps_x * compute_iter;
+                    auto c2_warp_lane = tidx.warp_c().fold<2>() + tidx.c2();
+                    auto x = x_iter + tidx.warp_x().get();
 
                     auto output = Output(output_ptr).x(x);
 
                     for (int c64 = 0; c64 < Params::c2_per_thread; ++c64)
                     {
                         __half2 norm = halves_norm(input_tile[c64], mean, rstd, weight[c64], bias[c64]);
-                        int c2 = c2_warp_lane + c64 * 32;
+                        auto c2 = c2_warp_lane + c64 * 32;
                         if (c2 < Output::C2 && x < Output::X)
                         {
                             *output.c2(c2) = norm;

@@ -15,6 +15,18 @@ namespace spio
         const unsigned _offset;
     };
 
+    /// A base class for a 1-dimensional index.
+    class Index1D : public IndexBase
+    {
+    public:
+        using IndexBase::IndexBase;
+        const static unsigned _D0_Stride = 1;
+        DEVICE constexpr int _d0() const
+        {
+            return offset() / _D0_Stride;
+        }
+    };
+
     /// A base class for a 2-dimensional index.
     template <unsigned _D1>
     class Index2D : public IndexBase
@@ -84,7 +96,7 @@ namespace spio
     };
 
     /// A base class for a 6-dimensional index.
-    template<unsigned _D1, unsigned _D2, unsigned _D3, unsigned _D4, unsigned _D5>
+    template <unsigned _D1, unsigned _D2, unsigned _D3, unsigned _D4, unsigned _D5>
     class Index6D : public IndexBase
     {
     public:
@@ -106,10 +118,10 @@ namespace spio
     };
 
     /// A base class for a 7-dimensional index.
-    template<unsigned _D1, unsigned _D2, unsigned _D3, unsigned _D4, unsigned _D5, unsigned _D6>
+    template <unsigned _D1, unsigned _D2, unsigned _D3, unsigned _D4, unsigned _D5, unsigned _D6>
     class Index7D : public IndexBase
     {
-        public:
+    public:
         constexpr static unsigned _D6_Stride = 1;
         constexpr static unsigned _D5_Stride = _D6 * _D6_Stride;
         constexpr static unsigned _D4_Stride = _D5 * _D5_Stride;

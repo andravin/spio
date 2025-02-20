@@ -18,8 +18,12 @@ from spio.generators import (
     CheckerboardIndexSpec,
     FragmentIndexSpec,
     FragmentLoadIndexSpec,
+    DimSpec,
+    FoldSpec,
+    generate,
 )
 import spio.compiler
+import spio.generators
 
 
 CPP_SOURCES = [
@@ -28,6 +32,7 @@ CPP_SOURCES = [
     "test_fragment_index.cpp",
     "test_mathutil.cpp",
     "test_strip_loader_params.cpp",
+    "test_dim.cpp",
 ]
 
 TRUTHS = ["true", "1", "yes", "y", "t"]
@@ -51,7 +56,7 @@ def compile_cpp_tests(extra_cpp_test_files=None):
 
 
 @pytest.mark.skipif(
-    not ENABLE_CPP_TESTS, reason="NVCC support not requried by default."
+    not ENABLE_CPP_TESTS, reason="NVCC support not required by default."
 )
 def test_cpp_tests():
     """Run all C++ unit tests."""
@@ -62,12 +67,16 @@ def test_cpp_tests():
         spio.generators.checkerboard._checkerboard_header(),
         spio.generators.fragment_index._fragment_index_header(),
         spio.generators.fragment_index._fragment_load_index_header(),
+        spio.generators.dim.dim_header(),
     ]
     sources = [
+        _test_generate_dim(),
+        _test_generate_fold(),
         _test_generate_index(),
         _test_generate_dense_tensor(),
-        _test_generate_checkerboard_index(),
+        _test_genrate_1d_dense_tensor(),
         _test_generate_tensor_with_strides(),
+        _test_generate_checkerboard_index(),
         _test_checkerboard_tensor(),
         _test_fragment_index(),
         _test_fragment_load_index(),
@@ -82,54 +91,135 @@ def test_cpp_tests():
         assert False, f"{e.stdout} {e.stderr}"
 
 
+def _test_generate_dim():
+    """Return the C++ source code that tests a custom dimension class."""
+    specs = [DimSpec("i"), DimSpec("j")]
+    generated_code = generate(specs, namespace="I_Dim_GenCode")
+    return f"""
+{generated_code}
+
+UTEST(I_Dim, methods)
+{{
+    using namespace I_Dim_GenCode;
+    EXPECT_EQ(I_Dim(7).get(), 7);
+    EXPECT_TRUE(I_Dim(7) == I_Dim(7));
+    EXPECT_TRUE(I_Dim(7) < I_Dim(8));
+    EXPECT_TRUE(I_Dim(7) <= I_Dim(8));
+    EXPECT_TRUE(I_Dim(8) > I_Dim(7));
+    EXPECT_TRUE(I_Dim(8) >= I_Dim(7));
+    EXPECT_TRUE(I_Dim(7) == I_Dim(7));
+    EXPECT_TRUE(I_Dim(7) <= I_Dim(7));
+    EXPECT_TRUE(I_Dim(7) >= I_Dim(7));
+    EXPECT_TRUE(I_Dim(7) != I_Dim(8));
+    EXPECT_TRUE(I_Dim(7) + I_Dim(8) == I_Dim(15));
+    EXPECT_TRUE(I_Dim(8) - I_Dim(7) == I_Dim(1));
+    EXPECT_TRUE(I_Dim(8) % I_Dim(3) == I_Dim(2));
+    EXPECT_TRUE((I_Dim(32).fold<4>() == spio::Fold<I_Dim, 4>(8)));
+    EXPECT_TRUE((I_Dim(32).cast<J_Dim>() == J_Dim(32)));
+}}
+
+UTEST(I_Dim, range)
+{{
+    using namespace I_Dim_GenCode;
+    int j = 0;
+    for (auto i : I_Dim(7)) {{
+        EXPECT_EQ(i.get(), j++);
+    }}
+    EXPECT_EQ(j, 7);
+}}
+"""
+
+
+def _test_generate_fold():
+    specs = [
+        DimSpec("c"),
+        FoldSpec("block_i", "i", 64),
+        FoldSpec("block_j", "j", 64),
+        FoldSpec("block_c8", "c8", 4),
+    ]
+    generated_code = generate(specs, namespace="I_Fold_GenCode")
+    return f"""
+{generated_code}
+
+UTEST(I_Fold, methods)
+{{
+    using namespace I_Fold_GenCode;
+    EXPECT_EQ(BLOCK_I_Dim(7).get(), 7);
+    EXPECT_TRUE(BLOCK_I_Dim(7).unfold() == I_Dim(7 * 64));
+    EXPECT_TRUE((BLOCK_I_Dim(7).fold<32>() == spio::Fold<I_Dim, 32>(7 * 2)));
+
+    EXPECT_EQ(BLOCK_C8_Dim(7).get(), 7);
+    EXPECT_TRUE((BLOCK_C8_Dim(7).unfold() == spio::Fold<C_Dim, 8>(7 * 4)));
+
+    EXPECT_TRUE(BLOCK_I_Dim(7).cast<J_Dim>() == BLOCK_J_Dim(7));
+}}
+"""
+
+
 def _test_generate_index():
     """Return the C++ source code that tests a custom index class."""
 
-    my_index_code = IndexSpec(
-        "MyIndex", {"n": 4, "h": 32, "w": 64, "c": 128}
-    ).generate()
+    specs = [
+        IndexSpec("MyIndex", {"n": 4, "h": 32, "w": 64, "c": 128}),
+    ]
+
+    generated_code = generate(specs, namespace="MyIndex_GenCode")
     size = 4 * 32 * 64 * 128
     test_code = f"""
-{my_index_code}
+{generated_code}
 
 UTEST(MyIndex, index_from_offset)
 {{
+    using namespace MyIndex_GenCode;
     int offset = 532523;
     MyIndex idx(offset);
-    EXPECT_EQ(idx.n(), offset / (32 * 64 * 128));
-    EXPECT_EQ(idx.h(), (offset / (64 * 128)) % 32);
-    EXPECT_EQ(idx.w(), (offset / 128) % 64);
-    EXPECT_EQ(idx.c(), offset % 128);
+    EXPECT_TRUE(idx.n() == N_Dim(offset / (32 * 64 * 128) ) );
+    EXPECT_TRUE(idx.h() == H_Dim( (offset / (64 * 128)) % 32) );
+    EXPECT_TRUE(idx.w() == W_Dim( (offset / 128) % 64));
+    EXPECT_TRUE(idx.c() == C_Dim(offset % 128));
 }}
 
 UTEST(MyIndex, size)
 {{
+    using namespace MyIndex_GenCode;
     EXPECT_EQ(MyIndex::size, {size});
+}}
+
+UTEST(MyIndex, dim_sizes)
+{{
+    using namespace MyIndex_GenCode;
+    EXPECT_TRUE(MyIndex::N == N_Dim(4));
+    EXPECT_TRUE(MyIndex::H == H_Dim(32));
+    EXPECT_TRUE(MyIndex::W == W_Dim(64));
+    EXPECT_TRUE(MyIndex::C == C_Dim(128));
 }}
 """
     return test_code
 
 
 def _test_generate_checkerboard_index():
-    my_fused_index_code = IndexSpec(
-        "MyCheckerboard", dict(c16=8, checkers=CheckerboardIndexSpec(r=16, cm2=2))
-    ).generate()
-
+    specs = [
+        IndexSpec(
+            "MyCheckerboard", dict(c16=8, checkers=CheckerboardIndexSpec(r=16, c=2))
+        ),
+    ]
+    generated_code = generate(specs, namespace="IndexSpec_GenCode")
     code = f"""
-{my_fused_index_code}
+{generated_code}
 
 UTEST(IndexSpec, checkerboard_fused_dim)
 {{
+    using namespace IndexSpec_GenCode;
     EXPECT_EQ(MyCheckerboard::size, 8 * 16 * 2);
-    EXPECT_EQ(MyCheckerboard::C16, 8);
+    EXPECT_TRUE((MyCheckerboard::C16 == spio::Fold<C_Dim, 16>(8)));
     EXPECT_EQ(MyCheckerboard::CHECKERS, 16 * 2);
     for (int offset = 0; offset < MyCheckerboard::size; ++offset) {{
         MyCheckerboard idx(offset);
-        EXPECT_EQ(idx.c16(), offset / (16 * 2));
+        EXPECT_EQ(idx.c16().get(), offset / (16 * 2));
         int ckbd_offset = offset % 32;
         int ckbd_row = ckbd_offset / 8;
-        EXPECT_EQ(idx.checkers().r(), ckbd_offset / 2);
-        EXPECT_EQ(idx.checkers().cm2(), (ckbd_offset & 1) ^ (ckbd_row & 1));
+        EXPECT_TRUE(idx.checkers().r() == R_Dim(ckbd_offset / 2));
+        EXPECT_TRUE(idx.checkers().c() == C_Dim((ckbd_offset & 1) ^ (ckbd_row & 1)));
     }}
 }}
 """
@@ -143,15 +233,17 @@ def _test_generate_dense_tensor():
     w = 33
     c = 42
 
-    dense_tensor_code = TensorSpec(
-        "DenseTensor", "const float", {"n": n, "h": h, "w": w, "c": c}
-    ).generate()
+    specs = [
+        TensorSpec("DenseTensor", "const float", {"n": n, "h": h, "w": w, "c": c}),
+    ]
+    generated_code = generate(specs, namespace="DenseTensor_GenCode")
     test_code = f"""
 
-{dense_tensor_code}
+{generated_code}
 
 UTEST(DenseTensor, offset_from_tensor)
 {{
+    using namespace DenseTensor_GenCode;
     constexpr int N = {n};
     constexpr int H = {h};
     constexpr int W = {w};
@@ -169,14 +261,61 @@ UTEST(DenseTensor, offset_from_tensor)
             }}
         }}
     }}
-    for (int n = 0; n < N; ++n) {{
-        for (int h = 0; h < H; ++h) {{
-            for (int w = 0; w < W; ++w) {{
-                for (int c = 0; c < C; ++c) {{
-                    EXPECT_EQ(*DenseTensor(data).n(n).h(h).w(w).c(c), n*(H*W*C) + h*(W*C) + w*C + c);
+    DenseTensor tensor(data);
+    for (auto n : tensor.N) {{
+        for (auto h : tensor.H) {{
+            for (auto w : tensor.W) {{
+                for (auto c : tensor.C) {{
+                    EXPECT_EQ(*tensor.n(n).h(h).w(w).c(c), n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
+                    EXPECT_EQ(*tensor[n][h][w][c], n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
+                    EXPECT_EQ(*tensor[h][n][c][w], n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
+                    EXPECT_EQ(*tensor[h][w][c][n], n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
+                    EXPECT_EQ(*tensor[w][c][n][h], n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
                 }}
             }}
         }}
+    }}
+    EXPECT_EQ(DenseTensor::size, size);
+    EXPECT_EQ(DenseTensor::num_bytes, static_cast<int>(num_bytes));
+
+    int nn = 0;
+    for (auto n : DenseTensor::N) {{
+        EXPECT_EQ(n.get(), nn++);
+    }}
+    EXPECT_EQ(nn, N);
+}}
+"""
+    return test_code
+
+
+def _test_genrate_1d_dense_tensor():
+    """Return the C++ source code that tests a custom 1D tensor class"""
+    n = 7
+    specs = [
+        TensorSpec("DenseTensor", "const float", {"n": n}),
+    ]
+    generated_code = generate(specs, namespace="DenseTensor_1D_GenCode")
+    test_code = f"""
+
+{generated_code}
+
+UTEST(DensTensor1D, offset_from_tensor)
+{{
+    using namespace DenseTensor_1D_GenCode;
+    constexpr int N = {n};
+    constexpr int size = N;
+    constexpr size_t num_bytes = sizeof(float) * size;
+
+    float data[N];
+    for (int n = 0; n < N; ++n) {{
+        data[n] = n;
+    }}
+    for (auto n : DenseTensor::N) {{
+        // Tensor named-index accessors.
+        EXPECT_EQ(*DenseTensor(data).n(n), data[n.get()]);
+
+        // Tensor subscript accessors.
+        EXPECT_EQ(*DenseTensor(data)[n], data[n.get()]);
     }}
     EXPECT_EQ(DenseTensor::size, size);
     EXPECT_EQ(DenseTensor::num_bytes, static_cast<int>(num_bytes));
@@ -195,18 +334,22 @@ def _test_generate_tensor_with_strides():
     stride_w = c + 2
     stride_h = (w + 1) * stride_w
 
-    dense_tensor_code = TensorSpec(
-        "StrideTensor",
-        "const float",
-        {"n": n, "h": h, "w": w, "c": c},
-        strides={"h": stride_h, "w": stride_w},
-    ).generate()
+    specs = [
+        TensorSpec(
+            "StrideTensor",
+            "const float",
+            {"n": n, "h": h, "w": w, "c": c},
+            strides={"h": stride_h, "w": stride_w},
+        ),
+    ]
+    generated_code = generate(specs, namespace="StrideTensor_GenCode")
     test_code = f"""
 
-{dense_tensor_code}
+{generated_code}
 
 UTEST(StrideTensor, offset_from_tensor)
 {{
+    using namespace StrideTensor_GenCode;
     constexpr int N = {n};
     constexpr int H = {h};
     constexpr int W = {w};
@@ -228,11 +371,13 @@ UTEST(StrideTensor, offset_from_tensor)
             }}
         }}
     }}
-    for (int n = 0; n < N; ++n) {{
-        for (int h = 0; h < H; ++h) {{
-            for (int w = 0; w < W; ++w) {{
-                for (int c = 0; c < C; ++c) {{
-                    EXPECT_EQ(*StrideTensor(data).n(n).h(h).w(w).c(c), n*(H*W*C) + h*(W*C) + w*C + c);
+    StrideTensor tensor(data);
+    for (auto n : tensor.N) {{
+        for (auto h : tensor.H) {{
+            for (auto w : tensor.W) {{
+                for (auto c : tensor.C) {{
+                    EXPECT_EQ(*tensor.n(n).h(h).w(w).c(c), n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
+                    EXPECT_EQ(*tensor[n][h][w][c], n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
                 }}
             }}
         }}
@@ -247,40 +392,45 @@ UTEST(StrideTensor, offset_from_tensor)
 def _test_checkerboard_tensor():
     c16 = 8
     r = 16
-    cm2 = 2
+    c = 2
 
-    tensor_code = TensorSpec(
-        "CheckerboardTensor",
-        "const float",
-        dict(c16=c16, checkers=CheckerboardIndexSpec(r=16, cm2=cm2)),
-    ).generate()
+    specs = [
+        TensorSpec(
+            "CheckerboardTensor",
+            "const float",
+            dict(c16=c16, checkers=CheckerboardIndexSpec(r=16, c=c)),
+        ),
+    ]
+    generated_code = generate(specs, namespace="CheckerboardTensor_GenCode")
+
     test_code = f"""
 
-{tensor_code}
+{generated_code}
 
 UTEST(CheckerboardTensor, offset_from_tensor)
 {{
+    using namespace CheckerboardTensor_GenCode;
     constexpr int C16 = {c16};
     constexpr int R = {r};
-    constexpr int CM2 = {cm2};
-    constexpr int size = C16 * R * CM2;
+    constexpr int C = {c};
+    constexpr int size = C16 * R * C;
     constexpr size_t num_bytes = sizeof(float) * size;
 
-    float data[C16 * R * CM2];
+    float data[C16 * R * C];
     for (int c16 = 0; c16 < C16; ++c16) {{
         for (int r = 0; r < R; ++r) {{
-            for (int cm2 = 0; cm2 < CM2; ++cm2) {{
-                data[c16 * R * CM2 + r * CM2 + cm2] = c16 * R * CM2 + r * CM2 + cm2;
+            for (int c = 0; c < C; ++c) {{
+                data[c16 * R * C + r * C + c] = c16 * R * C + r * C + c;
             }}
         }}
     }}
 
     for (int c16 = 0; c16 < C16; ++c16) {{
         for (int r = 0; r < R; ++r) {{
-            for (int cm2 = 0; cm2 < CM2; ++cm2) {{
+            for (int c = 0; c < C; ++c) {{
                 EXPECT_EQ(
-                    *CheckerboardTensor(data).c16(c16).checkers(r, cm2),
-                    data[c16 * R * CM2 + spio::CheckerboardIndex<8>::offset(r, cm2)]
+                    *CheckerboardTensor(data).c16(c16).checkers(r, c),
+                    data[c16 * R * C + spio::CheckerboardIndex<8>::offset(r, c)]
             );
             }}
         }}
@@ -291,50 +441,70 @@ UTEST(CheckerboardTensor, offset_from_tensor)
 
 
 def _test_fragment_index():
-    index_a_code = FragmentIndexSpec("A", "MMA_M16_K16_F16_A", "r", "s").generate()
-    index_b_code = FragmentIndexSpec("B", "MMA_N16_K16_F16_B", "s", "t").generate()
-    index_c_code = FragmentIndexSpec("C", "MMA_M16_N16_F32_C", "r", "s").generate()
+
+    specs = [
+        DimSpec("lane"),
+        FragmentIndexSpec("A", "MMA_M16_K16_F16_A", "r", "s"),
+        FragmentIndexSpec("B", "MMA_N16_K16_F16_B", "s", "t"),
+        FragmentIndexSpec("C", "MMA_M16_N16_F32_C", "r", "s"),
+        FragmentIndexSpec("B2", "MMA_N8_K8_F16_B", "s", "t"),
+    ]
+    generated_code = generate(specs, namespace="FragmentIndex_GenCode")
     test_code = f"""
-{index_c_code}
+{generated_code}
 
 UTEST(FragmentIndex, MMA_M16_K16_F16_A)
 {{
-    {index_a_code}
-
-    for (int lane = 0; lane < 32; ++lane) {{
+    using namespace FragmentIndex_GenCode;
+    constexpr LANE_Dim lanes = 32;
+    for (auto lane : lanes) {{
         for (int idx = 0; idx < A::size(); ++idx) {{
-            EXPECT_EQ(A(lane).r(idx), spio::MMA_A_88_F16_Index(lane).i(idx));
-            EXPECT_EQ(A(lane).s2(idx), spio::MMA_A_88_F16_Index(lane).k2(idx));
-            EXPECT_EQ(A(lane).s8(idx), spio::MMA_A_88_F16_Index(lane).k8(idx));
-            EXPECT_EQ(A(lane).s2m4(), spio::MMA_A_88_F16_Index(lane).k2m4());
+            EXPECT_TRUE(A(lane).r(idx) == R_Dim(spio::MMA_A_88_F16_Index(lane.get()).i(idx)));
+            EXPECT_TRUE(( A(lane).s2(idx) == spio::Fold<S_Dim, 2>(spio::MMA_A_88_F16_Index(lane.get()).k2(idx)) ));
+            EXPECT_TRUE(( A(lane).s8(idx) == spio::Fold<S_Dim, 8>(spio::MMA_A_88_F16_Index(lane.get()).k8(idx)) ));
+            EXPECT_TRUE(( A(lane).s2m4() == spio::Fold<S_Dim, 2>(spio::MMA_A_88_F16_Index(lane.get()).k2m4()) ));
         }}
     }}
 }}
 
 UTEST(FragmentIndex, MMA_N16_K16_F16_B)
 {{
-    {index_b_code}
-
-    for (int lane = 0; lane < 32; ++lane) {{
+    using namespace FragmentIndex_GenCode;
+    constexpr LANE_Dim lanes = 32;
+    for (auto lane : lanes) {{
         for (int idx = 0; idx < B::size(); ++idx) {{
-            EXPECT_EQ(B(lane).t(idx), spio::MMA_B_88_F16_Index(lane).j(idx));
-            EXPECT_EQ(B(lane).s2(idx), spio::MMA_B_88_F16_Index(lane).k2(idx));
-            EXPECT_EQ(B(lane).s8(idx), spio::MMA_B_88_F16_Index(lane).k8(idx));
-            EXPECT_EQ(B(lane).s2m4(), spio::MMA_B_88_F16_Index(lane).k2m4());
+            EXPECT_TRUE(B(lane).t(idx) == T_Dim(spio::MMA_B_88_F16_Index(lane.get()).j(idx)));
+            EXPECT_TRUE(( B(lane).s2(idx) == spio::Fold<S_Dim, 2>(spio::MMA_B_88_F16_Index(lane.get()).k2(idx)) ));
+            EXPECT_TRUE(( B(lane).s8(idx) == spio::Fold<S_Dim, 8>(spio::MMA_B_88_F16_Index(lane.get()).k8(idx)) ));
+            EXPECT_TRUE(( B(lane).s2m4() == spio::Fold<S_Dim, 2>(spio::MMA_B_88_F16_Index(lane.get()).k2m4()) ));
+        }}
+    }}
+}}
+
+UTEST(FragmentIndex, MMA_N8_K8_F16_B)
+{{
+    using namespace FragmentIndex_GenCode;
+    constexpr LANE_Dim lanes = 32;
+    for (auto lane : lanes) {{
+        for (int idx = 0; idx < B2::size(); ++idx) {{
+            EXPECT_TRUE(B2(lane).t(idx) == T_Dim(spio::MMA_B_88_F16_Index(lane.get()).j(idx)));
+            EXPECT_TRUE(( B2(lane).s2(idx) == spio::Fold<S_Dim, 2>(spio::MMA_B_88_F16_Index(lane.get()).k2(idx)) ));
+            EXPECT_TRUE(( B2(lane).s8(idx) == spio::Fold<S_Dim, 8>(spio::MMA_B_88_F16_Index(lane.get()).k8(idx)) ));
+            EXPECT_TRUE(( B2(lane).s2m4() == spio::Fold<S_Dim, 2>(spio::MMA_B_88_F16_Index(lane.get()).k2m4()) ));
         }}
     }}
 }}
 
 UTEST(FragmentIndex, MMA_M16_N16_F32_C)
 {{
-    {index_c_code}
-
-    for (int lane = 0; lane < 32; ++lane) {{
+    using namespace FragmentIndex_GenCode;
+    constexpr LANE_Dim lanes = 32;
+    for (auto lane : lanes) {{
         for (int idx = 0; idx < C::size(); ++idx) {{
-            EXPECT_EQ(C(lane).r(idx), spio::MMA_C_88_F32_Index(lane).i(idx));
-            EXPECT_EQ(C(lane).s2(idx), spio::MMA_C_88_F32_Index(lane).j2(idx));
-            EXPECT_EQ(C(lane).s8(idx), spio::MMA_C_88_F32_Index(lane).j8(idx));
-            EXPECT_EQ(C(lane).s2m4(), spio::MMA_C_88_F32_Index(lane).j2m4());
+            EXPECT_TRUE(C(lane).r(idx) == R_Dim(spio::MMA_C_88_F32_Index(lane.get()).i(idx)));
+            EXPECT_TRUE(( C(lane).s2(idx) == spio::Fold<S_Dim, 2>(spio::MMA_C_88_F32_Index(lane.get()).j2(idx)) ));
+            EXPECT_TRUE(( C(lane).s8(idx) == spio::Fold<S_Dim, 8>(spio::MMA_C_88_F32_Index(lane.get()).j8(idx)) ));
+            EXPECT_TRUE(( C(lane).s2m4() == spio::Fold<S_Dim, 2>(spio::MMA_C_88_F32_Index(lane.get()).j2m4()) ));
         }}
     }}
 }}
@@ -343,16 +513,30 @@ UTEST(FragmentIndex, MMA_M16_N16_F32_C)
 
 
 def _test_fragment_load_index():
-    index_a_code = FragmentLoadIndexSpec("A", "MMA_M16_K16_F16_A", "r", "s").generate()
+    specs = [
+        DimSpec("lane"),
+        FragmentLoadIndexSpec("Input", "MMA_M16_K16_F16_A", "x", "c"),
+        FragmentLoadIndexSpec("Weights", "MMA_N8_K16_F16_B", "c", "k"),
+    ]
+    generated_code = generate(specs, namespace="FragmentLoadIndex_GenCode")
     test_code = f"""
+{generated_code}
+
 UTEST(FragmentLoadIndex, MMA_M16_K16_F16_A)
 {{
-    {index_a_code}
-
-    for (int lane = 0; lane < 32; ++lane) {{
-            EXPECT_EQ(A(lane).r(), spio::MMA_A_M16_K16_F16_LoadIndex(lane).i());
-            EXPECT_EQ(A(lane).s8(), spio::MMA_A_M16_K16_F16_LoadIndex(lane).k8());
+    using namespace FragmentLoadIndex_GenCode;
+    constexpr LANE_Dim lanes = 32;
+    for (auto lane : lanes) {{
+        EXPECT_TRUE(Input(lane).x() == X_Dim( spio::MMA_A_M16_K16_F16_LoadIndex(lane.get()).i()) );
+        auto a = spio::Fold<C_Dim, 8>( spio::MMA_A_M16_K16_F16_LoadIndex(lane.get()).k8());
+        EXPECT_TRUE(Input(lane).c8() ==  a);
     }}
+
+    for (auto lane : lanes) {{
+        auto b = spio::Fold<C_Dim, 8>( spio::MMA_B_N8_K16_F16_LoadIndex(lane.get()).k8());
+        EXPECT_TRUE(Weights(lane).c8() == b);
+        EXPECT_TRUE(Weights(lane).k() == K_Dim( spio::MMA_B_N8_K16_F16_LoadIndex(lane.get()).j()) );
+     }}
 }}
 """
     return test_code

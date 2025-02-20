@@ -34,19 +34,19 @@ extern "C"
         uint4 *smem_a = smem + 0;
         uint4 *smem_b = smem + SmemA::size;
 
-        int block_i = blockIdx.x * Params::block_m;
-        int block_j = blockIdx.y * Params::block_n;
+        BLOCK_I_Dim block_i(blockIdx.x);
+        BLOCK_J_Dim block_j(blockIdx.y);
 
         // The lanes of a warp load 16x 2k [8k] [half2] from global memory.
         GlobalLoadIndex global_load_idx(threadIdx.x);
 
         // Position the global memory input tile.
-        auto a = A(a_ptr).i(block_i + global_load_idx.x()).k8(global_load_idx.k8());
-        auto b = B(b_ptr).j(block_j + global_load_idx.x()).k8(global_load_idx.k8());
+        auto a = A(a_ptr).i(block_i.unfold() + global_load_idx.x().cast<I_Dim>()).k8(global_load_idx.k8());
+        auto b = B(b_ptr).j(block_j.unfold() + global_load_idx.x().cast<J_Dim>()).k8(global_load_idx.k8());
 
         // Define the mapping from the global memory tile to the shared memory tile.
-        auto smem_a_store = SmemA(smem_a).checkers(global_load_idx.x(), global_load_idx.k8());
-        auto smem_b_store = SmemB(smem_b).checkers(global_load_idx.x(), global_load_idx.k8());
+        auto smem_a_store = SmemA(smem_a).checkers(global_load_idx.x().cast<I_Dim>(), global_load_idx.k8());
+        auto smem_b_store = SmemB(smem_b).checkers(global_load_idx.x().cast<J_Dim>(), global_load_idx.k8());
 
         // Define the mapping from the thread index to the warps' i32 x j64 tiles and the lane index.
         ComputeIndex compute_idx(threadIdx.x);
@@ -55,8 +55,8 @@ extern "C"
         A_Fragment::LoadIndex a_load_idx(compute_idx.lane());
         B_Fragment::LoadIndex b_load_idx(compute_idx.lane());
 
-        auto smem_a_load = SmemA(smem_a).i16(compute_idx.i32() * 2).checkers(a_load_idx.i(), a_load_idx.k8());
-        auto smem_b_load = SmemB(smem_b).j16(compute_idx.j64() * 4).checkers(b_load_idx.j(), b_load_idx.k8());
+        auto smem_a_load = SmemA(smem_a).i32(compute_idx.i32()).checkers(a_load_idx.i(), a_load_idx.k8());
+        auto smem_b_load = SmemB(smem_b).j64(compute_idx.j64()).checkers(b_load_idx.j(), b_load_idx.k8());
 
         int ping_pong = 0;
 
@@ -64,9 +64,9 @@ extern "C"
         C_Tensor::data_type c_data[C_Tensor::size];
         C_Tensor c_tensor(c_data);
 
-        for (int i16 = 0; i16 < C_Tensor::I16; ++i16)
+        for (auto i16 : C_Tensor::I16)
         {
-            for (int j16 = 0; j16 < C_Tensor::J16; ++j16)
+            for (auto j16 : C_Tensor::J16)
             {
                 c_tensor.i16(i16).j16(j16)->zero();
             }
@@ -94,23 +94,23 @@ extern "C"
 
                 A_Tensor::data_type a_data[A_Tensor::size];
                 A_Tensor a_tensor(a_data);
-                for (int i16 = 0; i16 < Params::warp_m16; ++i16)
+                for (auto i16 : A_Tensor::I16)
                 {
                     a_tensor.i16(i16)->load(smem_a_load.ping_pong(ping_pong).i16(i16).get());
                 }
 
                 B_Tensor::data_type b_data[B_Tensor::size];
                 B_Tensor b_tensor(b_data);
-                for (int j16 = 0; j16 < Params::warp_n16; ++j16)
+                for (auto j16 : B_Tensor::J16)
                 {
                     b_tensor.j16(j16)->load(smem_b_load.ping_pong(ping_pong).j16(j16).get());
                 }
 
-                for (int i16 = 0; i16 < Params::warp_m16; ++i16)
+                for (auto i16 : A_Tensor::I16)
                 {
-                    for (int j16 = 0; j16 < Params::warp_n16; ++j16)
+                    for (auto j16 : B_Tensor::J16)
                     {
-                        matmul_trans(*c_tensor.i16(i16).j16(j16), *a_tensor.i16(i16), *b_tensor.j16(j16), *c_tensor.i16(i16).j16(j16));
+                        mma_trans(*c_tensor.i16(i16).j16(j16), *a_tensor.i16(i16), *b_tensor.j16(j16), *c_tensor.i16(i16).j16(j16));
                     }
                 }
 
@@ -121,21 +121,21 @@ extern "C"
         // Store outputs through shared memory.
         C_Fragment::Index c_idx(compute_idx.lane());
         auto smem_c_store = SmemCStore(reinterpret_cast<__half2 *>(smem)).i32(compute_idx.i32()).j64(compute_idx.j64()).j2(c_idx.j2m4());
-        for (int i16 = 0; i16 < Params::warp_m16; ++i16)
+        for (auto i16 : C_Tensor::I16)
         {
-            for (int j16 = 0; j16 < Params::warp_n16; ++j16)
+            for (auto j16 : C_Tensor::J16)
             {
                 for (int f = 0; f < C_Fragment::size(); ++f)
                 {
-                    *smem_c_store.j8(j16 * 2 + c_idx.j8(f)).i(i16 * 16 + c_idx.i(f)) = c_tensor.i16(i16).j16(j16)->to_half2(f);
+                    *smem_c_store.j16(j16).j8(c_idx.j8(f)).i16(i16).i(c_idx.i(f)) = c_tensor.i16(i16).j16(j16)->to_half2(f);
                 }
             }
         }
 
         // Transfer outputs from shared memory to global memory.
-        auto c = C(c_ptr).i(block_i + compute_idx.i32() * 32).j8(block_j / 8 + compute_idx.j64() * 8);
+        auto c = C(c_ptr).i(block_i.unfold() + compute_idx.i32().unfold()).j8(block_j.fold<8>() + compute_idx.j64().fold<8>());
         auto smem_c_load = SmemCLoad(reinterpret_cast<const uint4 *>(smem)).i32(compute_idx.i32()).j64(compute_idx.j64());
-        for (int offset = compute_idx.lane(); offset < SmemCLoadIndex::size; offset += ComputeIndex::LANE)
+        for (int offset = compute_idx.lane().get(); offset < SmemCLoadIndex::size; offset += ComputeIndex::LANE.get())
         {
             SmemCLoadIndex idx(offset);
             *c.i(idx.i()).j8(idx.j8()) = *smem_c_load.j8(idx.j8()).i(idx.i());

@@ -12,7 +12,7 @@ namespace spio
     /// @param a Matrix argument A is a 16 x 8 fragment in float16.
     /// @param b Matrix argument B is an 8 x 8 fragment in float16.
     /// @param c Accumulate matrix C is a 16 x 8 fragment in float32.
-    __device__ void matmul_trans(MMA_M16_N8_F32_C &d, const MMA_M16_K8_F16_A &a, const MMA_N8_K8_F16_B &b, const MMA_M16_N8_F32_C &c)
+    __device__ void mma_trans(MMA_M16_N8_F32_C &d, const MMA_M16_K8_F16_A &a, const MMA_N8_K8_F16_B &b, const MMA_M16_N8_F32_C &c)
     {
         mma_m16_n8_k8(d.vec4(), a.reg2(), b.reg(), c.vec4());
     }
@@ -22,17 +22,17 @@ namespace spio
     /// @param a Matrix argument A is a 16 x 16 fragment in float16.
     /// @param b Matrix argument B is an 8 x 16 fragment in float16.
     /// @param c Accumulate matrix C is a 16 x 8 fragment in float32.
-    __device__ void matmul_trans(MMA_M16_N8_F32_C &d, const MMA_M16_K16_F16_A &a, const MMA_N8_K16_F16_B &b, const MMA_M16_N8_F32_C &c)
+    __device__ void mma_trans(MMA_M16_N8_F32_C &d, const MMA_M16_K16_F16_A &a, const MMA_N8_K16_F16_B &b, const MMA_M16_N8_F32_C &c)
     {
         mma_m16_n8_k16(d.vec4(), a.reg4(), b.reg2(), c.vec4());
     }
 
-    /// @brief Perform D = A x trans(B) + C matrix-multiplication with tensor cores.
+    /// @brief Perform D = A x trans(B) + C matrix multiply-accumulate with tensor cores.
     /// @param d Result matrix D is a 16 x 16 fragment in float32.
     /// @param a Matrix argument A is a 16 x 16 fragment in float16.
     /// @param b Matrix argument B is an 16 x 16 fragment in float16.
     /// @param c Accumulate matrix C is a 16 x 16 fragment in float32.
-    __device__ void matmul_trans(MMA_M16_N16_F32_C &d, const MMA_M16_K16_F16_A &a, const MMA_N16_K16_F16_B &b, const MMA_M16_N16_F32_C &c)
+    __device__ void mma_trans(MMA_M16_N16_F32_C &d, const MMA_M16_K16_F16_A &a, const MMA_N16_K16_F16_B &b, const MMA_M16_N16_F32_C &c)
     {
         mma_m16_n8_k16(d.vec4(0), a.reg4(), b.reg2(0), c.vec4(0));
         mma_m16_n8_k16(d.vec4(1), a.reg4(), b.reg2(1), c.vec4(1));

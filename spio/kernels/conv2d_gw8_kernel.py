@@ -10,6 +10,7 @@ from ..generators import (
     IndexSpec,
     TensorSpec,
     FragmentSpec,
+    FoldSpec,
     GenSpecs,
 )
 from ..util import divup, next_relative_prime
@@ -96,8 +97,8 @@ def _get_specs(
     blocks_n = divup(n, block_n)
     blocks_p = divup(p, block_p)
     blocks_q = divup(q, block_q)
-    blocks_c8 = divup(c8, block_c8)
-    blocks = blocks_n * blocks_p * blocks_q * blocks_c8
+    blocks_c = divup(c, block_c)
+    blocks = blocks_n * blocks_p * blocks_q * blocks_c
     warps = block_groups
     threads = warps * 32
 
@@ -115,22 +116,32 @@ def _get_specs(
 
     specs = [
         MacroSpec({"SPIO_CONV_KERNEL": full_kernel_name}),
+        FoldSpec("block_n", "n", block_n),
+        FoldSpec("block_p", "p", block_p),
+        FoldSpec("block_q", "q", block_q),
+        FoldSpec("block_c", "c", block_c),
         ParamsSpec(
             "Block",
             {
-                "n": block_n,
-                "p": block_p,
-                "q": block_q,
-                "c8": block_c8,
-                "padding_h": padding_h,
-                "padding_w": padding_w,
                 "threads": threads,
+            },
+        ),
+        ParamsSpec(
+            "Padding",
+            {
+                "h": padding_h,
+                "w": padding_w,
             },
         ),
         ParamsSpec("Mode", {"igrad": igrad, "has_bias": kernel_has_bias}),
         IndexSpec(
             "BlockIdx",
-            {"n": blocks_n, "p": blocks_p, "q": blocks_q, "c8": blocks_c8},
+            {
+                "block_n": blocks_n,
+                "block_p": blocks_p,
+                "block_q": blocks_q,
+                "block_c": blocks_c,
+            },
         ),
         IndexSpec("InputIdx", {"n": block_n, "x": block_w, "c8": block_c8}),
         TensorSpec("Input", "const uint4", {"n": n, "y": h, "x": w, "c8": c8}),
@@ -142,9 +153,9 @@ def _get_specs(
         TensorSpec(
             "ConstSmemWeights",
             "const uint4",
-            {"kd8": block_c8, "km8": 8, "rs": r * s},
+            {"k8": block_c8, "k": 8, "r": r, "s": s},
         ),
-        IndexSpec("SmemWeightsLoadIdx", {"kd8": block_c8, "rs": 4, "km8": 8}),
+        IndexSpec("SmemWeightsLoadIdx", {"k8": block_c8, "repeat": 4, "k": 8}),
         TensorSpec(
             "SmemInput",
             "uint4",
@@ -160,8 +171,6 @@ def _get_specs(
             "SmemInputLoadIdx",
             {
                 "c8": block_c8,
-
-                # TODO: this should be a FragmentLoadIndex spec:
                 "repeat": 32 // (block_q * block_n),
                 "q": block_q,
                 "n": block_n,
@@ -181,6 +190,9 @@ def _get_specs(
         IndexSpec("OutputStoreIdx", {"n": block_n, "q": block_q, "k8": block_c8}),
         IndexSpec("BlockQNIdx", {"q": block_q, "n": block_n}),
         FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k"),
+        FragmentSpec("In", "MMA_M16_K8_F16_A", "qn", "c"),
+        TensorSpec("WeightsReg", "spio::MMA_N8_K8_F16_B", {"r": r, "s": s}),
+        TensorSpec("AccReg", "Acc", {"p": r}),
     ]
     return specs, launch_params
 

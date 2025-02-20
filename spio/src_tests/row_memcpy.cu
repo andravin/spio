@@ -1,6 +1,7 @@
 #include <cuda_pipeline.h>
 
 #include "spio/pipeline.h"
+#include "spio/mathutil.h"
 
 #include "parameters.h"
 
@@ -22,10 +23,10 @@ extern "C"
         // Define the block tile.
         //
         BlockIdx block_idx(blockIdx.x);
-        int block_n = block_idx.n();
-        int block_p = block_idx.p() * Block::p;
-        int block_q = block_idx.q() * Block::q;
-        int block_c4 = block_idx.c4() * Block::c4;
+        auto block_n = block_idx.n();
+        auto block_p = block_idx.block_p();
+        auto block_q = block_idx.block_q();
+        auto block_c = block_idx.block_c();
 
         //
         // Define tile mappings
@@ -38,15 +39,15 @@ extern "C"
         int zfill;
         {
             InputIdx idx(threadIdx.x);
-            int block_x = block_q - Block::padding;
-            int x = block_x + idx.x();
-            int c4 = block_c4 + idx.c4();
+            auto block_x = block_q.unfold().cast<X_Dim>() - Block::padding;
+            auto x = block_x + idx.x();
+            auto c4 = block_c.fold<4>() + idx.c4();
 
-            smem_input_store = smem_input_store.x(idx.x()).c4(idx.c4());
-            input = input.n(block_n).y(block_p).x(x).c4(c4);
+            smem_input_store = smem_input_store[idx.x()][idx.c4()];
+            input = input[block_n][block_p.unfold().cast<Y_Dim>()][x][c4];
 
-            bool x_inbounds = (x >= 0 && x < Input::X);
-            bool c4_inbounds = (c4 < Input::C4);
+            bool x_inbounds = (x >= 0 && x < input.X);
+            bool c4_inbounds = (c4 < input.C4);
             bool thread_inbounds = (x_inbounds && c4_inbounds);
             thread_loads_input = threadIdx.x < InputIdx::size;
             zfill = thread_inbounds ? 0 : sizeof(Input::data_type);
@@ -57,8 +58,8 @@ extern "C"
         SmemOutput smem_output_store(reinterpret_cast<float2 *>(smem_output_buf));
         {
             SmemInputLoadIdx idx(threadIdx.x);
-            smem_input_load = smem_input_load.x(idx.q() + Block::padding).c4(idx.c4()).c2(idx.c2());
-            smem_output_store = smem_output_store.q(idx.q()).c4(idx.c4()).c2(idx.c2());
+            smem_input_load = smem_input_load[idx.q().cast<X_Dim>() + Block::padding][idx.c4()][idx.c2()];
+            smem_output_store = smem_output_store[idx.q()][idx.c4()][idx.c2()];
         }
 
         // Smem to output.
@@ -67,13 +68,13 @@ extern "C"
         bool thread_stores_output;
         {
             ConstSmemOutput::Index idx(threadIdx.x);
-            int q = block_q + idx.q();
-            int c4 = block_c4 + idx.c4();
+            auto q = block_q.unfold() + idx.q();
+            auto c4 = block_c.fold<4>() + idx.c4();
 
-            smem_output_load = smem_output_load.q(idx.q()).c4(idx.c4());
-            output = output.n(block_n).p(block_p).q(q).c4(c4);
+            smem_output_load = smem_output_load[idx.q()][idx.c4()];
+            output = output[block_n][block_p.unfold()][q][c4];
 
-            thread_stores_output = q < Input::X && c4 < Block::c4 && threadIdx.x < ConstSmemOutput::Index::size;
+            thread_stores_output = q.cast<X_Dim>() < input.X && c4 < Block::c4 && threadIdx.x < ConstSmemOutput::Index::size;
         }
 
         //
@@ -83,8 +84,8 @@ extern "C"
         constexpr unsigned COPY_STAGE = 1 << 1;
         constexpr unsigned NUM_STAGES = 2;
 
-        int num_p = min(Block::p, Input::Y - block_p);
-        int num_iters = num_p + NUM_STAGES - 1;
+        auto num_p = min(block_p.stride, input.Y.cast<P_Dim>() - block_p.unfold());
+        int num_iters = num_p.get() + NUM_STAGES - 1;
         int ping_pong = 0;
 
         Pipeline pipeline;
@@ -94,7 +95,7 @@ extern "C"
         //      
         for (int iter = 0; iter < num_iters; ++iter)
         {
-            pipeline.step(iter < num_p);
+            pipeline.step(iter < num_p.get());
             if (pipeline.active(LOAD_INPUT_STAGE))
             {
                 if (thread_loads_input)

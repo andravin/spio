@@ -1,6 +1,7 @@
 """Code generator for matrix fragment with named dimensions."""
 
 from dataclasses import dataclass
+from typing import Tuple
 
 from .fragment_index import (
     FragmentLoadIndexSpec,
@@ -48,14 +49,33 @@ class FragmentSpec:
 
         load_index_class = self.generate_load_index()
 
+        if load_index_class:
+            load_method = f"""
+    __device__ static {self.class_name} load_new(const void *p) {{ 
+            {self.class_name} f;
+            f.load(p);
+            return f;
+        }}
+"""
+        else:
+            load_method = ""
+
+
         return f"""
 class {self.class_name} : public spio::{self.fragment_type} {{
     public:
         {index_class}
 
         {load_index_class}
+
+        {load_method}
 }};
 """
+
+    @property
+    def dim_names(self) -> Tuple[str, str]:
+        """Return the names of the dimensions."""
+        return (self.row, self.col)
 
     def generate_index(self) -> str:
         """Generate the fragment index class code."""

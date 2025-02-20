@@ -7,9 +7,10 @@ from spio.generators import (
     TensorSpec,
     ParamsSpec,
     FragmentSpec,
-    generate,
     CheckerboardIndexSpec,
     AsyncStripLoaderSpec,
+    FoldSpec,
+    generate,
 )
 from spio.compiler import compile_and_load_kernel
 from spio.util import divup, assert_all_close_with_acc_depth, SixteenChannelsLast
@@ -45,8 +46,6 @@ def _make_checkerboard_kernel_params(
     params = dict(
         warp_m16=warp_m16,
         warp_n16=warp_n16,
-        block_m=block_x,
-        block_n=block_x,
         k16=k // 16,
         vec_bytes=8 * 2,
         warps=warps,
@@ -60,8 +59,8 @@ def _make_checkerboard_kernel_params(
     block_x64 = block_x // 64
 
     if sixteen_channels_last:
-        tensor_a = TensorSpec("A", "const uint4", dict(k16=k16, i=m, k8m2=2))
-        tensor_b = TensorSpec("B", "const uint4", dict(k16=k16, j=n, k8m2=2))
+        tensor_a = TensorSpec("A", "const uint4", dict(k16=k16, i=m, k8=2))
+        tensor_b = TensorSpec("B", "const uint4", dict(k16=k16, j=n, k8=2))
         chunk_k16 = 2
     else:
         tensor_a = TensorSpec("A", "const uint4", dict(i=m, k8=k8))
@@ -93,9 +92,9 @@ def _make_checkerboard_kernel_params(
         ),
     )
 
-    params["chunk_k16"] = chunk_k16
-
     specs = [
+        FoldSpec("block_i", "i", block_x),
+        FoldSpec("block_j", "j", block_x),
         ParamsSpec("Params", params),
         tensor_a,
         tensor_b,
@@ -184,9 +183,12 @@ def test_mma_checkerboard_kernel():
 def test_mma_checkerboard_16c_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with checkerboard layout for smem."""
 
-    m = 499
-    n = 224
-    k = 128
+    big_test = False
+
+    if big_test:
+        m, n, k = (4096, 4096, 1024)
+    else:
+        m, n, k = (512, 256, 128)
 
     specs, grid, block = _make_checkerboard_kernel_params(
         m, n, k, sixteen_channels_last=True
@@ -197,7 +199,6 @@ def test_mma_checkerboard_16c_kernel():
     A, B_trans, C = make_test_matrices(
         m=m, n=n, k=k, ones=False, output_dtype=torch.float16
     )
-    C_ref = matmul_trans_ref(A, B_trans)
 
     A_16c = SixteenChannelsLast.to(A)
     B_16c = SixteenChannelsLast.to(B_trans)
@@ -212,4 +213,5 @@ def test_mma_checkerboard_16c_kernel():
     )
     mma_kernel_16c.launch(grid, block, (C, A_16c, B_16c))
 
+    C_ref = matmul_trans_ref(A, B_trans)
     assert_all_close_with_acc_depth(C, C_ref, acc_depth=k)

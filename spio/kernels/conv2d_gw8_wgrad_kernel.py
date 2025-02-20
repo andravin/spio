@@ -11,6 +11,7 @@ from ..generators import (
     IndexSpec,
     TensorSpec,
     FragmentSpec,
+    FoldSpec,
 )
 from ..util import divup, next_relative_prime
 from .launch_params import LaunchParams
@@ -166,14 +167,15 @@ def _get_specs(
         #
         # Block parameters.
         #
+        FoldSpec("block_n", "n", block_n),
+        FoldSpec("block_y", "y", block_h),
+        FoldSpec("block_p", "p", block_p),
+        FoldSpec("block_q", "q", BLOCK_Q),
+        FoldSpec("block_c", "c", block_c),
+        FoldSpec("warp_s", "s", config.warp_s),
         ParamsSpec(
             "Block",
             {
-                "n": block_n,
-                "h": block_h,
-                "q": BLOCK_Q,
-                "c8": block_c8,
-                "p": block_p,
                 "threads": threads,
             },
         ),
@@ -200,7 +202,7 @@ def _get_specs(
         #
         IndexSpec(
             "BlockIdx",
-            {"n": blocks_n, "y": blocks_h, "q": blocks_q, "c8": blocks_c8},
+            {"block_n": blocks_n, "block_y": blocks_h, "block_q": blocks_q, "block_c": blocks_c8},
         ),
         #
         # Input loading.
@@ -226,12 +228,16 @@ def _get_specs(
             "SmemDeltaLoadIdx",
             {"k8": warps_c8, "repeat": (32 * warps_s) // BLOCK_Q, "q": BLOCK_Q},
         ),
-        TensorSpec("DeltaFrag", "spio::MMA_N8_K8_F16_B", {"n": config.warp_n, "r": r}),
         #
-        # Accumulator
+        # MMA fragments
         #
         FragmentSpec("Acc", "MMA_M16_N8_F32_C", "c", "k"),
+        #
+        # MMA tensors
+        #
         TensorSpec("AccTensor", "spio::MMA_M16_N8_F32_C", {"s2": warp_s2_up, "r": r}),
+        TensorSpec("InputTensor", "spio::MMA_M16_K8_F16_A", {"s2": warp_s2_up}),
+        TensorSpec("DeltaTensor", "spio::MMA_N8_K8_F16_B", {"n": config.warp_n, "r": r}),
         #
         # Weights storing.
         #

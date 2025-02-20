@@ -1,6 +1,12 @@
 #include "utest.h"
 #include "spio/index.h"
 
+UTEST(Index1D, index_from_offset)
+{
+    using Idx = spio::Index1D;
+    EXPECT_EQ(Idx(53)._d0(), 53);
+}
+
 UTEST(Index2D, index_from_offset)
 {
     constexpr int D1 = 16;
@@ -73,10 +79,10 @@ UTEST(Index7D, index_from_offset)
 {
     constexpr int D1 = 45;
     constexpr int D2 = 56;
-    constexpr int D3 = 67;
-    constexpr int D4 = 78;
-    constexpr int D5 = 89;
-    constexpr int D6 = 90;
+    constexpr int D3 = 7;
+    constexpr int D4 = 5;
+    constexpr int D5 = 3;
+    constexpr int D6 = 4;
     using Idx = spio::Index7D<D1, D2, D3, D4, D5, D6>;
     constexpr int Offset = 867539;
     Idx idx(Offset);
