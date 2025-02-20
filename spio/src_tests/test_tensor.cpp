@@ -105,6 +105,81 @@ UTEST(Tensor5D, indexing)
     }
 }
 
+UTEST(Tensor6D, indexing)
+{
+    constexpr int D0 = 3;
+    constexpr int D1 = 7;
+    constexpr int D2 = 13;
+    constexpr int D3 = 17;
+    constexpr int D4 = 19;
+    constexpr int D5 = 23;
+
+    using Tensor = spio::Tensor6D<float, D1, D2, D3, D4, D5>;
+
+    float data[D0 * D1 * D2 * D3 * D4 * D5];
+
+    for (int d0 = 0; d0 < D0; ++d0)
+    {
+        for (int d1 = 0; d1 < D1; ++d1)
+        {
+            for (int d2 = 0; d2 < D2; ++d2)
+            {
+                for (int d3 = 0; d3 < D3; ++d3)
+                {
+                    for (int d4 = 0; d4 < D4; ++d4)
+                    {
+                        for (int d5 = 0; d5 < D5; ++d5)
+                        {
+                            auto p1 = Tensor(data)._d0(d0)._d1(d1)._d2(d2)._d3(d3)._d4(d4)._d5(d5).get();
+                            auto p2 = data + d0 * D1 * D2 * D3 * D4 * D5 + d1 * D2 * D3 * D4 * D5 + d2 * D3 * D4 * D5 + d3 * D4 * D5 + d4 * D5 + d5;
+                            EXPECT_EQ(p1, p2);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+UTEST(Tensor7D, indexing)
+{
+    constexpr int D0 = 3;
+    constexpr int D1 = 7;
+    constexpr int D2 = 13;
+    constexpr int D3 = 17;
+    constexpr int D4 = 4;
+    constexpr int D5 = 2;
+    constexpr int D6 = 8;
+
+    using Tensor = spio::Tensor7D<float, D1, D2, D3, D4, D5, D6>;
+
+    float data[D0 * D1 * D2 * D3 * D4 * D5 * D6];
+
+    for (int d0 = 0; d0 < D0; ++d0)
+    {
+        for (int d1 = 0; d1 < D1; ++d1)
+        {
+            for (int d2 = 0; d2 < D2; ++d2)
+            {
+                for (int d3 = 0; d3 < D3; ++d3)
+                {
+                    for (int d4 = 0; d4 < D4; ++d4)
+                    {
+                        for (int d5 = 0; d5 < D5; ++d5)
+                        {
+                            for (int d6 = 0; d6 < D6; ++d6)
+                            {
+                                auto p1 = Tensor(data)._d0(d0)._d1(d1)._d2(d2)._d3(d3)._d4(d4)._d5(d5)._d6(d6).get();
+                                auto p2 = data + d0 * D1 * D2 * D3 * D4 * D5 * D6 + d1 * D2 * D3 * D4 * D5 * D6 + d2 * D3 * D4 * D5 * D6 + d3 * D4 * D5 * D6 + d4 * D5 * D6 + d5 * D6 + d6;
+                                EXPECT_EQ(p1, p2);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 UTEST(Tensor2D, custom_stride)
 {
@@ -127,7 +202,6 @@ UTEST(Tensor2D, custom_stride)
         }
     }
 }
-
 
 UTEST(Tensor3D, custom_stride)
 {
@@ -155,7 +229,6 @@ UTEST(Tensor3D, custom_stride)
         }
     }
 }
-
 
 UTEST(Tensor4D, custom_stride)
 {
@@ -188,7 +261,6 @@ UTEST(Tensor4D, custom_stride)
         }
     }
 }
-
 
 UTEST(Tensor5D, custom_stride)
 {
