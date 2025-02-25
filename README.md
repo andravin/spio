@@ -1,7 +1,5 @@
 # Spio
 
-Efficient CUDA kernels for training convolutional neural networks with PyTorch.
-
 ![Benchmark Result on NVIDIA GeForce RTX 3090](figures/batch_size_vs_eff_bandwidth__nvidia_geforce_rtx_3090__convfirst_64c_3r_3s_8gw.png)
 
 ## Introduction
