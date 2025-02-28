@@ -173,11 +173,9 @@ def main():
     plt.title(title)
     if fprop_kernel_name == "spio_conv2d_gw8_fprop":
         suptitle = (
-            (
-                f"{params.c} channels, {params.h}x{params.w} input, "
-                f"{params.r}x{params.s} kernel, group width {params.group_width}, "
-                f"{device_name}"
-            ),
+            f"{params.c} channels, {params.h}x{params.w} input, "
+            f"{params.r}x{params.s} kernel, group width {params.group_width}, "
+            f"{device_name}"
         )
     elif fprop_kernel_name == "spio_layernorm_2d":
         suptitle = f"{params.c} channels, {params.h}x{params.w} input, {device_name}"

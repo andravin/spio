@@ -383,14 +383,20 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     if args.batch_start is not None and args.batch_end is not None:
-        for batch_size in range(args.batch_start, args.batch_end, args.batch_step):
+        for batch_size in tqdm(
+            range(args.batch_start, args.batch_end, args.batch_step),
+            desc="Sweeping batch size.",
+            ascii=True,
+            leave=False,
+        ):
             args.batch_size = batch_size
-            run_benchmark(args, batch_size)
+            run_benchmark(args, batch_size, quiet=True)
+        print("Results saved to:", args.output_dir)
     else:
         run_benchmark(args)
 
 
-def run_benchmark(args, batch_size: int = None):
+def run_benchmark(args, batch_size: int = None, quiet: bool = False):
     """Run the benchmark with the given batch size."""
     if batch_size is not None:
         args.batch_size = batch_size
@@ -461,7 +467,8 @@ def run_benchmark(args, batch_size: int = None):
 
     if args.benchmark_configs:
         output_path = args.output_dir / get_benchmark_model_output_file_name(args)
-        print("Will save benchmark results to", output_path)
+        if not quiet:
+            print("Will save benchmark results to", output_path)
         benchmark_configs(model, inputs, args, output_path)
         sys.exit(0)
 
@@ -525,7 +532,8 @@ def run_benchmark(args, batch_size: int = None):
         if args.save_trace:
             json_file_name = str(file_name.with_suffix(".json"))
             prof.export_chrome_trace(json_file_name)
-            print(f"Trace saved to {json_file_name}")
+            if not quiet:
+                print(f"Trace saved to {json_file_name}")
 
         data_file_name = str(file_name.with_suffix(".dat"))
         group_by_stack_n = 8 if args.with_stack else 0
@@ -541,7 +549,8 @@ def run_benchmark(args, batch_size: int = None):
                     max_name_column_width=RESULTS_TABLE_MAX_COL_WIDTH,
                 )
             )
-            print(f"Averages saved to {data_file_name}")
+            if not quiet:
+                print(f"Averages saved to {data_file_name}")
 
 
 def benchmark_configs(model, inputs, args, data_path: Path):
@@ -611,7 +620,12 @@ def benchmark_configs(model, inputs, args, data_path: Path):
 
         f.write("Kernel;Params;Config;KernelKwargs;CUDA_time_avg_ms\n")
 
-        for idx in tqdm(range(num_choices), desc="Profiling kernel configurations"):
+        for idx in tqdm(
+            range(num_choices),
+            desc="Profiling kernel configurations",
+            ascii=True,
+            leave=False,
+        ):
             # Select a random combination of kernel configurations without replacement.
             kernel_choices: Dict[KernelParams, Kernel] = {}
             for kernel_params, kernel_lst in all_kernel_choices.items():
