@@ -1,11 +1,4 @@
-#include <cuda_pipeline_primitives.h>
-
-#include "spio/fragment_mma.cuh"
-#include "spio/ldmatrix.cuh"
-#include "spio/fragment_load_index.h"
-#include "spio/fragment_index.h"
-#include "spio/checkerboard_index.h"
-#include "spio/mathutil.h"
+#include "spio.cuh"
 
 #include "parameters.h"
 

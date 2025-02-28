@@ -1,13 +1,4 @@
-#include <cuda_pipeline_primitives.h>
-
-#include "spio/fragment_mma.cuh"
-#include "spio/ldmatrix.cuh"
-#include "spio/fragment_load_index.h"
-#include "spio/fragment_index.h"
-#include "spio/checkerboard_index.h"
-#include "spio/async_strip_loader.cuh"
-#include "spio/strip_loader_params.h"
-#include "spio/mathutil.h"
+#include "spio.cuh"
 
 #include "parameters.h"
 
@@ -78,13 +69,13 @@ extern "C"
         auto global_load_i = block_i.unfold() + global_load_idx.x().cast<I_Dim>();
         auto global_load_j = block_j.unfold() + global_load_idx.x().cast<J_Dim>();
 
-        A_Loader loader_a(global_load_i < A::I);
-        B_Loader loader_b(global_load_j < B::J);
+        A_Loader loader_a(global_load_i < a.I);
+        B_Loader loader_b(global_load_j < b.J);
 
         // Iterate over chunks of the k-dimension.
-        for (int iter = 0; iter <= Params::k16; iter += A_Tensor::K16.get())
+        for (auto iter : range_with_step<A_Tensor::K16.get()>(a.K16 + A_Tensor::K16))
         {
-            if (iter < Params::k16)
+            if (iter < a.K16)
             {
                 loader_a.load(smem_a_store.ping_pong(ping_pong).get(), a.get());
                 loader_b.load(smem_b_store.ping_pong(ping_pong).get(), b.get());
