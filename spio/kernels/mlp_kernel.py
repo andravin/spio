@@ -6,10 +6,10 @@ from typing import Generator, Tuple, List
 import torch
 
 from ..generators import (
-    MacroSpec,
-    IndexSpec,
+    Macro,
+    Index,
     ParamsSpec,
-    TensorSpec,
+    Tensor,
     GenSpecs,
 )
 from ..util import divup, next_relative_prime
@@ -94,7 +94,7 @@ def _get_specs(
     smem_input_x_stride = next_relative_prime(c8, num_smem_banks)
 
     # Store the input tensor tile in shared memory using a checkerboard layout.
-    smem_input_tensor = TensorSpec(
+    smem_input_tensor = Tensor(
         "SmemInput",
         "uint4",
         {
@@ -107,7 +107,7 @@ def _get_specs(
 
     # Store the expansion weight tensor tiles in shared memory.
     # Pad the r-dimension stride to avoid bank conflicts.
-    smem_exp_weight_tensor = TensorSpec(
+    smem_exp_weight_tensor = Tensor(
         "SmemExpWeight",
         "uint4",
         {"ping_pong": 2, "r16": config.r16_chunk, "c16": c16, "checkerboard": 32},
@@ -115,7 +115,7 @@ def _get_specs(
 
     # Store the projection weight tensor tiles in shared memory.
     # Use a checkerboard layout.
-    smem_prj_weight_tensor = TensorSpec(
+    smem_prj_weight_tensor = Tensor(
         "SmemPrjWeight",
         "uint4",
         {"ping_pong": 2, "k16": k16, "r16": config.r16_chunk, "checkerboard": 32},
@@ -126,7 +126,7 @@ def _get_specs(
     warps_k16 = warps // config.r16_chunk
 
     specs = [
-        MacroSpec({"SPIO_MLP_KERNEL": full_kernel_name}),
+        Macro({"SPIO_MLP_KERNEL": full_kernel_name}),
         #
         # Block parameters.
         ParamsSpec("Block", {"x": config.block_x, "warps": warps, "threads": threads}),
@@ -145,51 +145,51 @@ def _get_specs(
         ),
         #
         # Warp / lane indices.
-        IndexSpec("WarpIdx", {"warp": warps, "lane": 32}),
+        Index("WarpIdx", {"warp": warps, "lane": 32}),
         #
         # Input, expansion weight, projection weight, and output tensors.
-        TensorSpec("Input", "const uint4", {"x": params.x, "c8": c8}),
-        TensorSpec("ExpWeight", "const uint4", {"c16": c16, "r": params.r, "c8": 2}),
-        TensorSpec("PrjWeight", "const uint4", {"r16": r16, "k": params.k, "r8": 2}),
-        TensorSpec("Output", "uint4", {"x": params.x, "k8": k8}),
+        Tensor("Input", "const uint4", {"x": params.x, "c8": c8}),
+        Tensor("ExpWeight", "const uint4", {"c16": c16, "r": params.r, "c8": 2}),
+        Tensor("PrjWeight", "const uint4", {"r16": r16, "k": params.k, "r8": 2}),
+        Tensor("Output", "uint4", {"x": params.x, "k8": k8}),
         #
         # Shared memory tensors.
         smem_input_tensor,
         smem_exp_weight_tensor,
         smem_prj_weight_tensor,
-        TensorSpec(
+        Tensor(
             "SmemOutputStore",
             "__half2",
             {"x8": block_x8, "k8": k8, "lane": 32},
             strides={"k8": 36}, # 32 half2 + 4 half2 padding
         ),
-        TensorSpec(
+        Tensor(
             "SmemOutputLoad",
             "uint4",
             {"warp": config.warps_x, "x8": warp_x8, "k8": k8, "xm8": 8},
             strides={"k8": 9}, # 8 uint4 + 1 uint4 padding
         ),
-        IndexSpec("SmemOutputLoadIdx", {"x8": warp_x8, "xm8": 8, "k8": k8}),
+        Index("SmemOutputLoadIdx", {"x8": warp_x8, "xm8": 8, "k8": k8}),
         #
         # Matrix fragments.
-        TensorSpec("In", "spio::MMA_M16_K16_F16_A", {"c16": c16, "x16": config.warp_x16}),
-        TensorSpec(
+        Tensor("In", "spio::MMA_M16_K16_F16_A", {"c16": c16, "x16": config.warp_x16}),
+        Tensor(
             "Hidden",
             "spio::MMA_M16_N16_F32_C",
             {"r16": config.r16_chunk, "x16": config.warp_x16},
         ),
-        TensorSpec(
+        Tensor(
             "HiddenAct",
             "spio::MMA_M16_K16_F16_A",
             {"r16": config.r16_chunk, "x16": config.warp_x16},
         ),
-        TensorSpec("Exp", "spio::MMA_N16_K16_F16_B", {"r16": config.r16_chunk, "c16": c16}),
-        TensorSpec("Prj", "spio::MMA_N16_K16_F16_B", {"k16": k16, "r16": config.r16_chunk}),
-        TensorSpec("Out", "spio::MMA_M16_N16_F32_C", {"k16": k16, "x16": config.warp_x16}),
-        IndexSpec(
+        Tensor("Exp", "spio::MMA_N16_K16_F16_B", {"r16": config.r16_chunk, "c16": c16}),
+        Tensor("Prj", "spio::MMA_N16_K16_F16_B", {"k16": k16, "r16": config.r16_chunk}),
+        Tensor("Out", "spio::MMA_M16_N16_F32_C", {"k16": k16, "x16": config.warp_x16}),
+        Index(
             "ExpWeightLoadIdx", {"warp_c16": warps_c16, "warp_r16": config.r16_chunk}
         ),
-        IndexSpec(
+        Index(
             "PrjWeightLoadIdx", {"warp_k16": warps_k16, "warp_r16": config.r16_chunk}
         ),
     ]

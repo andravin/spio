@@ -4,15 +4,8 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Generator, Tuple, List
 
-from ..generators import (
-    MacroSpec,
-    ParamsSpec,
-    IndexSpec,
-    TensorSpec,
-    FragmentSpec,
-    FoldSpec,
-    GenSpecs,
-)
+from .. import generators as gen
+
 from ..util import divup, next_relative_prime
 from .launch_params import LaunchParams
 from .conv2d_gw8_params import Conv2dGw8Params
@@ -59,7 +52,7 @@ def _get_kernel_name(igrad=False) -> str:
 
 def _get_specs(
     params: Conv2dGw8Params, config: Conv2dGw8Config = None, igrad: bool = False
-) -> Tuple[List[GenSpecs], LaunchParams]:
+) -> Tuple[List[gen.GenSpecs], LaunchParams]:
     """The code generator specs and launch parameters."""
     params.validate()
 
@@ -115,26 +108,26 @@ def _get_specs(
     smem_x_stride = next_relative_prime(block_n * block_c8, num_smem_banks)
 
     specs = [
-        MacroSpec({"SPIO_CONV_KERNEL": full_kernel_name}),
-        FoldSpec("block_n", "n", block_n),
-        FoldSpec("block_p", "p", block_p),
-        FoldSpec("block_q", "q", block_q),
-        FoldSpec("block_c", "c", block_c),
-        ParamsSpec(
+        gen.Macro({"SPIO_CONV_KERNEL": full_kernel_name}),
+        gen.Fold("block_n", "n", block_n),
+        gen.Fold("block_p", "p", block_p),
+        gen.Fold("block_q", "q", block_q),
+        gen.Fold("block_c", "c", block_c),
+        gen.ParamsSpec(
             "Block",
             {
                 "threads": threads,
             },
         ),
-        ParamsSpec(
+        gen.ParamsSpec(
             "Padding",
             {
                 "h": padding_h,
                 "w": padding_w,
             },
         ),
-        ParamsSpec("Mode", {"igrad": igrad, "has_bias": kernel_has_bias}),
-        IndexSpec(
+        gen.ParamsSpec("Mode", {"igrad": igrad, "has_bias": kernel_has_bias}),
+        gen.Index(
             "BlockIdx",
             {
                 "block_n": blocks_n,
@@ -143,20 +136,20 @@ def _get_specs(
                 "block_c": blocks_c,
             },
         ),
-        IndexSpec("InputIdx", {"n": block_n, "x": block_w, "c8": block_c8}),
-        TensorSpec("Input", "const uint4", {"n": n, "y": h, "x": w, "c8": c8}),
-        TensorSpec("Bias", "const float2", {"k8": c8, "k2": 4}),
-        IndexSpec("BiasIdx", {"k8": block_c8, "lane": 32}),
-        TensorSpec("Output", "uint4", {"n": n, "p": p, "q": q, "k8": c8}),
-        TensorSpec("Weights", "const uint4", {"k": c, "r": r, "s": s}),
-        TensorSpec("SmemWeights", "uint4", {"k": block_c, "r": r, "s": s}),
-        TensorSpec(
+        gen.Index("InputIdx", {"n": block_n, "x": block_w, "c8": block_c8}),
+        gen.Tensor("Input", "const uint4", {"n": n, "y": h, "x": w, "c8": c8}),
+        gen.Tensor("Bias", "const float2", {"k8": c8, "k2": 4}),
+        gen.Index("BiasIdx", {"k8": block_c8, "lane": 32}),
+        gen.Tensor("Output", "uint4", {"n": n, "p": p, "q": q, "k8": c8}),
+        gen.Tensor("Weights", "const uint4", {"k": c, "r": r, "s": s}),
+        gen.Tensor("SmemWeights", "uint4", {"k": block_c, "r": r, "s": s}),
+        gen.Tensor(
             "ConstSmemWeights",
             "const uint4",
             {"k8": block_c8, "k": 8, "r": r, "s": s},
         ),
-        IndexSpec("SmemWeightsLoadIdx", {"k8": block_c8, "repeat": 4, "k": 8}),
-        TensorSpec(
+        gen.Index("SmemWeightsLoadIdx", {"k8": block_c8, "repeat": 4, "k": 8}),
+        gen.Tensor(
             "SmemInput",
             "uint4",
             {
@@ -167,7 +160,7 @@ def _get_specs(
             },
             strides={"x": smem_x_stride},
         ),
-        IndexSpec(
+        gen.Index(
             "SmemInputLoadIdx",
             {
                 "c8": block_c8,
@@ -176,23 +169,23 @@ def _get_specs(
                 "n": block_n,
             },
         ),
-        IndexSpec("SmemOutputStoreIdx", {"k8": block_c8, "lane": 32}),
-        TensorSpec(
+        gen.Index("SmemOutputStoreIdx", {"k8": block_c8, "lane": 32}),
+        gen.Tensor(
             "SmemOutput",
             "__half2",
             {"q": block_q, "n": block_n, "k8": block_c8 + 1, "k2": 4},
         ),
-        TensorSpec(
+        gen.Tensor(
             "ConstSmemOutput",
             "const uint4",
             {"q": block_q, "n": block_n, "k8": block_c8 + 1},
         ),
-        IndexSpec("OutputStoreIdx", {"n": block_n, "q": block_q, "k8": block_c8}),
-        IndexSpec("BlockQNIdx", {"q": block_q, "n": block_n}),
-        FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k"),
-        FragmentSpec("In", "MMA_M16_K8_F16_A", "qn", "c"),
-        TensorSpec("WeightsReg", "spio::MMA_N8_K8_F16_B", {"r": r, "s": s}),
-        TensorSpec("AccReg", "Acc", {"p": r}),
+        gen.Index("OutputStoreIdx", {"n": block_n, "q": block_q, "k8": block_c8}),
+        gen.Index("BlockQNIdx", {"q": block_q, "n": block_n}),
+        gen.Fragment("Acc", "MMA_M16_N8_F32_C", "qn", "k"),
+        gen.Fragment("In", "MMA_M16_K8_F16_A", "qn", "c"),
+        gen.Tensor("WeightsReg", "spio::MMA_N8_K8_F16_B", {"r": r, "s": s}),
+        gen.Tensor("AccReg", "Acc", {"p": r}),
     ]
     return specs, launch_params
 

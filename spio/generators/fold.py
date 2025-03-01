@@ -12,7 +12,7 @@ from .dim import (
 
 
 @dataclass
-class FoldSpec(GenSpecs):
+class Fold(GenSpecs):
     """CUDA Code generator for custom folded-dimension classes.
 
     This class defines a folding of a tensor dimension. The

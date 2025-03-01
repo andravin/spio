@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from .index import _generate_index
 from .subindex_protocol import SubindexProtocol
 from .dim import dim_name_to_dim_or_fold_class_name
+from .dims import Dims
 
 DATA_TYPE_SIZES = {
     "float": 4,
@@ -20,7 +21,7 @@ DATA_TYPE_SIZES = {
 
 
 @dataclass
-class TensorSpec:
+class Tensor:
     """CUDA Code generator for custom tensor classes.
 
     This class is used to generate custom tensor classes that map named tensor
@@ -39,7 +40,7 @@ class TensorSpec:
 
     class_name: str
     data_type: str
-    dims: Dict[str, int]
+    dims: Dims
     strides: Dict[str, int] = None
 
     def __post_init__(self):
@@ -169,7 +170,7 @@ def _sizes_gen(dims: Dict[str, int]):
     return [d.size if isinstance(d, SubindexProtocol) else d for d in dims.values()]
 
 
-def _tensor_header():
+def header():
     """The C++ statement that includes the spio tensor header file.
 
     This file implements the C++ base template classes from which the

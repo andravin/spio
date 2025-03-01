@@ -4,14 +4,14 @@ from dataclasses import dataclass
 from typing import Tuple
 
 from .fragment_index import (
-    FragmentLoadIndexSpec,
-    FragmentIndexSpec,
+    FragmentLoadIndex,
+    FragmentIndex,
     fragment_load_supported,
 )
 
 
 @dataclass
-class FragmentSpec:
+class Fragment:
     """Fragment code generator.
 
     Example:
@@ -79,7 +79,7 @@ class {self.class_name} : public spio::{self.fragment_type} {{
 
     def generate_index(self) -> str:
         """Generate the fragment index class code."""
-        return FragmentIndexSpec(
+        return FragmentIndex(
             "Index", self.fragment_type, self.row, self.col
         ).generate()
 
@@ -87,7 +87,7 @@ class {self.class_name} : public spio::{self.fragment_type} {{
         """Generate the fragment load index class code."""
         if not fragment_load_supported(self.fragment_type):
             return ""
-        return FragmentLoadIndexSpec(
+        return FragmentLoadIndex(
             "LoadIndex", self.fragment_type, self.row, self.col
         ).generate()
 

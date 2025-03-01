@@ -3,11 +3,11 @@
 from dataclasses import dataclass
 
 from .gen_specs import GenSpecs
-from .tensor import TensorSpec
+from .tensor import Tensor
 
 
 @dataclass
-class AsyncStripLoaderSpec(GenSpecs):
+class AsyncStripLoader(GenSpecs):
     """CUDA Code generator for custom strip loader classes.
 
     This class is used to generate custom strip loader classes that load
@@ -16,8 +16,8 @@ class AsyncStripLoaderSpec(GenSpecs):
     """
 
     class_name: str
-    smem_tensor: TensorSpec
-    gmem_tensor: TensorSpec
+    smem_tensor: Tensor
+    gmem_tensor: Tensor
     minor_axis: str
     major_axis_size: int
     minor_axis_size: int

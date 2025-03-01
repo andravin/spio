@@ -2,13 +2,14 @@
 
 from .generators import generate
 from .gen_specs import GenSpecs
-from .index import IndexSpec
-from .tensor import TensorSpec
-from .fragment import FragmentSpec
-from .fragment_index import FragmentIndexSpec, FragmentLoadIndexSpec
-from .macros import MacroSpec
+from .index import Index
+from .tensor import Tensor
+from .fragment import Fragment
+from .fragment_index import FragmentIndex, FragmentLoadIndex
+from .macros import Macro
 from .params import ParamsSpec
-from .checkerboard import CheckerboardIndexSpec
-from .async_strip_loader import AsyncStripLoaderSpec
-from .dim import DimSpec, dim_name_to_dim_or_fold_class_name
-from .fold import FoldSpec
+from .checkerboard import CheckerboardIndex
+from .async_strip_loader import AsyncStripLoader
+from .dim import Dim, dim_name_to_dim_or_fold_class_name
+from .fold import Fold
+from .dims import Dims

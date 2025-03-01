@@ -4,14 +4,7 @@ from dataclasses import dataclass
 from typing import Generator, Tuple, List
 from itertools import product
 
-from ..generators import (
-    MacroSpec,
-    ParamsSpec,
-    IndexSpec,
-    TensorSpec,
-    GenSpecs,
-    FoldSpec,
-)
+from .. import generators as gen
 from ..util import divup
 from .launch_params import LaunchParams
 from .layernorm_2d_params import LayerNorm2dParams
@@ -84,7 +77,7 @@ C_PER_REG = 64
 
 def _get_specs(
     params: LayerNorm2dParams, config: LayerNorm2dConfig = None
-) -> Tuple[List[GenSpecs], LaunchParams]:
+) -> Tuple[List[gen.GenSpecs], LaunchParams]:
     """Get the specifications for the LayerNorm2d kernel."""
     params.validate()
 
@@ -112,19 +105,19 @@ def _get_specs(
     c2_per_thread = divup(warp_c, C_PER_REG)
 
     specs = [
-        MacroSpec({"SPIO_LAYERNORM_2D_KERNEL": full_kernel_name}),
-        FoldSpec("block_x", "x", config.block_x),
-        FoldSpec("warp_c", "c", warp_c),
-        ParamsSpec(
+        gen.Macro({"SPIO_LAYERNORM_2D_KERNEL": full_kernel_name}),
+        gen.Fold("block_x", "x", config.block_x),
+        gen.Fold("warp_c", "c", warp_c),
+        gen.ParamsSpec(
             "Block",
             {
                 "warps_x": config.warps_x,
                 "warps_c": config.warps_c,
                 "threads": threads,
-                "blocks" : blocks,
+                "blocks": blocks,
             },
         ),
-        ParamsSpec(
+        gen.ParamsSpec(
             "Params",
             {
                 "eps": params.eps,
@@ -136,18 +129,18 @@ def _get_specs(
                 "c": params.c,
             },
         ),
-        ParamsSpec(
+        gen.ParamsSpec(
             "Mode",
             {
                 "reverse_x": config.reverse_x,
             },
         ),
-        TensorSpec("Input", "const uint4", {"x": x, "c8": c8}),
-        TensorSpec("Output", "__half2", {"x": x, "c2": c2}),
-        TensorSpec(
+        gen.Tensor("Input", "const uint4", {"x": x, "c8": c8}),
+        gen.Tensor("Output", "__half2", {"x": x, "c2": c2}),
+        gen.Tensor(
             "SmemInputStore", "uint4", {"ping_pong": 2, "x": config.warps_x, "c8": c8}
         ),
-        TensorSpec(
+        gen.Tensor(
             "SmemInputLoad",
             "const __half2",
             {
@@ -156,10 +149,10 @@ def _get_specs(
                 "c2": c2,
             },
         ),
-        IndexSpec(
+        gen.Index(
             "ThreadIdx", {"warp_x": config.warps_x, "warp_c": config.warps_c, "c2": 32}
         ),
-        TensorSpec(
+        gen.Tensor(
             "SmemSum", "float", {"warp_x": config.warps_x, "warp_c": config.warps_c}
         ),
     ]

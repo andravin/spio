@@ -146,7 +146,7 @@ def _to(tensor: torch.Tensor, memory_format=None) -> torch:
         return None
 
     if memory_format == SixteenChannelsLast:
-        return SixteenChannelsLast.to(tensor)
+        return SixteenChannelsLast.format(tensor)
 
     if tensor.dim() == 4:
         return tensor.to(memory_format=memory_format)

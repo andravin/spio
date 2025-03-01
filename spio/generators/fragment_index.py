@@ -63,7 +63,7 @@ FRAGMENT_DESCRIPTORS = {
 }
 
 
-class FragmentIndexSpec:
+class FragmentIndex:
     """Fragment index code generator for matrix fragment with named dimensions.
 
     This class generates a subclass of the given fragment index type that adds
@@ -135,7 +135,7 @@ class {self.class_name} : public spio::{desc.fragment_index} {{
         return (self.row_name, self.col_name, "lane")
 
 
-class FragmentLoadIndexSpec(FragmentIndexSpec):
+class FragmentLoadIndex(FragmentIndex):
     """Fragment load index code generator for matrix fragment with named dimensions.
 
     This class generates a subclass of the given fragment's load index that adds
@@ -188,15 +188,9 @@ def _decorate_dim_name(name: str, veclen: int = None, mod: int = None) -> str:
     return code
 
 
-def _fragment_index_header() -> str:
+def header() -> str:
     """Return the C++ source code that tests a custom index class."""
     return """
 #include "spio/fragment_index.h"
-"""
-
-
-def _fragment_load_index_header() -> str:
-    """Return the C++ source code that tests a custom index class."""
-    return """
 #include "spio/fragment_load_index.h"
 """

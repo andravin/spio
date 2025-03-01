@@ -46,17 +46,17 @@ extern "C"
         ComputeIndex compute_idx(threadIdx.x);
 
         // Define the mapping from the shared memory tile to the register tile.
-        A_Fragment::LoadIndex a_load_idx(compute_idx.lane());
-        B_Fragment::LoadIndex b_load_idx(compute_idx.lane());
-
+        A_Fragments::data_type::LoadIndex a_load_idx(compute_idx.lane());
+        B_Fragments::data_type::LoadIndex b_load_idx(compute_idx.lane());
         auto smem_a_load = SmemA(smem_a)[compute_idx.i32()].checkers(a_load_idx.i(), a_load_idx.k8());
         auto smem_b_load = SmemB(smem_b)[compute_idx.j64()].checkers(b_load_idx.j(), b_load_idx.k8());
 
+        // Double-buffer the global memory loads.
         int ping_pong = 0;
 
         // Initialize the accumulator.
-        C_Tensor::data_type c_data[C_Tensor::size];
-        C_Tensor c_tensor(c_data);
+        C_Fragments::data_type c_data[C_Fragments::size];
+        C_Fragments c_tensor(c_data);
 
         for (auto i16 : c_tensor.I16)
         {
@@ -73,7 +73,7 @@ extern "C"
         B_Loader loader_b(global_load_j < b.J);
 
         // Iterate over chunks of the k-dimension.
-        for (auto iter : range_with_step<A_Tensor::K16.get()>(a.K16 + A_Tensor::K16))
+        for (auto iter : range_with_step<A_Fragments::K16.get()>(a.K16 + A_Fragments::K16))
         {
             if (iter < a.K16)
             {
@@ -81,8 +81,8 @@ extern "C"
                 loader_b.load(smem_b_store.ping_pong(ping_pong).get(), b.get());
 
                 __pipeline_commit();
-                a = a[A_Tensor::K16];
-                b = b[B_Tensor::K16];
+                a = a[A_Fragments::K16];
+                b = b[B_Fragments::K16];
             }
 
             ping_pong ^= 1;
@@ -93,11 +93,11 @@ extern "C"
 
                 __syncthreads();
 
-                A_Tensor::data_type a_data[A_Tensor::size];
-                B_Tensor::data_type b_data[B_Tensor::size];
+                A_Fragments::data_type a_data[A_Fragments::size];
+                B_Fragments::data_type b_data[B_Fragments::size];
 
-                A_Tensor a_tensor(a_data);
-                B_Tensor b_tensor(b_data);
+                A_Fragments a_tensor(a_data);
+                B_Fragments b_tensor(b_data);
 
                 for (auto k16 : a_tensor.K16)
                 {
@@ -131,13 +131,13 @@ extern "C"
         }
 
         // Store outputs through shared memory.
-        C_Fragment::Index c_idx(compute_idx.lane());
+        C_Fragments::data_type::Index c_idx(compute_idx.lane());
         auto smem_c_store = SmemCStore(reinterpret_cast<__half2 *>(smem))[compute_idx.i32()][compute_idx.j64()][c_idx.j2m4()];
         for (auto i16 : c_tensor.I16)
         {
             for (auto j16 : c_tensor.J16)
             {
-                for (int f = 0; f < C_Fragment::size(); ++f)
+                for (int f = 0; f < C_Fragments::data_type::size(); ++f)
                 {
                     *smem_c_store[j16][c_idx.j8(f)][i16][c_idx.i(f)] = c_tensor[i16][j16]->to_half2(f);
                 }

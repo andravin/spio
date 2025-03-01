@@ -5,7 +5,7 @@ from .subindex_protocol import SubindexProtocol
 from .dim import dim_name_to_dim_or_fold_class_name
 
 
-class CheckerboardIndexSpec(SubindexProtocol):
+class CheckerboardIndex(SubindexProtocol):
     """CUDA / C++ code generator for checkerboard index classes."""
 
     def __init__(self, class_name: str = None, ranks: int = 8, **dims):
@@ -64,7 +64,6 @@ public:
         return (self.pairs_name, self.colors_name)
 
 
-def _checkerboard_header():
-    return """
-#include "spio/checkerboard_index.h"
-"""
+def header():
+    """Return the header file for the checkerboard index."""
+    return '#include "spio/checkerboard_index.h"'

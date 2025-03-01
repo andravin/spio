@@ -29,7 +29,7 @@ def test_sixteen_channels_last_2d():
     """Test the SixteenChannelsLast memory format with 2d tensors."""
     K, C = (256, 64)
     a = torch.randn(K, C)
-    b = SixteenChannelsLast.to(a)
+    b = SixteenChannelsLast.format(a)
     assert b.shape == (C // 16, K, 16)
     for k, c in product(range(K), range(C)):
         cd16 = c // 16
@@ -42,7 +42,7 @@ def test_sixtenn_channels_last_4d():
     N, C, H, W = (2, 64, 8, 16)
     for a_format in [torch.contiguous_format, torch.channels_last]:
         a = torch.randn(N, C, H, W).to(memory_format=a_format)
-        b = SixteenChannelsLast.to(a)
+        b = SixteenChannelsLast.format(a)
         assert b.shape == (C // 16, N, H, W, 16)
         for n, c, h, w in product(range(N), range(C), range(H), range(W)):
             cd16 = c // 16

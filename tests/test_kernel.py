@@ -2,13 +2,7 @@
 
 import torch
 
-from spio.generators import (
-    IndexSpec,
-    TensorSpec,
-    ParamsSpec,
-    FoldSpec,
-    generate,
-)
+import spio.generators as gen
 from spio.compiler import compile_and_load_kernel
 from spio.util import divup, assert_all_close_with_acc_depth
 
@@ -48,9 +42,9 @@ def test_memcpy_kernel():
     X = N * C * H * W
     BLOCKS = divup(X, BLOCK_X)
 
-    my_params_header = generate(
+    my_params_header = gen.generate(
         [
-            ParamsSpec(
+            gen.ParamsSpec(
                 "MyParams",
                 {"ITERS": ITERS, "BLOCK_X4": BLOCK_X4, "X": X, "THREADS": THREADS},
             ),
@@ -114,13 +108,13 @@ def test_row_memcpy_kernel():
     WARPS = BLOCK_GROUPS
     THREADS = WARPS * 32
 
-    parameters_header = generate(
+    parameters_header = gen.generate(
         [
-            FoldSpec("block_p", "p", BLOCK_P),
-            FoldSpec("block_q", "q", BLOCK_Q),
-            FoldSpec("block_c", "c", BLOCK_C),
-            ParamsSpec("Block", {"padding": 1, "c4": BLOCK_C4}),
-            IndexSpec(
+            gen.Fold("block_p", "p", BLOCK_P),
+            gen.Fold("block_q", "q", BLOCK_Q),
+            gen.Fold("block_c", "c", BLOCK_C),
+            gen.ParamsSpec("Block", {"padding": 1, "c4": BLOCK_C4}),
+            gen.Index(
                 "BlockIdx",
                 {
                     "n": BLOCKS_N,
@@ -129,26 +123,26 @@ def test_row_memcpy_kernel():
                     "block_c": BLOCKS_C4,
                 },
             ),
-            IndexSpec("InputIdx", {"x": BLOCK_W, "c4": BLOCK_C4}),
-            TensorSpec("Input", "const float4", {"n": N, "y": H, "x": W, "c4": C4}),
-            TensorSpec("Output", "float4", {"n": N, "p": H, "q": W, "c4": C4}),
-            TensorSpec(
+            gen.Index("InputIdx", {"x": BLOCK_W, "c4": BLOCK_C4}),
+            gen.Tensor("Input", "const float4", {"n": N, "y": H, "x": W, "c4": C4}),
+            gen.Tensor("Output", "float4", {"n": N, "p": H, "q": W, "c4": C4}),
+            gen.Tensor(
                 "SmemInput",
                 "float4",
                 {"ping_pong": 2, "x": BLOCK_W, "c4": BLOCK_C4 + 1},
             ),
-            TensorSpec(
+            gen.Tensor(
                 "ConstSmemInput",
                 "const float2",
                 {"ping_pong": 2, "x": BLOCK_W, "c4": BLOCK_C4 + 1, "c2": 2},
             ),
-            IndexSpec("SmemInputLoadIdx", {"c4": BLOCK_C4, "q": BLOCK_Q, "c2": 2}),
-            TensorSpec(
+            gen.Index("SmemInputLoadIdx", {"c4": BLOCK_C4, "q": BLOCK_Q, "c2": 2}),
+            gen.Tensor(
                 "SmemOutput",
                 "float2",
                 {"q": BLOCK_Q, "c4": BLOCK_C4 + 1, "c2": 2},
             ),
-            TensorSpec(
+            gen.Tensor(
                 "ConstSmemOutput",
                 "const float4",
                 {"q": BLOCK_Q, "c4": BLOCK_C4 + 1},

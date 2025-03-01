@@ -3,8 +3,8 @@
 from typing import List, Set
 
 from .gen_specs import GenSpecs
-from .dim import DimSpec, _get_dim_name_and_stride
-from .fold import FoldSpec
+from .dim import Dim, _get_dim_name_and_stride
+from .fold import Fold
 
 
 def generate(
@@ -12,6 +12,9 @@ def generate(
     namespace: str = None,
 ) -> str:
     """Generate CUDA code from generator specifications.
+
+    Automatically detects all dimensions used in the generator specifications
+    and generates the corresponding custom dimension classes.
 
     Args:
         gen_specs: List of generator specifications.
@@ -29,9 +32,9 @@ def generate(
     dim_names.difference_update(fold_specs)
     dim_names = sorted(dim_names)
     for dim_name in dim_names:
-        code += DimSpec(dim_name).generate()
+        code += Dim(dim_name).generate()
     for spec in gen_specs:
-        if isinstance(spec, DimSpec):
+        if isinstance(spec, Dim):
             continue
         code += spec.generate()
         code += "\n"
@@ -57,7 +60,7 @@ def _get_spec_dim_names(spec: GenSpecs) -> Set[str]:
 
 
 def _get_foldspec_names(gen_specs: List[GenSpecs]) -> Set[str]:
-    return set(spec.fold_name for spec in gen_specs if isinstance(spec, FoldSpec))
+    return set(spec.fold_name for spec in gen_specs if isinstance(spec, Fold))
 
 
 def _include_files():

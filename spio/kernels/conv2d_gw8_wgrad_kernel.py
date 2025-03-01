@@ -4,15 +4,8 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Generator, Tuple, List
 
-from ..generators import (
-    GenSpecs,
-    MacroSpec,
-    ParamsSpec,
-    IndexSpec,
-    TensorSpec,
-    FragmentSpec,
-    FoldSpec,
-)
+from .. import generators as gen
+
 from ..util import divup, next_relative_prime
 from .launch_params import LaunchParams
 from .conv2d_gw8_params import Conv2dGw8Params
@@ -91,7 +84,7 @@ def _get_configs(
 
 def _get_specs(
     params: Conv2dGw8Params, config: Conv2dGw8WgradConfig = None, **_kwargs
-) -> Tuple[List[GenSpecs], LaunchParams]:
+) -> Tuple[List[gen.GenSpecs], LaunchParams]:
     """Get the code gen specs and launch params."""
     params.validate()
 
@@ -140,19 +133,19 @@ def _get_specs(
     smem_x_stride = next_relative_prime(block_c8, num_smem_banks)
 
     smem_tensors = [
-        TensorSpec(
+        gen.Tensor(
             "SmemInput",
             "uint4",
             {"ping_pong": 2, "n": config.warp_n, "x": block_w, "c8": block_c8},
             strides={"x" : smem_x_stride}
         ),
-        TensorSpec(
+        gen.Tensor(
             "SmemDelta",
             "uint4",
             {"ping_pong": 2, "n": config.warp_n, "q": BLOCK_Q, "k8": block_c8},
             strides={"x" : smem_x_stride}
         ),
-        TensorSpec("SmemWgrad", "float2", {"k8": block_c8, "s": s, "c": 8, "k2": 4}),
+        gen.Tensor("SmemWgrad", "float2", {"k8": block_c8, "s": s, "c": 8, "k2": 4}),
     ]
 
     # TODO: ensure that the smem tensors fit in the shared memory.
@@ -163,17 +156,17 @@ def _get_specs(
     full_kernel_name = get_full_kernel_name(KERNEL_NAME, params)
 
     specs = [
-        MacroSpec({"SPIO_CONV_WGRAD_KERNEL": full_kernel_name}),
+        gen.Macro({"SPIO_CONV_WGRAD_KERNEL": full_kernel_name}),
         #
         # Block parameters.
         #
-        FoldSpec("block_n", "n", block_n),
-        FoldSpec("block_y", "y", block_h),
-        FoldSpec("block_p", "p", block_p),
-        FoldSpec("block_q", "q", BLOCK_Q),
-        FoldSpec("block_c", "c", block_c),
-        FoldSpec("warp_s", "s", config.warp_s),
-        ParamsSpec(
+        gen.Fold("block_n", "n", block_n),
+        gen.Fold("block_y", "y", block_h),
+        gen.Fold("block_p", "p", block_p),
+        gen.Fold("block_q", "q", BLOCK_Q),
+        gen.Fold("block_c", "c", block_c),
+        gen.Fold("warp_s", "s", config.warp_s),
+        gen.ParamsSpec(
             "Block",
             {
                 "threads": threads,
@@ -182,7 +175,7 @@ def _get_specs(
         #
         # Constant parameters.
         #
-        ParamsSpec(
+        gen.ParamsSpec(
             "Params",
             {
                 "R": r,
@@ -200,16 +193,16 @@ def _get_specs(
         #
         # Block indices.
         #
-        IndexSpec(
+        gen.Index(
             "BlockIdx",
             {"block_n": blocks_n, "block_y": blocks_h, "block_q": blocks_q, "block_c": blocks_c8},
         ),
         #
         # Input loading.
         #
-        IndexSpec("InputIdx", {"n": config.warp_n, "x": block_w, "c8": block_c8}),
-        TensorSpec("Input", "const uint4", {"n": n, "y": h, "x": w, "c8": c8}),
-        IndexSpec(
+        gen.Index("InputIdx", {"n": config.warp_n, "x": block_w, "c8": block_c8}),
+        gen.Tensor("Input", "const uint4", {"n": n, "y": h, "x": w, "c8": c8}),
+        gen.Index(
             "SmemInputLoadIdx",
             {
                 "c8": warps_c8,
@@ -222,30 +215,30 @@ def _get_specs(
         #
         # Delta loading
         #
-        IndexSpec("DeltaIdx", {"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}),
-        TensorSpec("Delta", "const uint4", {"n": n, "p": p, "q": q, "k8": c8}),
-        IndexSpec(
+        gen.Index("DeltaIdx", {"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}),
+        gen.Tensor("Delta", "const uint4", {"n": n, "p": p, "q": q, "k8": c8}),
+        gen.Index(
             "SmemDeltaLoadIdx",
             {"k8": warps_c8, "repeat": (32 * warps_s) // BLOCK_Q, "q": BLOCK_Q},
         ),
         #
         # MMA fragments
         #
-        FragmentSpec("Acc", "MMA_M16_N8_F32_C", "c", "k"),
+        gen.Fragment("Acc", "MMA_M16_N8_F32_C", "c", "k"),
         #
         # MMA tensors
         #
-        TensorSpec("AccTensor", "spio::MMA_M16_N8_F32_C", {"s2": warp_s2_up, "r": r}),
-        TensorSpec("InputTensor", "spio::MMA_M16_K8_F16_A", {"s2": warp_s2_up}),
-        TensorSpec("DeltaTensor", "spio::MMA_N8_K8_F16_B", {"n": config.warp_n, "r": r}),
+        gen.Tensor("AccTensor", "spio::MMA_M16_N8_F32_C", {"s2": warp_s2_up, "r": r}),
+        gen.Tensor("InputTensor", "spio::MMA_M16_K8_F16_A", {"s2": warp_s2_up}),
+        gen.Tensor("DeltaTensor", "spio::MMA_N8_K8_F16_B", {"n": config.warp_n, "r": r}),
         #
         # Weights storing.
         #
-        IndexSpec("SmemWgradStoreIdx", {"k8": warps_c8, "warp_s": warps_s, "lane": 32}),
+        gen.Index("SmemWgradStoreIdx", {"k8": warps_c8, "warp_s": warps_s, "lane": 32}),
         # Each thread stores 8k for a particular (k8, r, s, c).
-        IndexSpec("WgradStoreIdx", {"k8": warps_c8, "s": s, "c": 8}),
+        gen.Index("WgradStoreIdx", {"k8": warps_c8, "s": s, "c": 8}),
         # Reduce Wgrad through global memory using float32 precision.
-        TensorSpec("Wgrad", "float", {"k": c, "r": r, "s": s, "c": 8}),
+        gen.Tensor("Wgrad", "float", {"k": c, "r": r, "s": s, "c": 8}),
     ] + smem_tensors
     return specs, launch_params
 

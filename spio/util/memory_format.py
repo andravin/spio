@@ -9,7 +9,7 @@ class SixteenChannelsLast:
     """Memory format for 16 channels last."""
 
     @staticmethod
-    def to(tensor: torch.Tensor) -> torch.Tensor:
+    def format(tensor: torch.Tensor) -> torch.Tensor:
         """Transpose a tensor from [k, c] to [c16, k, 16c]."""
         if tensor.dim() == 2:
             return tensor.view(tensor.shape[0], -1, 16).permute(1, 0, 2).contiguous()

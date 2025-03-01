@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from .gen_specs import GenSpecs
 from .subindex_protocol import SubindexProtocol
 from .dim import dim_name_to_dim_or_fold_class_name
+from .dims import Dims
 
 
 @dataclass
-class IndexSpec(GenSpecs):
+class Index(GenSpecs):
     """CUDA Code generator for custom index classes.
 
     This class is used to generate custom index classes that map named tensor dimensions to offsets.
@@ -22,7 +23,7 @@ class IndexSpec(GenSpecs):
     """
 
     class_name: str
-    dims: Dict[str, Union[int, SubindexProtocol]]
+    dims: Dims
 
     def generate(self) -> str:
         """Generate the C++ source code for the custom index class."""
@@ -43,7 +44,7 @@ class IndexSpec(GenSpecs):
                 yield name
 
 
-def index_header() -> str:
+def header() -> str:
     """Return a C++ statement that includes the spio index header.
 
     The header implements the C++ base template classes from which the

@@ -7,7 +7,7 @@ from .gen_specs import GenSpecs
 
 
 @dataclass
-class DimSpec(GenSpecs):
+class Dim(GenSpecs):
     """CUDA Code generator for custom dimension classes.
 
     This class defines a named tensor dimension.
@@ -106,7 +106,7 @@ def _format_fold_template_instance(dim_class_name: str, stride: int) -> str:
     return f"spio::Fold<{dim_class_name}, {stride}>"
 
 
-def dim_header() -> str:
+def header() -> str:
     """Return a C++ statement that includes the spio dim header.
 
     The header implements the C++ spio::Dim base class from which the
