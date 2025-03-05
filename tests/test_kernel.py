@@ -124,28 +124,30 @@ def test_row_memcpy_kernel():
                 },
             ),
             gen.Index("InputIdx", {"x": BLOCK_W, "c4": BLOCK_C4}),
-            gen.Tensor("Input", "const float4", {"n": N, "y": H, "x": W, "c4": C4}),
-            gen.Tensor("Output", "float4", {"n": N, "p": H, "q": W, "c4": C4}),
+            gen.Tensor("Input", gen.dtype.float4, {"n": N, "y": H, "x": W, "c4": C4}, constant=True),
+            gen.Tensor("Output", gen.dtype.float4, {"n": N, "p": H, "q": W, "c4": C4}),
             gen.Tensor(
                 "SmemInput",
-                "float4",
+                gen.dtype.float4,
                 {"ping_pong": 2, "x": BLOCK_W, "c4": BLOCK_C4 + 1},
             ),
             gen.Tensor(
                 "ConstSmemInput",
-                "const float2",
+                gen.dtype.float2,
                 {"ping_pong": 2, "x": BLOCK_W, "c4": BLOCK_C4 + 1, "c2": 2},
+                constant=True,
             ),
             gen.Index("SmemInputLoadIdx", {"c4": BLOCK_C4, "q": BLOCK_Q, "c2": 2}),
             gen.Tensor(
                 "SmemOutput",
-                "float2",
+                gen.dtype.float2,
                 {"q": BLOCK_Q, "c4": BLOCK_C4 + 1, "c2": 2},
             ),
             gen.Tensor(
                 "ConstSmemOutput",
-                "const float4",
+                gen.dtype.float4,
                 {"q": BLOCK_Q, "c4": BLOCK_C4 + 1},
+                constant=True
             ),
         ]
     )

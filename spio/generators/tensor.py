@@ -1,6 +1,6 @@
 """Code generator for custom tensor classes in CUDA source code."""
 
-from typing import Dict, Tuple, Union, Generator
+from typing import Dict, Tuple, Union, Generator, List
 from dataclasses import dataclass
 
 from .index import _generate_index
@@ -8,17 +8,7 @@ from .subindex_protocol import SubindexProtocol
 from .dim import dim_name_to_dim_or_fold_class_name
 from .dims import Dims
 from .fragment_type import FragmentType
-
-DATA_TYPE_SIZES = {
-    "float": 4,
-    "float2": 8,
-    "float4": 16,
-    "unsigned": 4,
-    "uint2": 8,
-    "uint4": 16,
-    "half": 2,
-    "half2": 4,
-}
+from .data_type import dtype
 
 
 @dataclass
@@ -30,19 +20,21 @@ class Tensor:
 
     The user may optionally optionally set the stride of a dimension
     by specifying it in the strides parameter. Any unspecified stride is automatically
-    set to the size of the next dimension times the stride of the next dimension.
+    calculated as the the size of the next dimension times the stride of the next dimension,
+    with the last dimension having a stride of 1.
 
     Attributes:
         class_name (str): The name of the custom tensor class.
-        data_type (str): The data type of the tensor elements (e.g., float, uint4).
-        dims (Dict[str, int]): A dictionary mapping dimension names to their sizes.
+        data_type (Union[dtype, FragmentType]): The data type of the tensor elements.
+        dims (Dims): A dictionary mapping dimension names to their sizes.
         strides (Dict[str, int]): An optional dictionary mapping dimension names to their strides.
     """
 
     class_name: str
-    data_type: Union[str, FragmentType]
+    data_type: Union[dtype, FragmentType]
     dims: Dims
     strides: Dict[str, int] = None
+    constant: bool = False
 
     def __post_init__(self):
         self.strides = self._compute_full_strides(self.dims, self.strides)
@@ -68,10 +60,15 @@ class Tensor:
             stride *= value
         return all_strides
 
-    def generate(self) -> str:
+    def generate_with_context(self, user_types: List[str] = None) -> str:
         """Generate the C++ source code for the custom tensor class."""
+        data_type_name = self._get_data_type_name(user_types=user_types)
         return _generate_tensor(
-            self.class_name, self.data_type, self.dims, self.strides, self.size
+            self.class_name,
+            data_type_name,
+            self.dims,
+            self.strides,
+            self.size,
         )
 
     @property
@@ -90,7 +87,12 @@ class Tensor:
     @property
     def num_bytes(self) -> int:
         """The number of bytes required to store the tensor data."""
-        return self.size * _sizeof_data_type(self.data_type)
+        if isinstance(self.data_type, str):
+            element_size = self.data_type.size
+        else:
+            raise ValueError(f"Size of data_type {self.data_type} not supported.")
+
+        return self.size * element_size
 
     @property
     def dim_names(self) -> Generator[str, None, None]:
@@ -101,11 +103,20 @@ class Tensor:
             else:
                 yield name
 
+    def _get_data_type_name(self, user_types: List[str]) -> str:
+        """Return the type-name for the tensor data type.
+
+        The type-name is the literal name of the data type used in CUDA / C++ code.
+        """
+        return _get_data_type_name(
+            self.data_type, constant=self.constant, user_types=user_types
+        )
+
 
 def _generate_tensor(
     class_name: str,
-    data_type: Union[str, FragmentType],
-    dims: Dict[str, int],
+    data_type_name: str,
+    dims: Dims,
     strides: Dict[str, int],
     size: int = None,
 ) -> str:
@@ -145,18 +156,21 @@ def _generate_tensor(
 
     Parameters:
         class_name(str): the name to use for the C++ class
-        data_type(str): the C++/CUDA data-type used by the Tensor elements.
-        dims(Dict[str, int]): an (ordered) dict that maps dimension names to their sizes.
+        data_type_name(str): the C++/CUDA data-type used by the Tensor elements.
+        dims(Dims): a Dims object that defines the dimension names and sizes.
         strides(Dict[str, int]): optional dict that specifies non-default strides for given dims.
     """
     code = ""
-    if isinstance(data_type, FragmentType):
-        data_type = f"spio::{data_type.value}"
     index_class_name = f"_{class_name}_Index"
     code += _generate_index(index_class_name, dims)
     code += "\n"
     sizes = _sizes_gen(dims)
-    code += _class(class_name, data_type, tuple(sizes), tuple(strides.values()))
+    code += _class(
+        class_name,
+        data_type_name,
+        tuple(sizes),
+        tuple(strides.values()),
+    )
     code += _using_index(index_class_name)
     code += _size_and_bytes(size)
     for (name, value), size in zip(dims.items(), sizes):
@@ -198,25 +212,28 @@ def _size_and_bytes(size: int) -> str:
 
 
 def _class(
-    class_name: str, data_type: str, shape: Tuple[int, ...], stride: Tuple[int, ...]
+    class_name: str,
+    data_type_name: str,
+    shape: Tuple[int, ...],
+    stride: Tuple[int, ...],
 ) -> str:
     num_dims = len(shape)
     shape_str = ", ".join([str(d) for d in shape[1:]])
     stride_str = ", ".join([str(d) for d in stride])
     if shape_str and stride_str:
-        template_pars_str = f"<{data_type}, {shape_str}, {stride_str}>"
+        template_pars_str = f"<{data_type_name}, {shape_str}, {stride_str}>"
     else:
         assert (
             stride_str == "1"
         ), f"Unexpected template parameters: shape:{shape_str} stride:{stride_str}"
-        template_pars_str = f"<{data_type}>"
+        template_pars_str = f"<{data_type_name}>"
     base = f"Tensor{num_dims}D{template_pars_str}"
     return f"""
     class {class_name} : public spio::{base} {{
     public:
         using Base = {base};
 
-        DEVICE constexpr {class_name}({data_type} *data  = nullptr) : Base(data) {{}}
+        DEVICE constexpr {class_name}({data_type_name} *data  = nullptr) : Base(data) {{}}
 
         DEVICE constexpr {class_name}(const {base} &other) : Base(other) {{}}
 
@@ -268,7 +285,7 @@ def _dim_to_pointer(
         /// Return a {dim_class_name} object that points to the element at the given index.
         /// This overloads the subscript operator "[]".
         DEVICE constexpr {class_name} operator[]({dim_class_name} {name_in}) const {{ return {dim_d}({name_in}.get()); }}
-"""   
+"""
 
 
 def _tail() -> str:
@@ -277,13 +294,22 @@ def _tail() -> str:
 """
 
 
-def _sizeof_data_type(data_type: str) -> int:
-    return DATA_TYPE_SIZES[_strip_data_type(data_type)]
-
-
-def _strip_data_type(data_type: str) -> str:
-    if data_type.startswith("const "):
-        return _strip_data_type(data_type[6:])
-    if data_type.startswith("__half"):
-        return _strip_data_type("half" + data_type[6:])
+def _get_data_type_name(
+    data_type: Union[dtype, FragmentType],
+    constant: bool = False,
+    user_types: List[str] = None,
+) -> str:
+    if isinstance(data_type, FragmentType):
+        data_type = f"spio::{data_type.value}"
+    elif isinstance(data_type, dtype):
+        data_type = data_type.value.name
+    elif isinstance(data_type, str):
+        if user_types is None:
+            raise ValueError("user_types must be provided for user-defined data-types.")
+        if not data_type in user_types:
+            raise ValueError(f"Unknown user-defined data-type: {data_type}")
+    else:
+        raise ValueError(f"Unsupported data_type: {data_type}")
+    if constant:
+        data_type = f"const {data_type}"
     return data_type

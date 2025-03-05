@@ -3,7 +3,6 @@
 import torch
 
 import spio.generators as gen
-from spio.generators import Dims
 from spio.compiler import compile_and_load_kernel
 from spio.util import divup, assert_all_close_with_acc_depth, SixteenChannelsLast
 
@@ -75,14 +74,18 @@ def _get_specs(m: int, n: int, k: int):
 
     assert k16 % chunk_k16 == 0, "Kernel requires K to be a multiple of the chunk size."
 
-    tensor_a = gen.Tensor("A", "const uint4", Dims(k16=k16, i=m, k8=2))
-    tensor_b = gen.Tensor("B", "const uint4", Dims(k16=k16, j=n, k8=2))
-    tensor_c = gen.Tensor("C", "uint4", Dims(i=m, j8=n8))
+    tensor_a = gen.Tensor(
+        "A", gen.dtype.uint4, gen.Dims(k16=k16, i=m, k8=2), constant=True
+    )
+    tensor_b = gen.Tensor(
+        "B", gen.dtype.uint4, gen.Dims(k16=k16, j=n, k8=2), constant=True
+    )
+    tensor_c = gen.Tensor("C", gen.dtype.uint4, gen.Dims(i=m, j8=n8))
 
     smem_tensor_a = gen.Tensor(
         "SmemA",
-        "uint4",
-        Dims(
+        gen.dtype.uint4,
+        gen.Dims(
             ping_pong=2,
             k16=chunk_k16,
             i32=block_x32,
@@ -92,8 +95,8 @@ def _get_specs(m: int, n: int, k: int):
     )
     smem_tensor_b = gen.Tensor(
         "SmemB",
-        "uint4",
-        Dims(
+        gen.dtype.uint4,
+        gen.Dims(
             ping_pong=2,
             k16=chunk_k16,
             j64=block_x64,
@@ -103,15 +106,16 @@ def _get_specs(m: int, n: int, k: int):
     )
     smem_tensor_c_store = gen.Tensor(
         "SmemCStore",
-        "__half2",
-        Dims(i32=4, j64=2, j16=4, j8=2, i16=2, i=16, j2=4),
+        gen.dtype.half2,
+        gen.Dims(i32=4, j64=2, j16=4, j8=2, i16=2, i=16, j2=4),
         strides=dict(j8=(32 + 1) * 4),
     )
     smem_tensor_c_load = gen.Tensor(
         "SmemCLoad",
-        "const uint4",
-        Dims(i32=4, j64=2, j8=8, i=32),
+        gen.dtype.uint4,
+        gen.Dims(i32=4, j64=2, j8=8, i=32),
         strides=dict(j8=32 + 1),
+        constant=True,
     )
 
     specs = [
@@ -121,8 +125,8 @@ def _get_specs(m: int, n: int, k: int):
         tensor_a,
         tensor_b,
         tensor_c,
-        gen.Index("GlobalLoadIndex", Dims(x=block_x, k8=2)),
-        gen.Index("ComputeIndex", Dims(i32=4, j64=2, lane=32)),
+        gen.Index("GlobalLoadIndex", gen.Dims(x=block_x, k8=2)),
+        gen.Index("ComputeIndex", gen.Dims(i32=4, j64=2, lane=32)),
         smem_tensor_a,
         smem_tensor_b,
         gen.AsyncStripLoader(
@@ -146,10 +150,10 @@ def _get_specs(m: int, n: int, k: int):
         gen.Fragment("_A", gen.FragmentType.M16_K16_F16_A, "i", "k"),
         gen.Fragment("_B", gen.FragmentType.N16_K16_F16_B, "k", "j"),
         gen.Fragment("_C", gen.FragmentType.M16_N16_F32_C, "i", "j"),
-        gen.Tensor("A_Fragments", "_A", Dims(k16=chunk_k16, i16=warp_m16)),
-        gen.Tensor("B_Fragments", "_B", Dims(k16=chunk_k16, j16=warp_n16)),
-        gen.Tensor("C_Fragments", "_C", Dims(i16=warp_m16, j16=warp_n16)),
-        gen.Index("SmemCLoadIndex", Dims(i=32, j8=8)),
+        gen.Tensor("A_Fragments", "_A", gen.Dims(k16=chunk_k16, i16=warp_m16)),
+        gen.Tensor("B_Fragments", "_B", gen.Dims(k16=chunk_k16, j16=warp_n16)),
+        gen.Tensor("C_Fragments", "_C", gen.Dims(i16=warp_m16, j16=warp_n16)),
+        gen.Index("SmemCLoadIndex", gen.Dims(i=32, j8=8)),
         smem_tensor_c_store,
         smem_tensor_c_load,
     ]

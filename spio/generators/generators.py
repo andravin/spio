@@ -5,6 +5,7 @@ from typing import List, Set
 from .gen_specs import GenSpecs
 from .dim import Dim, _get_dim_name_and_stride
 from .fold import Fold
+from .fragment import Fragment
 
 
 def generate(
@@ -23,20 +24,24 @@ def generate(
     Returns:
         Generated CUDA code as a string.
     """
-    code = _include_files()
-    code += "\n"
-    if namespace is not None:
-        code += _start_namespace(namespace)
     fold_specs = _get_foldspec_names(gen_specs)
     dim_names = _get_unique_dim_names(gen_specs)
     dim_names.difference_update(fold_specs)
     dim_names = sorted(dim_names)
+    user_types = _get_user_defined_types(gen_specs)
+    code = _include_files()
+    code += "\n"
+    if namespace is not None:
+        code += _start_namespace(namespace)
     for dim_name in dim_names:
         code += Dim(dim_name).generate()
     for spec in gen_specs:
         if isinstance(spec, Dim):
             continue
-        code += spec.generate()
+        if hasattr(spec, "generate_with_context"):
+            code += spec.generate_with_context(user_types=user_types)
+        else:
+            code += spec.generate()
         code += "\n"
     if namespace is not None:
         code += _end_namespace()
@@ -50,6 +55,15 @@ def _get_unique_dim_names(gen_specs: List[GenSpecs]) -> Set[str]:
         names = _get_spec_dim_names(spec)
         dim_names.update(names)
     return dim_names
+
+
+def _get_user_defined_types(gen_specs: List[GenSpecs]) -> List[str]:
+    """Get the names of all fragments in the generator specifications."""
+    type_names = []
+    for spec in gen_specs:
+        if isinstance(spec, Fragment):
+            type_names.append(spec.class_name)
+    return type_names
 
 
 def _get_spec_dim_names(spec: GenSpecs) -> Set[str]:

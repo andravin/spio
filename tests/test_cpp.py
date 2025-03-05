@@ -217,7 +217,7 @@ def _test_generate_dense_tensor():
     c = 42
 
     specs = [
-        gen.Tensor("DenseTensor", "const float", {"n": n, "h": h, "w": w, "c": c}),
+        gen.Tensor("DenseTensor", gen.dtype.float, {"n": n, "h": h, "w": w, "c": c}),
     ]
     generated_code = gen.generate(specs, namespace="DenseTensor_GenCode")
     test_code = f"""
@@ -276,7 +276,7 @@ def _test_genrate_1d_dense_tensor():
     """Return the C++ source code that tests a custom 1D tensor class"""
     n = 7
     specs = [
-        gen.Tensor("DenseTensor", "const float", {"n": n}),
+        gen.Tensor("DenseTensor", gen.dtype.float, {"n": n}, constant=True),
     ]
     generated_code = gen.generate(specs, namespace="DenseTensor_1D_GenCode")
     test_code = f"""
@@ -322,9 +322,10 @@ def _test_generate_tensor_with_strides():
     specs = [
         gen.Tensor(
             "StrideTensor",
-            "const float",
+            gen.dtype.float,
             {"n": n, "h": h, "w": w, "c": c},
             strides={"h": stride_h, "w": stride_w},
+            constant=True,
         ),
     ]
     generated_code = gen.generate(specs, namespace="StrideTensor_GenCode")
@@ -383,8 +384,9 @@ def _test_checkerboard_tensor():
     specs = [
         gen.Tensor(
             "CheckerboardTensor",
-            "const float",
+            gen.dtype.float,
             dict(c16=c16, checkers=gen.CheckerboardIndex(r=16, c=c)),
+            constant=True,
         ),
     ]
     generated_code = gen.generate(specs, namespace="CheckerboardTensor_GenCode")

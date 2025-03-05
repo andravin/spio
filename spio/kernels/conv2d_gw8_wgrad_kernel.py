@@ -135,17 +135,17 @@ def _get_specs(
     smem_tensors = [
         gen.Tensor(
             "SmemInput",
-            "uint4",
+            gen.dtype.uint4,
             {"ping_pong": 2, "n": config.warp_n, "x": block_w, "c8": block_c8},
             strides={"x" : smem_x_stride}
         ),
         gen.Tensor(
             "SmemDelta",
-            "uint4",
+            gen.dtype.uint4,
             {"ping_pong": 2, "n": config.warp_n, "q": BLOCK_Q, "k8": block_c8},
             strides={"x" : smem_x_stride}
         ),
-        gen.Tensor("SmemWgrad", "float2", {"k8": block_c8, "s": s, "c": 8, "k2": 4}),
+        gen.Tensor("SmemWgrad", gen.dtype.float2, {"k8": block_c8, "s": s, "c": 8, "k2": 4}),
     ]
 
     # TODO: ensure that the smem tensors fit in the shared memory.
@@ -201,7 +201,7 @@ def _get_specs(
         # Input loading.
         #
         gen.Index("InputIdx", {"n": config.warp_n, "x": block_w, "c8": block_c8}),
-        gen.Tensor("Input", "const uint4", {"n": n, "y": h, "x": w, "c8": c8}),
+        gen.Tensor("Input", gen.dtype.uint4, {"n": n, "y": h, "x": w, "c8": c8}, constant=True),
         gen.Index(
             "SmemInputLoadIdx",
             {
@@ -216,7 +216,7 @@ def _get_specs(
         # Delta loading
         #
         gen.Index("DeltaIdx", {"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}),
-        gen.Tensor("Delta", "const uint4", {"n": n, "p": p, "q": q, "k8": c8}),
+        gen.Tensor("Delta", gen.dtype.uint4, {"n": n, "p": p, "q": q, "k8": c8}, constant=True),
         gen.Index(
             "SmemDeltaLoadIdx",
             {"k8": warps_c8, "repeat": (32 * warps_s) // BLOCK_Q, "q": BLOCK_Q},
@@ -238,7 +238,7 @@ def _get_specs(
         # Each thread stores 8k for a particular (k8, r, s, c).
         gen.Index("WgradStoreIdx", {"k8": warps_c8, "s": s, "c": 8}),
         # Reduce Wgrad through global memory using float32 precision.
-        gen.Tensor("Wgrad", "float", {"k": c, "r": r, "s": s, "c": 8}),
+        gen.Tensor("Wgrad", gen.dtype.float, {"k": c, "r": r, "s": s, "c": 8}),
     ] + smem_tensors
     return specs, launch_params
 

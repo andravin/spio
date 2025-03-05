@@ -135,25 +135,26 @@ def _get_specs(
                 "reverse_x": config.reverse_x,
             },
         ),
-        gen.Tensor("Input", "const uint4", {"x": x, "c8": c8}),
-        gen.Tensor("Output", "__half2", {"x": x, "c2": c2}),
+        gen.Tensor("Input", gen.dtype.uint4, {"x": x, "c8": c8}, constant=True),
+        gen.Tensor("Output", gen.dtype.half2, {"x": x, "c2": c2}),
         gen.Tensor(
-            "SmemInputStore", "uint4", {"ping_pong": 2, "x": config.warps_x, "c8": c8}
+            "SmemInputStore", gen.dtype.uint4, {"ping_pong": 2, "x": config.warps_x, "c8": c8}
         ),
         gen.Tensor(
             "SmemInputLoad",
-            "const __half2",
+            gen.dtype.half2,
             {
                 "ping_pong": 2,
                 "x": config.warps_x,
                 "c2": c2,
             },
+            constant=True,
         ),
         gen.Index(
             "ThreadIdx", {"warp_x": config.warps_x, "warp_c": config.warps_c, "c2": 32}
         ),
         gen.Tensor(
-            "SmemSum", "float", {"warp_x": config.warps_x, "warp_c": config.warps_c}
+            "SmemSum", gen.dtype.float, {"warp_x": config.warps_x, "warp_c": config.warps_c}
         ),
     ]
 
