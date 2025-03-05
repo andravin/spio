@@ -14,4 +14,4 @@ from .checkerboard import CheckerboardIndex
 from .async_strip_loader import AsyncStripLoader
 from .dim import Dim, dim_name_to_dim_or_fold_class_name
 from .fold import Fold
-from .dims import Dims
+from .dims import Dims, Strides

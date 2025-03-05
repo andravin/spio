@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from .index import _generate_index
 from .subindex_protocol import SubindexProtocol
 from .dim import dim_name_to_dim_or_fold_class_name
-from .dims import Dims
+from .dims import Dims, Strides, compute_full_strides
 from .fragment_type import FragmentType
 from .data_type import dtype
 
@@ -27,38 +27,17 @@ class Tensor:
         class_name (str): The name of the custom tensor class.
         data_type (Union[dtype, FragmentType]): The data type of the tensor elements.
         dims (Dims): A dictionary mapping dimension names to their sizes.
-        strides (Dict[str, int]): An optional dictionary mapping dimension names to their strides.
+        strides (Strides): An optional dictionary mapping dimension names to their strides.
     """
 
     class_name: str
     data_type: Union[dtype, FragmentType]
     dims: Dims
-    strides: Dict[str, int] = None
+    strides: Strides = None
     constant: bool = False
 
     def __post_init__(self):
-        self.strides = self._compute_full_strides(self.dims, self.strides)
-
-    @classmethod
-    def _compute_full_strides(
-        cls,
-        dims: Dict[str, Union[int, SubindexProtocol]],
-        given_strides: Dict[str, int],
-    ) -> Dict[str, int]:
-        """Compute the full strides for the given dimensions."""
-        if given_strides is None:
-            given_strides = {}
-        all_strides = {}
-        stride = 1
-        for name, value in reversed(dims.items()):
-            if isinstance(value, SubindexProtocol):
-                value = value.size
-            if name in given_strides:
-                stride = given_strides[name]
-            all_strides[name] = stride
-            # Compute the default stride of the next dimension.
-            stride *= value
-        return all_strides
+        self.strides = compute_full_strides(self.dims, self.strides)
 
     def generate_with_context(self, user_types: List[str] = None) -> str:
         """Generate the C++ source code for the custom tensor class."""
@@ -117,7 +96,7 @@ def _generate_tensor(
     class_name: str,
     data_type_name: str,
     dims: Dims,
-    strides: Dict[str, int],
+    strides: Strides,
     size: int = None,
 ) -> str:
     """Return the C++ source code that implements a custom tensor class.

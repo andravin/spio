@@ -323,8 +323,8 @@ def _test_generate_tensor_with_strides():
         gen.Tensor(
             "StrideTensor",
             gen.dtype.float,
-            {"n": n, "h": h, "w": w, "c": c},
-            strides={"h": stride_h, "w": stride_w},
+            gen.Dims(n=n, h=h, w=w, c=c),
+            strides=gen.Strides(h=stride_h, w=stride_w),
             constant=True,
         ),
     ]

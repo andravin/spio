@@ -108,13 +108,13 @@ def _get_specs(m: int, n: int, k: int):
         "SmemCStore",
         gen.dtype.half2,
         gen.Dims(i32=4, j64=2, j16=4, j8=2, i16=2, i=16, j2=4),
-        strides=dict(j8=(32 + 1) * 4),
+        strides=gen.Strides(j8=(32 + 1) * 4),
     )
     smem_tensor_c_load = gen.Tensor(
         "SmemCLoad",
         gen.dtype.uint4,
         gen.Dims(i32=4, j64=2, j8=8, i=32),
-        strides=dict(j8=32 + 1),
+        gen.Strides(j8=32 + 1),
         constant=True,
     )
 
