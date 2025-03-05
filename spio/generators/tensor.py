@@ -7,6 +7,7 @@ from .index import _generate_index
 from .subindex_protocol import SubindexProtocol
 from .dim import dim_name_to_dim_or_fold_class_name
 from .dims import Dims
+from .fragment_type import FragmentType
 
 DATA_TYPE_SIZES = {
     "float": 4,
@@ -39,7 +40,7 @@ class Tensor:
     """
 
     class_name: str
-    data_type: str
+    data_type: Union[str, FragmentType]
     dims: Dims
     strides: Dict[str, int] = None
 
@@ -103,7 +104,7 @@ class Tensor:
 
 def _generate_tensor(
     class_name: str,
-    data_type: str,
+    data_type: Union[str, FragmentType],
     dims: Dict[str, int],
     strides: Dict[str, int],
     size: int = None,
@@ -149,6 +150,8 @@ def _generate_tensor(
         strides(Dict[str, int]): optional dict that specifies non-default strides for given dims.
     """
     code = ""
+    if isinstance(data_type, FragmentType):
+        data_type = f"spio::{data_type.value}"
     index_class_name = f"_{class_name}_Index"
     code += _generate_index(index_class_name, dims)
     code += "\n"

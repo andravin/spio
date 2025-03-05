@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Tuple
 
+from .fragment_type import FragmentType
 from .fragment_index import (
     FragmentLoadIndex,
     FragmentIndex,
@@ -39,7 +40,7 @@ class Fragment:
     """
 
     class_name: str
-    fragment_type: str
+    fragment_type: FragmentType
     row: str
     col: str
 
@@ -60,9 +61,8 @@ class Fragment:
         else:
             load_method = ""
 
-
         return f"""
-class {self.class_name} : public spio::{self.fragment_type} {{
+class {self.class_name} : public spio::{self.fragment_type.value} {{
     public:
         {index_class}
 
@@ -79,9 +79,7 @@ class {self.class_name} : public spio::{self.fragment_type} {{
 
     def generate_index(self) -> str:
         """Generate the fragment index class code."""
-        return FragmentIndex(
-            "Index", self.fragment_type, self.row, self.col
-        ).generate()
+        return FragmentIndex("Index", self.fragment_type, self.row, self.col).generate()
 
     def generate_load_index(self) -> str:
         """Generate the fragment load index class code."""

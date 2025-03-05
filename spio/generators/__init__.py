@@ -4,6 +4,7 @@ from .generators import generate
 from .gen_specs import GenSpecs
 from .index import Index
 from .tensor import Tensor
+from .fragment_type import FragmentType
 from .fragment import Fragment
 from .fragment_index import FragmentIndex, FragmentLoadIndex
 from .macros import Macro

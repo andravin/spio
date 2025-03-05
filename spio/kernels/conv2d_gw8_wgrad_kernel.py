@@ -224,13 +224,13 @@ def _get_specs(
         #
         # MMA fragments
         #
-        gen.Fragment("Acc", "MMA_M16_N8_F32_C", "c", "k"),
+        gen.Fragment("Acc", gen.FragmentType.M16_N8_F32_C, "c", "k"),
         #
         # MMA tensors
         #
-        gen.Tensor("AccTensor", "spio::MMA_M16_N8_F32_C", {"s2": warp_s2_up, "r": r}),
-        gen.Tensor("InputTensor", "spio::MMA_M16_K8_F16_A", {"s2": warp_s2_up}),
-        gen.Tensor("DeltaTensor", "spio::MMA_N8_K8_F16_B", {"n": config.warp_n, "r": r}),
+        gen.Tensor("AccTensor", gen.FragmentType.M16_N8_F32_C, {"s2": warp_s2_up, "r": r}),
+        gen.Tensor("InputTensor", gen.FragmentType.M16_K8_F16_A, {"s2": warp_s2_up}),
+        gen.Tensor("DeltaTensor", gen.FragmentType.N8_K8_F16_B, {"n": config.warp_n, "r": r}),
         #
         # Weights storing.
         #

@@ -431,10 +431,10 @@ def _test_fragment_index():
 
     specs = [
         gen.Dim("lane"),
-        gen.FragmentIndex("A", "MMA_M16_K16_F16_A", "r", "s"),
-        gen.FragmentIndex("B", "MMA_N16_K16_F16_B", "s", "t"),
-        gen.FragmentIndex("C", "MMA_M16_N16_F32_C", "r", "s"),
-        gen.FragmentIndex("B2", "MMA_N8_K8_F16_B", "s", "t"),
+        gen.FragmentIndex("A", gen.FragmentType.M16_K16_F16_A, "r", "s"),
+        gen.FragmentIndex("B", gen.FragmentType.N16_K16_F16_B, "s", "t"),
+        gen.FragmentIndex("C", gen.FragmentType.M16_N16_F32_C, "r", "s"),
+        gen.FragmentIndex("B2", gen.FragmentType.N8_K8_F16_B, "s", "t"),
     ]
     generated_code = gen.generate(specs, namespace="FragmentIndex_GenCode")
     test_code = f"""
@@ -503,8 +503,8 @@ UTEST(FragmentIndex, MMA_M16_N16_F32_C)
 def _test_fragment_load_index():
     specs = [
         gen.Dim("lane"),
-        gen.FragmentLoadIndex("Input", "MMA_M16_K16_F16_A", "x", "c"),
-        gen.FragmentLoadIndex("Weights", "MMA_N8_K16_F16_B", "c", "k"),
+        gen.FragmentLoadIndex("Input", gen.FragmentType.M16_K16_F16_A, "x", "c"),
+        gen.FragmentLoadIndex("Weights", gen.FragmentType.N8_K16_F16_B, "c", "k"),
     ]
     generated_code = gen.generate(specs, namespace="FragmentLoadIndex_GenCode")
     test_code = f"""
