@@ -33,7 +33,7 @@ cdef class Function:
     def launch(self, grid, block, args, shared_mem_bytes=0):
         """Launch the CUDA kernel function."""
         cdef cdriver.CUdeviceptr arg_ptrs[16]
-        cdef int arg_ints[16]
+        cdef long long arg_ints[16]
         cdef float arg_floats[16]
         cdef void *kernel_params[16]
 
