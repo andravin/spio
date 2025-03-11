@@ -32,19 +32,22 @@ namespace spio
             data_type *__restrict__ next_execution,
             data_type count,
             unsigned tid)
-            : _slots(slots), _next_reservation(next_reservation), _next_execution(next_execution), _tid(tid)
+            : _slots(slots),
+              _next_reservation(next_reservation),
+              _next_execution(next_execution),
+              _first_lane((tid % 32) == 0)
         {
-            if (_tid < size)
+            if (tid < size)
             {
                 // UINT_MAX is logically one less than 0,
                 // so it is a sentinel value that indicates that the slot is empty.
-                _slots[_tid] = _tid < count ? _tid : UINT_MAX;
+                _slots[tid] = tid < count ? tid : UINT_MAX;
             }
-            else if (_tid == size)
+            else if (tid == size)
             {
                 *_next_execution = count;
             }
-            else if (_tid == size + 1)
+            else if (tid == size + 1)
             {
                 *_next_reservation = 0;
             }
@@ -54,7 +57,7 @@ namespace spio
         /// @return
         __device__ void acquire()
         {
-            if (_tid % 32 == 0)
+            if (_first_lane)
             {
                 auto seqno = atomicAdd(_next_reservation, 1);
                 auto slot = &_slots[seqno % size];
@@ -72,7 +75,7 @@ namespace spio
         /// @return
         __device__ void release()
         {
-            if (_tid % 32 == 0)
+            if (_first_lane)
             {
                 auto seqno = atomicAdd(_next_execution, 1);
                 _slots[seqno % size] = seqno;
@@ -84,7 +87,7 @@ namespace spio
         volatile data_type *_slots;
         data_type *_next_reservation;
         data_type *_next_execution;
-        int _tid;
+        bool _first_lane;
     };
 }
 
