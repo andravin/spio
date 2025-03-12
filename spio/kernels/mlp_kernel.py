@@ -56,7 +56,9 @@ class MlpConfig:
         return self.warps * 32
 
 
-def _get_configs(params: MlpParams, **_kwargs) -> Generator[MlpConfig, None, None]:
+def _get_configs(
+    params: MlpParams, _device_attr: DeviceAttributes, **_kwargs
+) -> Generator[MlpConfig, None, None]:
     """Generate configurations for the MLP kernel."""
     k = params.k
     if k <= 128:
@@ -72,13 +74,15 @@ def _get_configs(params: MlpParams, **_kwargs) -> Generator[MlpConfig, None, Non
         raise ValueError(f"Invalid k: {k}")
 
 
-def _get_kernel_spec(params: MlpParams, config: MlpConfig, device_attr: DeviceAttributes ) -> KernelSpec:
+def _get_kernel_spec(
+    params: MlpParams, config: MlpConfig, device_attr: DeviceAttributes
+) -> KernelSpec:
     """Return the generator specs, grid and block for the MLP kernel."""
     _validate_params(params)
 
     blocks = device_attr.multiprocessor_count
 
-    smem_size = device_attr.max_shared_memory_per_block_optin
+    smem_capacity = device_attr.max_shared_memory_per_block_optin
     smem_carveout = 100
 
     c8 = params.c // 8
@@ -98,19 +102,6 @@ def _get_kernel_spec(params: MlpParams, config: MlpConfig, device_attr: DeviceAt
         "PrjWeight", gen.dtype.uint4, gen.Dims(r16=r16, k=params.k, r8=2), constant=True
     )
 
-    input_smem_tensor_bytes = 32 * 1024
-    input_smem_tensor_size = input_smem_tensor_bytes // 16
-    input_smem_buffer_size = c8 * config.block_x
-    num_input_smem_buffers = input_smem_tensor_size // input_smem_buffer_size
-    smem_input_x_stride = next_relative_prime(c8, NUM_SMEM_BANKS_128)
-
-    smem_input_tensor = gen.Tensor(
-        "SmemInput",
-        gen.dtype.uint4,
-        gen.Dims(buffer=num_input_smem_buffers, x=config.warp_x, c8=c8),
-        gen.Strides(x=smem_input_x_stride),
-    )
-
     smem_exp_weights_tensor = gen.Tensor(
         "SmemExpWeight",
         gen.dtype.uint4,
@@ -123,10 +114,34 @@ def _get_kernel_spec(params: MlpParams, config: MlpConfig, device_attr: DeviceAt
         gen.Dims(r16=r16, k16=k16, checkers=gen.CheckerboardIndex(k=16, r8=2)),
     )
 
+    weights_tensor_bytes = (
+        smem_exp_weights_tensor.num_bytes + smem_prj_weights_tensor.num_bytes
+    )
+
+    max_smem_input_tensor_bytes = smem_capacity - weights_tensor_bytes
+    max_smem_input_tensor_size = (
+        max_smem_input_tensor_bytes // input_tensor.data_type.value.size
+    )
+
+    smem_input_x_stride = next_relative_prime(c8, NUM_SMEM_BANKS_128)
+
+    smem_input_buffer_size_per_warp = config.warp_x * smem_input_x_stride
+
+    num_smem_input_buffers = (
+        max_smem_input_tensor_size // smem_input_buffer_size_per_warp
+    )
+
+    smem_input_tensor = gen.Tensor(
+        "SmemInput",
+        gen.dtype.uint4,
+        gen.Dims(buffer=num_smem_input_buffers, x=config.warp_x, c8=c8),
+        gen.Strides(x=smem_input_x_stride),
+    )
+
     specs = [
         gen.Macro({"SPIO_MLP_KERNEL": get_full_kernel_name(KERNEL_NAME, params)}),
         gen.Fold("block_x", "x", config.block_x),
-        gen.ParamsSpec("Params", dict(blocks=blocks)),
+        gen.ParamsSpec("Params", dict(blocks=blocks, warps=config.warps)),
         gen.Index("WarpIdx", {"warp": config.warps, "lane": 32}),
         input_tensor,
         output_tensor,
@@ -138,11 +153,11 @@ def _get_kernel_spec(params: MlpParams, config: MlpConfig, device_attr: DeviceAt
     ]
 
     launch_params = LaunchParams(
-        grid=blocks, block=config.threads, shared_mem_bytes=smem_size
+        grid=blocks, block=config.threads, shared_mem_bytes=smem_capacity
     )
 
     function_attributes = FunctionAttributes(
-        max_dynamic_shared_memory_size=smem_size,
+        max_dynamic_shared_memory_size=smem_capacity,
         preferred_shared_memory_carveout=smem_carveout,
     )
 

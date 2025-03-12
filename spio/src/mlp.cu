@@ -1,5 +1,7 @@
 #include "spio.cuh"
 
+#include "spio/semaphore.cuh"
+
 #include "parameters.h"
 
 using namespace spio;
@@ -16,12 +18,18 @@ extern "C"
     {
         // Define the shared memory buffers.
         extern __shared__ uint4 smem[];
-        uint4 *smem_input_ptr = smem;
         uint4 *smem_exp_weights_ptr = smem;
         uint4 *smem_prj_weights_ptr = smem + SmemExpWeight::size;
+        uint4 *smem_input_ptr = smem_prj_weights_ptr + SmemPrjWeight::size;
+        unsigned *smem_sema_ptr = reinterpret_cast<unsigned *>(smem_input_ptr + SmemInput::size);
 
-        int block_x = blockIdx.x * Block::x;
+        WarpSemaphore input_buffers_semaphore(
+            smem_sema_ptr,
+            smem_sema_ptr + 1,
+            Input::BUFFERS.get(),
+            threadIdx.x);
 
+        BLOCK_X_Dim block_x(blockIdx.x);
         WarpIdx warp_idx(threadIdx.x);
 
         // Define the input matrix fragments.
@@ -227,7 +235,7 @@ extern "C"
             for (int k16 = 0; k16 < Params::k16; ++k16)
             {
                 // TODO: Use a FragmentSpec  to define the output_acc fragment type.
-                // TODO: Use Out::data_type::Index to compute x8() and k2(). 
+                // TODO: Use Out::data_type::Index to compute x8() and k2().
                 for (int k8 = 0; k8 < 2; ++k8)
                 {
                     for (int x8 = 0; x8 < 2; ++x8)
@@ -258,4 +266,3 @@ extern "C"
         }
     }
 }
-
