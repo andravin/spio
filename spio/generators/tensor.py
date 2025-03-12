@@ -66,8 +66,8 @@ class Tensor:
     @property
     def num_bytes(self) -> int:
         """The number of bytes required to store the tensor data."""
-        if isinstance(self.data_type, str):
-            element_size = self.data_type.size
+        if isinstance(self.data_type, dtype):
+            element_size = self.data_type.value.size
         else:
             raise ValueError(f"Size of data_type {self.data_type} not supported.")
 

@@ -5,8 +5,9 @@ from itertools import product
 from typing import Generator
 
 from .. import generators as gen
-
 from ..util import divup, next_relative_prime
+from ..cuda.driver import DeviceAttributes
+
 from .launch_params import LaunchParams
 from .conv2d_gw8_params import Conv2dGw8Params
 from .conv2d_stats import Conv2dStats
@@ -32,6 +33,7 @@ BLOCK_Q = 8
 
 def _get_configs(
     params: Conv2dGw8Params,
+    _device_attr: DeviceAttributes,
 ) -> Generator[Conv2dGw8WgradConfig, None, None]:
     """Generate tile configurations for the given layer parameters."""
     max_groups = min(params.groups, 8)
@@ -83,7 +85,10 @@ def _get_configs(
 
 
 def _get_kernel_spec(
-    params: Conv2dGw8Params, config: Conv2dGw8WgradConfig = None, **_kwargs
+    params: Conv2dGw8Params,
+    config: Conv2dGw8WgradConfig,
+    _device_attr: DeviceAttributes,
+    **_kwargs,
 ) -> KernelSpec:
     """Get the code gen specs and launch params."""
     params.validate()
@@ -150,8 +155,10 @@ def _get_kernel_spec(
         ),
     ]
 
-    # TODO: ensure that the smem tensors fit in the shared memory.
-    # smem_size = smem_tensors[0].num_bytes + smem_tensors[1].num_bytes
+    smem_size = max(
+        smem_tensors[0].num_bytes + smem_tensors[1].num_bytes, smem_tensors[2].num_bytes
+    )
+    assert smem_size < _device_attr.max_shared_memory_per_block
 
     launch_params = LaunchParams(grid=blocks, block=threads)
 

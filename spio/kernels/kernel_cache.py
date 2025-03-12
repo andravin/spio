@@ -8,6 +8,7 @@ from .. import primary_context_guard
 
 from ..compiler import compile_kernel_configs
 from ..util import logger_enabled
+from ..cuda.driver import get_device_attributes
 
 from .kernel_key import KernelKey
 from .performance_model_cache import PerformanceModelCache
@@ -96,11 +97,15 @@ def _compile_and_load_kernel(
 ) -> Kernel:
     with torch.device(device) as device_obj:
         device_ordinal = device_obj.index if device_obj.index is not None else 0
-        arch = torch.cuda.get_device_capability(device=device_obj)
+        device_attr = get_device_attributes(device_ordinal)
         primary_context_guard.set_device(device_ordinal)
         configs = [config]
         kernels = compile_kernel_configs(
-            kernel_factory, params, configs=configs, arch=arch, **kernel_kwargs
+            kernel_factory,
+            params,
+            configs=configs,
+            device_attr=device_attr,
+            **kernel_kwargs,
         )
         best_kernel = kernels[0]
         device_ordinal = device_obj.index if device_obj.index is not None else 0

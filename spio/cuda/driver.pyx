@@ -5,7 +5,8 @@ from cpython.bytes cimport PyBytes_FromString
 from dataclasses import dataclass
 from typing import Tuple
 
-@dataclass
+
+@dataclass(frozen=True)
 class DeviceAttributes:
     """Attributes of a CUDA device."""
 
@@ -14,9 +15,10 @@ class DeviceAttributes:
     name: str = None
     compute_capability: Tuple[int, int] = None
     max_shared_memory_per_block_optin: int = None
+    max_shared_memory_per_block: int = 48 * 1024
 
 
-@dataclass
+@dataclass(frozen=True)
 class FunctionAttributes:
     """Attributes of a CUDA function."""
     max_dynamic_shared_memory_size: int = None

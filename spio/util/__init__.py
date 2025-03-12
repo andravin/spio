@@ -4,7 +4,7 @@ from .load_parameter_set import _load_dataclasses_from_resource, load_parameter_
 from .math import divup, next_relative_prime
 from .close import assert_all_close_with_acc_depth
 from .interval_timer import IntervalTimer, Timer, time_function
-from .device_info import get_formatted_device_name, get_formatted_arch
+from .device_info import get_formatted_device_name, get_formatted_arch, get_device_ordinal
 from .cache_dir import get_cache_dir
 from .class_names import get_full_name, get_full_name_with_underscores
 from .parse_kwargs import ParseKwargs

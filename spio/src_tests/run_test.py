@@ -6,11 +6,13 @@ import torch
 
 from ..compiler import compile_kernel_configs
 from ..util.close import assert_all_close_with_acc_depth
+from ..util.device_info import get_device_ordinal
 from ..reflection import (
     get_kernel_reflection,
     get_function_reflection,
     get_layer_reflection,
 )
+from ..cuda.driver import get_device_attributes
 from ..transform._transform import _transform as spio_transform
 from ..kernels import Params, KernelFactory
 
@@ -27,8 +29,6 @@ def run_kernel_test(
     **kernel_kwargs,
 ):
     """Run a test for an forward pass kernel."""
-    arch = torch.cuda.get_device_capability(device)
-
     kernel_name = kernel_factory.get_kernel_name(**kernel_kwargs)
     reflection = get_kernel_reflection(kernel_name)
 
@@ -41,9 +41,16 @@ def run_kernel_test(
     reference_args = _all_to_float(reference_reflection.arrange_args(args))
     torch_kwargs = reference_reflection.get_function_kwargs(params)
 
+    device_idx = get_device_ordinal(device)
+    device_attr = get_device_attributes(device_idx)
+
     torch_output = reference_function(*reference_args, **torch_kwargs)
     kernels = compile_kernel_configs(
-        kernel_factory, params, arch=arch, configs=configs, **reflection.kwargs
+        kernel_factory,
+        params,
+        configs=configs,
+        device_attr=device_attr,
+        **reflection.kwargs,
     )
     stats = reflection.stats(params, output_names=reflection.output_names)
     acc_depth = stats.accumulation_depths[0]
@@ -67,7 +74,8 @@ def run_grad_kernel_test(
     **kernel_kwargs,
 ):
     """Run a test for a backward pass kernel."""
-    arch = torch.cuda.get_device_capability(device)
+    device_idx = get_device_ordinal(device)
+    device_attr = get_device_attributes(device_idx)
     kernel_name = kernel_factory.get_kernel_name(**kernel_kwargs)
     reflection = get_kernel_reflection(kernel_name)
     args = reflection.make_args(params, device=device, training=True)
@@ -100,7 +108,11 @@ def run_grad_kernel_test(
 
     kernel_args = reflection.arrange_args(args)
     kernels = compile_kernel_configs(
-        kernel_factory, params, arch=arch, configs=configs, **kernel_kwargs
+        kernel_factory,
+        params,
+        configs=configs,
+        device_attr=device_attr,
+        **kernel_kwargs,
     )
     for kernel in kernels:
         kernel.load()

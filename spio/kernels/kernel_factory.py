@@ -5,6 +5,7 @@ from typing import Type, Callable, Union, List, Any, TypeVar
 import torch
 
 from ..util import check_channels_last
+from ..cuda.driver import DeviceAttributes
 
 from .params import Params
 from .stats import Stats
@@ -37,7 +38,7 @@ Returns:
 """
 
 
-ConfigsCallback = Callable[[Params, Any], List[Config]]
+ConfigsCallback = Callable[[Params, DeviceAttributes, Any], List[Config]]
 """Callback that returns a list of kernel configurations.
 
 Args:
@@ -48,7 +49,7 @@ Returns:
     List[Config]: A list of kernel configurations.
 """
 
-KernelSpecCallback = Callable[[Params, Config, Any], KernelSpec]
+KernelSpecCallback = Callable[[Params, Config, DeviceAttributes, Any], KernelSpec]
 """Callback that returns the kernel specifications.
 
 Args:
@@ -140,10 +141,12 @@ class KernelFactory:
         self.per_model_skip_params = perf_model_skip_params
         self._args_checker = args_checker
 
-    def configs(self, params: Params, **kwargs) -> List[Config]:
+    def configs(
+        self, params: Params, device_attr: DeviceAttributes, **kwargs
+    ) -> List[Config]:
         """Return all configs of the given layer parameters."""
         if callable(self._configs):
-            return self._configs(params, **kwargs)
+            return self._configs(params, device_attr, **kwargs)
         return self._configs
 
     def get_kernel_name(self, **kwargs) -> str:
@@ -160,7 +163,9 @@ class KernelFactory:
         kernel_name = self.get_kernel_name(**kwargs)
         return get_full_kernel_name(kernel_name, params)
 
-    def get_kernel_spec(self, params: Params, config: Config, **kwargs) -> KernelSpec:
+    def get_kernel_spec(
+        self, params: Params, config: Config, device_attr: DeviceAttributes, **kwargs
+    ) -> KernelSpec:
         """Return the kernel specs and launch parameters.
 
         Kernel specs are code generators for named tensors, constant
@@ -172,7 +177,7 @@ class KernelFactory:
             config: The kernel configuration.
         """
         if callable(self._kernel_spec):
-            return self._kernel_spec(params, config, **kwargs)
+            return self._kernel_spec(params, config, device_attr, **kwargs)
         return self._kernel_spec
 
     def get_kernel_cache(self, **kwargs) -> KernelCache:
@@ -195,10 +200,12 @@ class KernelFactory:
         kernel_cache = self.get_kernel_cache(**kwargs)
         return kernel_cache.get(self, params, device, **kwargs)
 
-    def make_kernel(self, params: Params, config, **kwargs) -> Kernel:
+    def make_kernel(
+        self, params: Params, config, device_attr: DeviceAttributes, **kwargs
+    ) -> Kernel:
         """Return a new Kernel object for the params and config."""
         kernel_name = self.get_full_kernel_name(params, **kwargs)
-        kernel_specs = self.get_kernel_spec(params, config, **kwargs)
+        kernel_specs = self.get_kernel_spec(params, config, device_attr, **kwargs)
         return Kernel(
             kernel_name,
             kernel_specs,

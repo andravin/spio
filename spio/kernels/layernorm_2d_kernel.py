@@ -6,6 +6,8 @@ from itertools import product
 
 from .. import generators as gen
 from ..util import divup
+from ..cuda.driver import DeviceAttributes
+
 from .launch_params import LaunchParams
 from .layernorm_2d_params import LayerNorm2dParams
 from .layernorm_2d_stats import LayerNorm2dStats
@@ -54,7 +56,7 @@ def _config_is_valid(config: LayerNorm2dConfig, params: LayerNorm2dParams):
 
 
 def _get_configs(
-    params: LayerNorm2dParams, **_kwargs
+    params: LayerNorm2dParams, _device_attr: DeviceAttributes, **_kwargs
 ) -> Generator[LayerNorm2dConfig, None, None]:
     warps_x_choices = [1, 2, 4, 8]
     warp_c_choices = [1, 2, 4, 8]
@@ -76,7 +78,7 @@ C_PER_REG = 64
 
 
 def _get_kernel_spec(
-    params: LayerNorm2dParams, config: LayerNorm2dConfig = None
+    params: LayerNorm2dParams, config: LayerNorm2dConfig, _device_attr: DeviceAttributes
 ) -> KernelSpec:
     """Get the specifications for the LayerNorm2d kernel."""
     params.validate()

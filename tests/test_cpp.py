@@ -216,10 +216,15 @@ def _test_generate_dense_tensor():
     w = 33
     c = 42
 
-    specs = [
-        gen.Tensor("DenseTensor", gen.dtype.float, {"n": n, "h": h, "w": w, "c": c}),
-    ]
-    generated_code = gen.generate(specs, namespace="DenseTensor_GenCode")
+    tensor_spec = gen.Tensor(
+        "DenseTensor", gen.dtype.float, {"n": n, "h": h, "w": w, "c": c}
+    )
+
+    size = n * h * w * c
+    assert tensor_spec.size == size
+    assert tensor_spec.num_bytes == size * gen.dtype.float.value.size
+
+    generated_code = gen.generate([tensor_spec], namespace="DenseTensor_GenCode")
     test_code = f"""
 
 {generated_code}

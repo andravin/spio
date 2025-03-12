@@ -29,7 +29,7 @@ except ImportError:
     HAS_TORCHINFO = False
 
 from spio.transform import transform as spio_transform
-from spio.util import get_formatted_device_name, ParseKwargs, Timer
+from spio.util import get_formatted_device_name, ParseKwargs, Timer, get_device_ordinal
 from spio.kernels import (
     KernelParamsLogger,
     KernelParams,
@@ -39,6 +39,7 @@ from spio.kernels import (
 import spio.layers
 from spio.compiler import compile_kernels
 from spio.src_tests import preprocess_data_string
+from spio.cuda.driver import get_device_attributes
 
 GROUP_WIDTH = 8
 CHANNELS_LAST = True
@@ -585,11 +586,14 @@ def benchmark_configs(model, inputs, args, data_path: Path):
         kernel_factory = kernel_params.kernel_factory
         params = kernel_params.params
         device = kernel_params.device
-        arch = torch.cuda.get_device_capability(device=device)
+        device_idx = get_device_ordinal(device)
+        device_attr = get_device_attributes(device_idx)
         kernel_kwargs = dict(kernel_params.kernel_kwargs)
-        configs = kernel_factory.configs(kernel_params.params, **kernel_kwargs)
+        configs = kernel_factory.configs(
+            kernel_params.params, device_attr, **kernel_kwargs
+        )
         kernel_table[kernel_params] = [
-            kernel_factory.make_kernel(params, config, **kernel_kwargs)
+            kernel_factory.make_kernel(params, config, device_attr, **kernel_kwargs)
             for config in configs
         ]
 

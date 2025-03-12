@@ -5,6 +5,7 @@ from itertools import product
 from typing import Generator
 
 from .. import generators as gen
+from ..cuda.driver import DeviceAttributes
 
 from ..util import divup, next_relative_prime
 from .launch_params import LaunchParams
@@ -24,7 +25,7 @@ class Conv2dGw8Config:
 
 
 def _get_configs(
-    params: Conv2dGw8Params, **_kwargs
+    params: Conv2dGw8Params, _device_attr: DeviceAttributes, **_kwargs
 ) -> Generator[Conv2dGw8Config, None, None]:
     """Generate configurations for the Conv2d GW8 kernel."""
     # igrad is unused in this function
@@ -51,7 +52,10 @@ def _get_kernel_name(igrad=False) -> str:
 
 
 def _get_kernel_spec(
-    params: Conv2dGw8Params, config: Conv2dGw8Config = None, igrad: bool = False
+    params: Conv2dGw8Params,
+    config: Conv2dGw8Config,
+    _device_attr: DeviceAttributes,
+    igrad: bool = False,
 ) -> KernelSpec:
     """The code generator specs and launch parameters."""
     params.validate()
