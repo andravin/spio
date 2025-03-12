@@ -8,22 +8,21 @@
 namespace spio
 {
     /// @brief  A warp-safe circular FIFO.
-    /// The user must ensure the size of the FIFO never exceeds its capacity. Consider using WarpFifo
-    /// in cooperation with WarpSemaphore to limit the number of warps that can concurrently access the FIFO.
+    /// The user must ensure the size of the FIFO never exceeds its capacity.
     ///
-    /// For example, to manage access to a limited number of resources, you would create a WarpSemaphore
-    /// with a count equal to the number of resources and use it to control access to a WarpFifo 
-    /// with Capacity equal to the number of resources. You can construct the WarpFifo with the make_resource_queue
-    /// function to initialize the FIFO with the resource identifiers.
+    /// To manage access to a limited number of resources, you can call WarpFifo::make_resourece_queue()
+    /// to construct a FIFO that is initialized with the resource identifiers [0, num_resources).
+    /// Then you acquire a resource-id by calling pop() and release it by calling push().
     /// @tparam Capacity
     template <unsigned Capacity>
     class WarpFifo
     {
         static_assert(Capacity <= 32, "Capacity must be less than or equal to 32.");
-        static constexpr unsigned ALL_LANES_MASK = 0xFFFFFFFF;
+        static constexpr unsigned all_lanes_mask = 0xFFFFFFFF;
+        static constexpr unsigned patience_ns = 20;
 
     public:
-        static constexpr unsigned SENTINEL_VALUE = UINT_MAX;
+        static constexpr unsigned sentinel_value = UINT_MAX;
 
         static constexpr unsigned capacity = Capacity;
 
@@ -51,9 +50,9 @@ namespace spio
         /// @return WarpFifo initialized with the requested number of resource ids [0, num_resources).
         __device__ static WarpFifo make_resource_queue(unsigned *fifo, unsigned *head, unsigned *tail, int tid, int num_resources)
         {
-            if (tid < Capacity)
+            if (tid < capacity)
             {
-                fifo[tid] = (tid < num_resources) ? tid : SENTINEL_VALUE;
+                fifo[tid] = (tid < num_resources) ? tid : sentinel_value;
             }
             if (tid == 0)
             {
@@ -71,7 +70,7 @@ namespace spio
             if (_is_first_lane)
             {
                 auto idx = atomicAdd(_tail, 1);
-                _fifo[idx % Capacity] = value;
+                _fifo[idx % capacity] = value;
                 __threadfence_block();
             }
             __syncwarp();
@@ -87,13 +86,16 @@ namespace spio
             if (_is_first_lane)
             {
                 auto idx = atomicAdd(_head, 1);
-                auto slot = &_fifo[idx % Capacity];
-                do
+                auto slot = &_fifo[idx % capacity];
+                for (
+                    value = atomicExch(slot, sentinel_value);
+                    value == sentinel_value;
+                    value = atomicExch(slot, sentinel_value))
                 {
-                    value = atomicExch(slot, SENTINEL_VALUE);
-                } while (value == SENTINEL_VALUE);
+                    __nanosleep(patience_ns);
+                }
             }
-            return __shfl_sync(ALL_LANES_MASK, value, 0);
+            return __shfl_sync(all_lanes_mask, value, 0);
         }
 
     private:

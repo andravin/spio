@@ -5,17 +5,14 @@
 #define UINT_MAX 4294967295
 #endif
 
-namespace
-{
-    constexpr unsigned Patience_ns = 20;
-}
-
 namespace spio
 {
     /// @brief A fair, warp-based semaphore.
     /// This semaphore ensures that threads are served in the order they requested access.
     class WarpSemaphore
     {
+        static constexpr unsigned patience_ns = 20;
+
     public:
         using data_type = unsigned;
 
@@ -57,7 +54,7 @@ namespace spio
                 // The comparison is correct even if seqno overflows because unsigned integers wrap around.
                 while (static_cast<int>(*next_execution - seqno) <= 0)
                 {
-                    __nanosleep(Patience_ns);
+                    __nanosleep(patience_ns);
                 }
             }
             __syncwarp();
