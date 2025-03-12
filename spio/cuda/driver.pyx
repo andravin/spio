@@ -3,6 +3,7 @@ from spio.cuda cimport cdriver
 from cpython.bytes cimport PyBytes_FromString
 
 from dataclasses import dataclass
+from typing import Tuple
 
 @dataclass
 class DeviceAttributes:
@@ -11,6 +12,15 @@ class DeviceAttributes:
     multiprocessor_count: int
     l2_cache_size: int
     name: str = None
+    compute_capability: Tuple[int, int] = None
+    max_shared_memory_per_block_optin: int = None
+
+
+@dataclass
+class FunctionAttributes:
+    """Attributes of a CUDA function."""
+    max_dynamic_shared_memory_size: int = None
+    preferred_shared_memory_carveout: int = None
 
 
 cdef _check(cdriver.CUresult status):
@@ -29,6 +39,40 @@ cdef class Function:
 
     cdef set_c_function(self, cdriver.CUfunction c_function):
         self._c_function = c_function
+
+    cdef set_max_dynamic_shared_memory_size(self, size):
+        """Set the maximum dynamic shared memory size for this function."""
+        _check(cdriver.cuFuncSetAttribute(self._c_function, cdriver.CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, size))
+
+    cdef get_max_dynamic_shared_memory_size(self):
+        cdef int size
+        _check(cdriver.cuFuncGetAttribute(&size, cdriver.CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, self._c_function))
+        return size
+
+    cdef set_preferred_shared_memory_carveout(self, percentage):
+        """Set the preferred shared memory carveout for this function."""
+        _check(cdriver.cuFuncSetAttribute(
+            self._c_function, cdriver.CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT, percentage))
+
+    cdef get_preferred_shared_memory_carveout(self):
+        cdef int percentage
+        _check(cdriver.cuFuncGetAttribute(
+            &percentage, cdriver.CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT, self._c_function))
+        return percentage
+
+    def get_attributes(self):
+        """Get attributes of the CUDA function."""
+        return FunctionAttributes(
+            max_dynamic_shared_memory_size=self.get_max_dynamic_shared_memory_size(),
+            preferred_shared_memory_carveout=self.get_preferred_shared_memory_carveout()
+        )
+
+    def set_attributes(self, attr: FunctionAttributes):
+        """Set attributes of the CUDA function."""
+        if attr.preferred_shared_memory_carveout is not None:
+            self.set_preferred_shared_memory_carveout(attr.preferred_shared_memory_carveout)
+        if attr.max_dynamic_shared_memory_size is not None:
+            self.set_max_dynamic_shared_memory_size(attr.max_dynamic_shared_memory_size)
 
     def launch(self, grid, block, args, shared_mem_bytes=0):
         """Launch the CUDA kernel function."""
@@ -77,7 +121,7 @@ cdef class Module:
         self.unload()
 
     def load(self, fname):
-        """Load a CUDA module from file."""
+        """Load a CUDA module from a file."""
         _check(cdriver.cuModuleLoad(&self._c_module, fname.encode('utf-8')))
 
     def unload(self):
@@ -183,10 +227,32 @@ def get_device_name(device_ordinal=0):
     return name.decode('utf-8')
 
 
+def get_compute_capability(device_ordinal=0):
+    """Return the compute capability of the given device as a tuple (major, minor)."""
+    cdef int major, minor
+    cdef cdriver.CUdevice device
+    _check(cdriver.cuDeviceGet(&device, device_ordinal))
+    _check(cdriver.cuDeviceGetAttribute(&major, cdriver.CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device))
+    _check(cdriver.cuDeviceGetAttribute(&minor, cdriver.CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device))
+    return (major, minor)
+
+
+def get_max_shared_memory_per_block_optin(device_ordinal=0):
+    """Get the maximum shared memory per block (opt-in) on the given device."""
+    cdef int size
+    cdef cdriver.CUdevice device
+    _check(cdriver.cuDeviceGet(&device, device_ordinal))
+    _check(cdriver.cuDeviceGetAttribute(
+        &size, cdriver.CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN, device))
+    return size
+
+
 def get_device_attributes(device_ordinal=0):
     """Return a dataclass with the device attributes."""
     return DeviceAttributes(
         name=get_device_name(device_ordinal),
         multiprocessor_count=get_multiprocessor_count(device_ordinal),
         l2_cache_size=get_l2_cache_size(device_ordinal),
+        compute_capability=get_compute_capability(device_ordinal),
+        max_shared_memory_per_block_optin=get_max_shared_memory_per_block_optin(device_ordinal)
     )
