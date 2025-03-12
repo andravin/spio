@@ -1,27 +1,78 @@
 """Kernel factory for creating Kernel objects for CUDA kernels."""
 
-from typing import Type, Callable, Union, List, Any, TypeVar, Tuple
+from typing import Type, Callable, Union, List, Any, TypeVar
 
 import torch
 
-from ..generators.gen_specs import GenSpecs
-from .params import Params
-from .kernel import Kernel, get_full_kernel_name
-from .launch_params import LaunchParams
-from .kernel_cache import KernelCache
-from .stats import Stats
 from ..util import check_channels_last
+
+from .params import Params
+from .stats import Stats
+from .kernel_cache import KernelCache
+from .kernel import Kernel, KernelSpec, get_full_kernel_name
 
 # A kernel tile configuration class. Each kernel defines its own configuration dataclass.
 Config = TypeVar("Config")
 
 
-# Function prototypes for KernelFactory callbacks.
 KernelNameCallback = Callable[[Any], str]
+"""Callback that returns the kernel name.
+
+Args:
+    kwargs: Keyword arguments that can be used to determine the kernel name.
+
+Returns:
+    str: The kernel name.
+"""
+
 KernelSourceFileCallback = Callable[[Params, Any], str]
+"""Callback that returns the kernel source filename.
+
+Args:
+    params: The layer parameters.
+    kwargs: Keyword arguments that can be used to determine the kernel source filename.
+
+Returns:
+    str: The kernel source filename.
+"""
+
+
 ConfigsCallback = Callable[[Params, Any], List[Config]]
-SpecsCallback = Callable[[Params, Config, Any], List[GenSpecs]]
+"""Callback that returns a list of kernel configurations.
+
+Args:
+    params: The layer parameters.
+    kwargs: Keyword arguments that can be used to determine the kernel configurations.
+
+Returns:
+    List[Config]: A list of kernel configurations.
+"""
+
+KernelSpecCallback = Callable[[Params, Config, Any], KernelSpec]
+"""Callback that returns the kernel specifications.
+
+Args:
+    params: The layer parameters.
+    config: The kernel configuration.
+    kwargs: Keyword arguments that can be used to determine the kernel specifications.
+
+Returns:
+    KernelSpec: The kernel specifications.
+"""
+
+
 ArgsChecker = Callable[[List[torch.Tensor]], None]
+"""Callback that checks the arguments for the kernel.
+
+Args:
+    args: List[torch.Tensor]: The arguments to check.
+
+Raises:
+    AssertionError: If the arguments are not valid.
+
+Returns:
+    None
+"""
 
 
 class KernelFactory:
@@ -36,9 +87,6 @@ class KernelFactory:
     the kernel's performance model and compiles a new kernel that uses
     it.
 
-    Users do not instantiate this class directly. Rather, they define new
-    kernels by calling the KernelFactory() function.
-
     Methods that take keyword arguments (**kwargs) use them to
     distinguish between different modes of the kernel. For example, a forward
     and backward kernel may use the keyword argument (igrad:bool=False)
@@ -52,14 +100,31 @@ class KernelFactory:
         stats_cls: Type[Stats] = None,
         kernel_name: Union[str, KernelNameCallback] = None,
         configs: Union[List[Config], ConfigsCallback] = None,
-        specs: Union[List[GenSpecs], SpecsCallback] = None,
+        kernel_spec: Union[KernelSpec, KernelSpecCallback] = None,
         kernel_source_file: Union[str, KernelSourceFileCallback] = None,
-        launch_params: LaunchParams = None,
         src_module: str = "spio.src",
         includes_module: str = "spio.include",
         perf_model_skip_params: List[str] = None,
         args_checker: ArgsChecker = check_channels_last,
     ):
+        """Initialize the kernel factory.
+
+        The initializer configures a new kernel factory object to compile instances
+        of a kernel.
+
+        Arguments:
+            params_cls: The layer parameters class.
+            config_cls: The kernel configuration class.
+            stats_cls: The kernel statistics class.
+            kernel_name: The name of the kernel or a callback that returns it.
+            configs: A list of kernel configurations or a callback that returns it.
+            kernel_spec: The kernel specifications or a callback that returns it.
+            kernel_source_file: The kernel source filename or a callback that returns it.
+            src_module: The source module for the kernel.
+            includes_module: The includes module for the kernel.
+            perf_model_skip_params: List of parameter names to skip in the performance model.
+            args_checker: A callback that checks the arguments for the kernel.
+        """
         if perf_model_skip_params is None:
             perf_model_skip_params = []
         self.params_cls = params_cls
@@ -67,9 +132,8 @@ class KernelFactory:
         self.stats_cls = stats_cls
         self._kernel_name = kernel_name
         self._configs = configs
-        self._specs = specs
+        self._kernel_spec = kernel_spec
         self._kernel_source_file = kernel_source_file
-        self._launch_params = launch_params
         self._kernel_caches = {}
         self._src_module = src_module
         self._includes_module = includes_module
@@ -96,9 +160,7 @@ class KernelFactory:
         kernel_name = self.get_kernel_name(**kwargs)
         return get_full_kernel_name(kernel_name, params)
 
-    def get_specs(
-        self, params: Params, config: Config, **kwargs
-    ) -> Tuple[List[GenSpecs], LaunchParams]:
+    def get_kernel_spec(self, params: Params, config: Config, **kwargs) -> KernelSpec:
         """Return the kernel specs and launch parameters.
 
         Kernel specs are code generators for named tensors, constant
@@ -109,9 +171,9 @@ class KernelFactory:
             params: The layer parameters.
             config: The kernel configuration.
         """
-        if callable(self._specs):
-            return self._specs(params, config, **kwargs)
-        return self._specs, self._launch_params
+        if callable(self._kernel_spec):
+            return self._kernel_spec(params, config, **kwargs)
+        return self._kernel_spec
 
     def get_kernel_cache(self, **kwargs) -> KernelCache:
         """Return the kernel cache for the given keryword arguments."""
@@ -136,12 +198,11 @@ class KernelFactory:
     def make_kernel(self, params: Params, config, **kwargs) -> Kernel:
         """Return a new Kernel object for the params and config."""
         kernel_name = self.get_full_kernel_name(params, **kwargs)
-        specs, launch_params = self.get_specs(params, config, **kwargs)
+        kernel_specs = self.get_kernel_spec(params, config, **kwargs)
         return Kernel(
             kernel_name,
-            launch_params,
+            kernel_specs,
             kernel_source_file=self._kernel_source_file,
-            specs=specs,
             params=params,
             config=config,
             src_module=self._src_module,

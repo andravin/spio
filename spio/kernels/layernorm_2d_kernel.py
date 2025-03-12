@@ -1,7 +1,7 @@
 """Create the kernel factory for the LayerNorm2d kernel."""
 
 from dataclasses import dataclass
-from typing import Generator, Tuple, List
+from typing import Generator
 from itertools import product
 
 from .. import generators as gen
@@ -9,7 +9,7 @@ from ..util import divup
 from .launch_params import LaunchParams
 from .layernorm_2d_params import LayerNorm2dParams
 from .layernorm_2d_stats import LayerNorm2dStats
-from .kernel_factory import KernelFactory
+from .kernel_factory import KernelFactory, KernelSpec
 from .kernel import get_full_kernel_name
 
 
@@ -75,9 +75,9 @@ KERNEL_NAME = "spio_layernorm_2d"
 C_PER_REG = 64
 
 
-def _get_specs(
+def _get_kernel_spec(
     params: LayerNorm2dParams, config: LayerNorm2dConfig = None
-) -> Tuple[List[gen.GenSpecs], LaunchParams]:
+) -> KernelSpec:
     """Get the specifications for the LayerNorm2d kernel."""
     params.validate()
 
@@ -104,7 +104,7 @@ def _get_specs(
     warp_c2 = divup(warp_c, 2)
     c2_per_thread = divup(warp_c, C_PER_REG)
 
-    specs = [
+    gen_specs = [
         gen.Macro({"SPIO_LAYERNORM_2D_KERNEL": full_kernel_name}),
         gen.Fold("block_x", "x", config.block_x),
         gen.Fold("warp_c", "c", warp_c),
@@ -138,7 +138,9 @@ def _get_specs(
         gen.Tensor("Input", gen.dtype.uint4, {"x": x, "c8": c8}, constant=True),
         gen.Tensor("Output", gen.dtype.half2, {"x": x, "c2": c2}),
         gen.Tensor(
-            "SmemInputStore", gen.dtype.uint4, {"ping_pong": 2, "x": config.warps_x, "c8": c8}
+            "SmemInputStore",
+            gen.dtype.uint4,
+            {"ping_pong": 2, "x": config.warps_x, "c8": c8},
         ),
         gen.Tensor(
             "SmemInputLoad",
@@ -154,11 +156,13 @@ def _get_specs(
             "ThreadIdx", {"warp_x": config.warps_x, "warp_c": config.warps_c, "c2": 32}
         ),
         gen.Tensor(
-            "SmemSum", gen.dtype.float, {"warp_x": config.warps_x, "warp_c": config.warps_c}
+            "SmemSum",
+            gen.dtype.float,
+            {"warp_x": config.warps_x, "warp_c": config.warps_c},
         ),
     ]
 
-    return specs, launch_params
+    return KernelSpec(gen_specs=gen_specs, launch_params=launch_params)
 
 
 layernorm_2d_kernel_factory = KernelFactory(
@@ -167,7 +171,7 @@ layernorm_2d_kernel_factory = KernelFactory(
     LayerNorm2dStats,
     kernel_name=KERNEL_NAME,
     configs=_get_configs,
-    specs=_get_specs,
+    kernel_spec=_get_kernel_spec,
     kernel_source_file="layernorm_2d.cu",
     src_module="spio.src",
     includes_module="spio.include",

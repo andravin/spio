@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from itertools import product
-from typing import Generator, Tuple, List
+from typing import Generator
 
 from .. import generators as gen
 
@@ -10,7 +10,7 @@ from ..util import divup, next_relative_prime
 from .launch_params import LaunchParams
 from .conv2d_gw8_params import Conv2dGw8Params
 from .conv2d_stats import Conv2dStats
-from .kernel_factory import KernelFactory
+from .kernel_factory import KernelFactory, KernelSpec
 from .kernel import get_full_kernel_name
 
 
@@ -50,9 +50,9 @@ def _get_kernel_name(igrad=False) -> str:
     return "spio_conv2d_gw8_fprop" if not igrad else "spio_conv2d_gw8_dgrad"
 
 
-def _get_specs(
+def _get_kernel_spec(
     params: Conv2dGw8Params, config: Conv2dGw8Config = None, igrad: bool = False
-) -> Tuple[List[gen.GenSpecs], LaunchParams]:
+) -> KernelSpec:
     """The code generator specs and launch parameters."""
     params.validate()
 
@@ -107,7 +107,7 @@ def _get_specs(
 
     smem_x_stride = next_relative_prime(block_n * block_c8, num_smem_banks)
 
-    specs = [
+    gen_specs = [
         gen.Macro({"SPIO_CONV_KERNEL": full_kernel_name}),
         gen.Fold("block_n", "n", block_n),
         gen.Fold("block_p", "p", block_p),
@@ -137,7 +137,9 @@ def _get_specs(
             },
         ),
         gen.Index("InputIdx", {"n": block_n, "x": block_w, "c8": block_c8}),
-        gen.Tensor("Input", gen.dtype.uint4, {"n": n, "y": h, "x": w, "c8": c8}, constant=True),
+        gen.Tensor(
+            "Input", gen.dtype.uint4, {"n": n, "y": h, "x": w, "c8": c8}, constant=True
+        ),
         gen.Tensor("Bias", gen.dtype.float2, {"k8": c8, "k2": 4}, constant=True),
         gen.Index("BiasIdx", {"k8": block_c8, "lane": 32}),
         gen.Tensor("Output", gen.dtype.uint4, {"n": n, "p": p, "q": q, "k8": c8}),
@@ -180,7 +182,7 @@ def _get_specs(
             "ConstSmemOutput",
             gen.dtype.uint4,
             {"q": block_q, "n": block_n, "k8": block_c8 + 1},
-            constant=True
+            constant=True,
         ),
         gen.Index("OutputStoreIdx", {"n": block_n, "q": block_q, "k8": block_c8}),
         gen.Index("BlockQNIdx", {"q": block_q, "n": block_n}),
@@ -189,7 +191,7 @@ def _get_specs(
         gen.Tensor("WeightsReg", gen.FragmentType.N8_K8_F16_B, {"r": r, "s": s}),
         gen.Tensor("AccReg", "Acc", {"p": r}),
     ]
-    return specs, launch_params
+    return KernelSpec(gen_specs=gen_specs, launch_params=launch_params)
 
 
 conv2d_gw8_kernel_factory = KernelFactory(
@@ -198,7 +200,7 @@ conv2d_gw8_kernel_factory = KernelFactory(
     Conv2dStats,
     kernel_name=_get_kernel_name,
     configs=_get_configs,
-    specs=_get_specs,
+    kernel_spec=_get_kernel_spec,
     kernel_source_file="conv2d_gw8.cu",
     src_module="spio.src",
     includes_module="spio.include",

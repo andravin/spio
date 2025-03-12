@@ -6,7 +6,6 @@ import spio.generators as gen
 from spio.compiler import compile_and_load_kernel
 from spio.util import divup, assert_all_close_with_acc_depth, SixteenChannelsLast
 
-
 def test_mma_checkerboard_16c_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with checkerboard layout for smem."""
 
