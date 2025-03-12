@@ -5,89 +5,81 @@
 #define UINT_MAX 4294967295
 #endif
 
+namespace
+{
+    constexpr unsigned Patience_ns = 20;
+}
+
 namespace spio
 {
-    /// @brief A warp-based semaphore implementation that uses a circular buffer to manage waiters.
-    /// This is a fair semaphore, meaning that it ensures that threads are served in the order they requested access.
+    /// @brief A fair, warp-based semaphore.
+    /// This semaphore ensures that threads are served in the order they requested access.
     /// @tparam MAX_WAITERS
-    template <unsigned MAX_WAITERS>
     class WarpSemaphore
     {
     public:
         using data_type = unsigned;
 
-        static constexpr unsigned size = MAX_WAITERS;
-
         /// @brief  Constructor
         /// You must synchronize the warps that participate in the semaphore after calling this constructor
         /// and before calling acquire() or release().
-        /// @param slots pointer to shared memory array of size MAX_WAITERS.
         /// @param next_reservation pointer to a shared memory variable that holds the next reservation index.
         /// @param next_execution pointer to a shared memory variable that holds the next execution index.
         /// @param count the initial semaphore count.
-        /// @param tid this thread's unique identifier in the range [0, MAX_WAITERS * 32]
+        /// @param tid this thread's unique identifier among the threads that participate in the semaphore.
         __device__ WarpSemaphore(
-            data_type *__restrict__ slots,
             data_type *__restrict__ next_reservation,
             data_type *__restrict__ next_execution,
             data_type count,
             unsigned tid)
-            : _slots(slots),
-              _next_reservation(next_reservation),
+            : _next_reservation(next_reservation),
               _next_execution(next_execution),
-              _first_lane((tid % 32) == 0)
+              _is_first_lane((tid % 32) == 0)
         {
-            if (tid < size)
-            {
-                // UINT_MAX is logically one less than 0,
-                // so it is a sentinel value that indicates that the slot is empty.
-                _slots[tid] = tid < count ? tid : UINT_MAX;
-            }
-            else if (tid == size)
+            if (tid == 0)
             {
                 *_next_execution = count;
-            }
-            else if (tid == size + 1)
-            {
                 *_next_reservation = 0;
             }
+            __syncwarp();
         }
 
         /// @brief  Acquire the semaphore for this warp.
-        /// @return
         __device__ void acquire()
         {
-            if (_first_lane)
+            if (_is_first_lane)
             {
                 auto seqno = atomicAdd(_next_reservation, 1);
-                auto slot = &_slots[seqno % size];
 
-                // Wait until the slot has our sequence number or a greater one.
+                volatile data_type *next_execution = _next_execution;
+
+                // Wait until *next_execution is greater than our sequence number.
                 // This is a busy-wait loop, but it is only executed by the first thread in each warp.
-                // The comparison works even if seqno overflows, because the slots are unsigned integers.
-                while (static_cast<int>(*slot - seqno) < 0)
-                    ;
+                // The comparison is correct even if seqno overflows because unsigned integers wrap around.
+                while (static_cast<int>(*next_execution - seqno) <= 0)
+                {
+                    __nanosleep(Patience_ns);
+                }
             }
             __syncwarp();
         }
 
         /// @brief Release this warp from the semaphore.
-        /// @return
         __device__ void release()
         {
-            if (_first_lane)
+            __threadfence_block();
+            __syncwarp();
+            if (_is_first_lane)
             {
-                auto seqno = atomicAdd(_next_execution, 1);
-                _slots[seqno % size] = seqno;
+                atomicAdd(_next_execution, 1);
             }
             __syncwarp();
         }
 
     private:
-        volatile data_type *_slots;
         data_type *_next_reservation;
         data_type *_next_execution;
-        bool _first_lane;
+        bool _is_first_lane;
     };
 }
 

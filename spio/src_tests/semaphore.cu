@@ -10,12 +10,11 @@ extern "C"
         constexpr unsigned events_per_warp = iters_per_warp * 2;
         constexpr unsigned num_iters = warps * iters_per_warp;
 
-        __shared__ unsigned slots[spio::WarpSemaphore<warps>::size];
         __shared__ unsigned next_reservation;
         __shared__ unsigned next_execution;
 
-        spio::WarpSemaphore<warps> sem(
-            slots, &next_reservation, &next_execution, max_count, threadIdx.x);
+        spio::WarpSemaphore sem(
+            &next_reservation, &next_execution, max_count, threadIdx.x);
 
         __syncthreads();
 
