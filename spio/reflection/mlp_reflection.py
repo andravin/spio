@@ -68,7 +68,7 @@ def register_mlp_reflections():
 
     register_reflection(
         Reflection(
-            kernel_name="mlp_small_c",
+            kernel_name="mlp_tiny_c",
             arginfo=mlp_kernel_arg_info,
             args=[
                 "output",

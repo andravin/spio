@@ -1,14 +1,8 @@
-#include <cuda_pipeline.h>
-
-#include "spio/fragment_mma.cuh"
-#include "spio/ldmatrix.cuh"
-#include "spio/fragment_layout.h"
-#include "spio/mathutil.h"
+#include "spio.cuh"
 
 #include "parameters.h"
 
 using namespace spio;
-
 
 extern "C"
 {

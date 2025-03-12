@@ -5,9 +5,9 @@ from spio.kernels import MlpParams
 
 
 def test_kernel_reflection_mlp_small_c():
-    """Test the reflection for the mlp_small_c kernel."""
-    ref = get_kernel_reflection("mlp_small_c")
-    assert ref.kernel_name == "mlp_small_c"
+    """Test the reflection for the mlp_tiny_c kernel."""
+    ref = get_kernel_reflection("mlp_tiny_c")
+    assert ref.kernel_name == "mlp_tiny_c"
 
     # Make arguments and check their types and shapes.
     params = MlpParams(x=128, c=64, r=256, k=64)
