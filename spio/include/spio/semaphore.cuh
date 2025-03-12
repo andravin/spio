@@ -14,7 +14,6 @@ namespace spio
 {
     /// @brief A fair, warp-based semaphore.
     /// This semaphore ensures that threads are served in the order they requested access.
-    /// @tparam MAX_WAITERS
     class WarpSemaphore
     {
     public:
