@@ -131,6 +131,12 @@ def _get_kernel_spec(
         max_smem_input_tensor_size // smem_input_buffer_size_per_warp
     )
 
+    num_smem_input_buf_per_partition = (
+        num_smem_input_buffers // device_attr.num_partitions_per_sm
+    )
+
+    num_warps_per_partition = config.warps // device_attr.num_partitions_per_sm
+
     smem_input_tensor = gen.Tensor(
         "SmemInput",
         gen.dtype.uint4,
@@ -138,11 +144,28 @@ def _get_kernel_spec(
         gen.Strides(x=smem_input_x_stride),
     )
 
+    fifo_size = num_warps_per_partition + 2
+    input_buffer_fifos = gen.Tensor(
+        "InputBufferFifoData",
+        gen.dtype.unsigned,
+        gen.Dims(partition=device_attr.num_partitions_per_sm, fifo=fifo_size),
+    )
+
+    warps_per_partition = config.warps // device_attr.num_partitions_per_sm
+
     specs = [
         gen.Macro({"SPIO_MLP_KERNEL": get_full_kernel_name(KERNEL_NAME, params)}),
         gen.Fold("block_x", "x", config.block_x),
-        gen.ParamsSpec("Params", dict(blocks=blocks, warps=config.warps)),
-        gen.Index("WarpIdx", {"warp": config.warps, "lane": 32}),
+        gen.Fold("warp_x", "x", config.warp_x),
+        gen.ParamsSpec(
+            "Params",
+            dict(
+                blocks=blocks,
+                warps=config.warps,
+                num_smem_input_buf_per_partition=num_smem_input_buf_per_partition,
+                warps_per_partition=warps_per_partition,
+            ),
+        ),
         input_tensor,
         output_tensor,
         exp_weights_tensor,
@@ -150,6 +173,7 @@ def _get_kernel_spec(
         smem_input_tensor,
         smem_exp_weights_tensor,
         smem_prj_weights_tensor,
+        input_buffer_fifos,
     ]
 
     launch_params = LaunchParams(

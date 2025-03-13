@@ -1,10 +1,42 @@
 #include "spio.cuh"
 
-#include "spio/semaphore.cuh"
-
+#include "spio/fifo.cuh"
+#include "spio/allocator.cuh"
 #include "parameters.h"
 
 using namespace spio;
+
+namespace
+{
+    __device__ unsigned get_warp_id()
+    {
+        unsigned warp_id;
+        asm("mov.u32 %0, %warpid;" : "=r"(warp_id));
+        return warp_id;
+    }
+
+    __device__ unsigned get_lane()
+    {
+        unsigned lane_id;
+        asm("mov.u32 %0, %laneid;" : "=r"(lane_id));
+        return lane_id;
+    }
+
+    __device__ unsigned get_smsp()
+    {
+        return warp_id() & 3;
+    }
+
+    __device__ unsigned get_warpgroup()
+    {
+        return (warp_id() >> 2) & 3;
+    }
+}
+
+namespace
+{
+    constexpr int Lanes = 32;
+}
 
 extern "C"
 {
@@ -18,68 +50,82 @@ extern "C"
     {
         // Define the shared memory buffers.
         extern __shared__ uint4 smem[];
-        uint4 *smem_exp_weights_ptr = smem;
-        uint4 *smem_prj_weights_ptr = smem + SmemExpWeight::size;
-        uint4 *smem_input_ptr = smem_prj_weights_ptr + SmemPrjWeight::size;
-        unsigned *smem_sema_ptr = reinterpret_cast<unsigned *>(smem_input_ptr + SmemInput::size);
+        SmemAllocator alloc(smem);
 
-        WarpSemaphore input_buffers_semaphore(
-            smem_sema_ptr,
-            smem_sema_ptr + 1,
-            Input::BUFFERS.get(),
-            threadIdx.x);
+        using InputBufferGuard = WarpFifoGuard<Params::warps_per_smsp>;
+
+        auto smem_exp_weights_ptr = alloc.allocate<SmemExpWeight::data_type>(SmemExpWeight::size);
+        auto smem_prj_weights_ptr = alloc.allocate<SmemPrjWeight::data_type>(SmemPrjWeight::size);
+        auto smem_input_ptr = alloc.allocate<SmemInput::data_type>(SmemInput::size);
+        auto smem_input_buffer_fifo_data_ptr = alloc.allocate<unsigned>(InputBufferFifoData::size);
+
+        auto warp = get_warp();
+        auto lane = get_lane();
+
+        auto warpgroup = get_warpgroup();
+        auto smsp = get_smsp();
+
+        auto partition_tid = warpgroup * 32 + lane;
+
+        SmemInputBufferFifoData smem_input_buffer_fifo_data(smem_input_buffer_fifo_data_ptr);
+
+        auto input_buffer_fifo = InputBufferGuard::Fifo::make_resource_queue(
+            smem_input_buffer_fifo_data[smsp].get(),
+            partition_tid,
+            Params::num_smem_input_buf_per_partition);
 
         BLOCK_X_Dim block_x(blockIdx.x);
-        WarpIdx warp_idx(threadIdx.x);
 
-        // Define the input matrix fragments.
-        //
-        // The input tile stays resident in registers throughout the kernel.
+        // TODO load the weights into shared memory.
+
         In::data_type in_array[In::size];
         In in(in_array);
 
-        // Load the input tile.
         {
-            // Load the input tile into shared memory.
-            int global_x = block_x + warp_idx.warp() * Params::warp_x16 * 16;
 
-            auto input = Input(input_ptr).x(global_x);
-            auto smem_input = SmemInput(smem_input_ptr).warp_x(warp_idx.warp());
+            InputBufferGuard buffer_guard(input_buffer_fifo);
 
-            constexpr int Lanes = 32;
-            constexpr int InputLoads = SmemInput::X * SmemInput::C8;
-
-            for (int idx = warp_idx.lane(); idx < InputLoads; idx += Lanes)
+            // Load the warp's input tile.
             {
-                SmemInput::Index smem_idx(idx);
-                int zfill = (global_x + smem_idx.x()) < Input::X ? 0 : 16;
-                __pipeline_memcpy_async(
-                    smem_input.x(smem_idx.x()).c8(smem_idx.c8()).get(),
-                    input.x(smem_idx.x()).c8(smem_idx.c8()).get(),
-                    16,
-                    zfill);
-            }
-            __pipeline_commit();
-        }
-        {
-            // Load the input matrix fragments from shared memory.
+                // Load the input tile into shared memory.
+                WARP_X_Dim warp_x(warp);
+                auto global_x = block_x.unfold() + warp_x.unfold();
 
-            // No block synchronization is needed here, because each warp is loading its own input tile.
-            __pipeline_wait_prior(0);
+                auto input = Input(input_ptr)[global_x];
+                auto smem_input = SmemInput(smem_input_ptr).buffer(buffer_guard.value());
 
-            LdmatrixAIdx smem_input_lane_idx(warp_idx.lane());
-            auto smem_input_load = SmemInput(smem_input_ptr).warp_x(warp_idx.warp()).x(smem_input_lane_idx.m()).c8(smem_input_lane_idx.k8());
-            for (int c16 = 0; c16 < Params::c16; ++c16)
-            {
-                for (int x16 = 0; x16 < Params::warp_x16; ++x16)
+                constexpr int InputLoads = SmemInput::X * SmemInput::C8;
+
+                for (auto idx = lane; idx < InputLoads; idx += Lanes)
                 {
-                    in.c16(c16).x16(x16)->reg4() = ldmatrix_x4(smem_input_load.x(x16 * 16).c8(c16 * 2).get());
+                    SmemInput::Index smem_idx(idx);
+                    memcpy_async(
+                        smem_input[smem_idx.x()][smem_idx.c8()].get(),
+                        input.offset(idx).get(),
+                        global_x + smem_idx.x() < Input::X);
+                }
+                __pipeline_commit();
+            }
+            {
+                //
+                // TODO
+                //
+                // Load the input matrix fragments from shared memory.
+
+                // No block synchronization is needed here, because each warp is loading its own input tile.
+                __pipeline_wait_prior(0);
+
+                LdmatrixAIdx smem_input_lane_idx(warp_idx.lane());
+                auto smem_input_load = SmemInput(smem_input_ptr).warp_x(warp_idx.warp()).x(smem_input_lane_idx.m()).c8(smem_input_lane_idx.k8());
+                for (int c16 = 0; c16 < Params::c16; ++c16)
+                {
+                    for (int x16 = 0; x16 < Params::warp_x16; ++x16)
+                    {
+                        in.c16(c16).x16(x16)->reg4() = ldmatrix_x4(smem_input_load.x(x16 * 16).c8(c16 * 2).get());
+                    }
                 }
             }
         }
-
-        // Release smem_input shared memory.
-        __syncthreads();
 
         // Initialize the output accumulators.
         Out::data_type out_array[Out::size];
