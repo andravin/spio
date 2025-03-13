@@ -76,6 +76,7 @@ def _generate_index(
     for d, (name, value) in enumerate(dims.items()):
         code += _offset_to_index(d, name, value)
     code += _size(_calc_size(sizes))
+    code += _offset_tensor(dims)
     code += _tail()
     return code
 
@@ -139,6 +140,21 @@ def _offset_to_fused_idx(d: int, name: str, fused_dim_spec: SubindexProtocol) ->
             return {fused_dim_spec.class_name}(offset);
         }}
     """
+
+
+def _offset_tensor(dims: Dict[str, Union[int, SubindexProtocol]]) -> str:
+    """Return the C++ source code that implements the offset_tensor method.
+    
+    This method applies every dimension of this index to the subscript operator of the given tensor.
+    It returns a new tensor that is offset by the index.
+    """
+    index_str = "".join(f"[{name}()]" for name in dims.keys())
+    return f"""
+        template<typename TensorType>
+        DEVICE constexpr TensorType offset_tensor(TensorType tensor) const {{
+            return tensor{index_str};
+        }}
+"""
 
 
 def _tail() -> str:

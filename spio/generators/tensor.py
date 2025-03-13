@@ -219,6 +219,9 @@ def _class(
         DEVICE const {class_name}& operator=(const {base} &other) {{ this->reset(other.get()); return *this; }}
 
         DEVICE constexpr {class_name} offset(int idx) const {{ return {class_name}(this->get() + idx); }}
+
+        template<typename IndexType>
+        DEVICE constexpr {class_name} operator[](IndexType idx) const {{ return {class_name}(idx.offset_tensor(*this)); }}
  """
 
 

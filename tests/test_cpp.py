@@ -250,6 +250,9 @@ UTEST(DenseTensor, offset_from_tensor)
         }}
     }}
 
+    // Test the use of named-index accessors and subscript operators with the tensor class.
+    // Note all permutations of the subscript operators are equivalent. Because the operator
+    // is overloaded for dimension type, the order of the subscript operator does not matter.
     DenseTensor tensor(data);
     for (auto n : tensor.N) {{
         for (auto h : tensor.H) {{
@@ -265,9 +268,18 @@ UTEST(DenseTensor, offset_from_tensor)
         }}
     }}
 
+    // Test the use of an integer offset with the tensor offset method.
     for (int offset = 0; offset < size; ++offset) {{
         EXPECT_EQ(*tensor.offset(offset), data[offset]);
     }}
+
+    // Test the use of a generated index class with the tensor subscript operator.
+    for (int offset = 0; offset < size; ++offset) {{
+        DenseTensor::Index idx(offset);
+        EXPECT_EQ(*idx.offset_tensor(tensor), data[offset]);
+        EXPECT_EQ(*tensor[idx], data[offset]);
+    }}
+
     
     EXPECT_EQ(DenseTensor::size, size);
     EXPECT_EQ(DenseTensor::num_bytes, static_cast<int>(num_bytes));
