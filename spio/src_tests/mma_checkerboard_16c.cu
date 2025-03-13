@@ -1,5 +1,7 @@
 #include "spio.cuh"
 
+#include "spio/allocator.cuh"
+
 #include "parameters.h"
 
 extern "C"
@@ -25,8 +27,9 @@ extern "C"
     {
         __shared__ uint4 smem[spio::max(SmemA::size + SmemB::size, SmemCLoad::size)];
 
-        uint4 *smem_a = smem + 0;
-        uint4 *smem_b = smem + SmemA::size;
+        SmemAllocator alloc(smem);
+        auto smem_a = alloc.allocate<uint4>(SmemA::size);
+        auto smem_b = alloc.allocate<uint4>(SmemB::size);
 
         BLOCK_I_Dim block_i(blockIdx.x);
         BLOCK_J_Dim block_j(blockIdx.y);
@@ -131,8 +134,12 @@ extern "C"
         }
 
         // Store outputs through shared memory.
+        alloc.deallocate(smem_a, SmemA::size);
+        alloc.deallocate(smem_b, SmemB::size);
+        auto *smem_c_array = alloc.allocate<__half2>(SmemCStore::size);
+
         C_Fragments::data_type::Index c_idx(compute_idx.lane());
-        auto smem_c_store = SmemCStore(reinterpret_cast<__half2 *>(smem))[compute_idx.i32()][compute_idx.j64()][c_idx.j2m4()];
+        auto smem_c_store = SmemCStore(smem_c_array)[compute_idx.i32()][compute_idx.j64()][c_idx.j2m4()];
         for (auto i16 : c_tensor.I16)
         {
             for (auto j16 : c_tensor.J16)
@@ -146,7 +153,7 @@ extern "C"
 
         // Transfer outputs from shared memory to global memory.
         auto c = C(c_ptr);
-        auto smem_c_load = SmemCLoad(reinterpret_cast<const uint4 *>(smem))[compute_idx.i32()][compute_idx.j64()];
+        auto smem_c_load = SmemCLoad(reinterpret_cast<const uint4 *>(smem_c_array))[compute_idx.i32()][compute_idx.j64()];
         for (int offset = compute_idx.lane().get(); offset < SmemCLoadIndex::size; offset += ComputeIndex::LANE.get())
         {
             SmemCLoadIndex idx(offset);
