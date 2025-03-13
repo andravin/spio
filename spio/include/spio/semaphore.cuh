@@ -72,6 +72,9 @@ namespace spio
             __syncwarp();
         }
 
+        WarpSemaphore(const WarpSemaphore &) = delete;
+        WarpSemaphore &operator=(const WarpSemaphore &) = delete;
+
     private:
         data_type *_next_reservation;
         data_type *_next_execution;

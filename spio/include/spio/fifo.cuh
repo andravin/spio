@@ -118,11 +118,50 @@ namespace spio
             return __shfl_sync(all_lanes_mask, value, 0);
         }
 
+        __device__ WarpFifo(const WarpFifo &) = delete;
+        __device__ WarpFifo &operator=(const WarpFifo &) = delete;
+
     private:
         unsigned *_fifo;
         unsigned *_head;
         unsigned *_tail;
         bool _is_first_lane;
+    };
+
+    /// @brief A guard that pops a value from a WarpFifo and pushes it back when the guard goes out of scope.
+    /// This protects against the user forgetting to push the value back into the FIFO after using it.
+    /// @tparam Capacity
+    template <unsigned Capacity>
+    class WarpFifoGuard
+    {
+    public:
+        using Fifo = WarpFifo<Capacity>;
+
+        /// @brief  Construct the guard by popping a value from the WarpFifo.
+        /// @param fifo the WarpFifo to pop the value from.
+        __device__ WarpFifoGuard(Fifo &fifo) : _fifo(fifo)
+        {
+            _value = _fifo.pop();
+        }
+
+        /// @brief  Destructor that pushes the value back into the WarpFifo.
+        __device__ ~WarpFifoGuard()
+        {
+            _fifo.push(_value);
+        }
+
+        /// @brief  Get the value that was popped from the WarpFifo.
+        __device__ unsigned value() const
+        {
+            return _value;
+        }
+
+        __device__ WarpFifoGuard &operator=(const WarpFifoGuard &) = delete;
+        __device__ WarpFifoGuard(const WarpFifoGuard &) = delete;
+
+    private:
+        Fifo &_fifo;
+        unsigned _value;
     };
 }
 

@@ -8,11 +8,11 @@ extern "C"
         constexpr unsigned iters_per_warp = 64;
         constexpr unsigned events_per_warp = iters_per_warp * 2;
 
-        using Fifo = spio::WarpFifo<num_resources>;
+        using Guard = spio::WarpFifoGuard<num_resources>;
 
-        __shared__ unsigned smem[Fifo::smem_size];
+        __shared__ unsigned smem[Guard::Fifo::smem_size];
 
-        auto fifo = Fifo::make_resource_queue(smem, threadIdx.x, num_resources);
+        auto fifo = Guard::Fifo::make_resource_queue(smem, threadIdx.x, num_resources);
 
         __syncthreads();
 
@@ -24,18 +24,20 @@ extern "C"
 
         for (int i = 0; i < iters_per_warp; ++i)
         {
-            auto resource_id = fifo.pop();
-
-            if (lane_idx == 0)
+            unsigned resource_id;
             {
-                event_types[i * 2 + 0] = resource_id;
-                event_times[i * 2 + 0] = clock64();
-                auto sleepy_time = ((i * 2 + threadIdx.x) % 100) + 50;
-                __nanosleep(sleepy_time);
-            }
-            __syncwarp();
+                Guard guard(fifo);
+                resource_id = guard.value();
 
-            fifo.push(resource_id);
+                if (lane_idx == 0)
+                {
+                    event_types[i * 2 + 0] = resource_id;
+                    event_times[i * 2 + 0] = clock64();
+                    auto sleepy_time = ((i * 2 + threadIdx.x) % 100) + 50;
+                    __nanosleep(sleepy_time);
+                }
+                __syncwarp();
+            }
 
             if (lane_idx == 0)
             {
