@@ -16,6 +16,7 @@ class DeviceAttributes:
     compute_capability: Tuple[int, int] = None
     max_shared_memory_per_block_optin: int = None
     max_shared_memory_per_block: int = 48 * 1024
+    num_partitions_per_sm: int = 4
 
 
 @dataclass(frozen=True)

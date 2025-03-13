@@ -18,6 +18,7 @@ class DeviceAttributes:
     name: Optional[str]
     compute_capability: Optional[Tuple[int, int]]
     max_shared_memory_per_block_optin: Optional[int]
+    num_partitions_per_sm: Optional[int]
 
 class Function:
     """Type stub for the Function class.
