@@ -8,12 +8,11 @@ extern "C"
         constexpr unsigned iters_per_warp = 64;
         constexpr unsigned events_per_warp = iters_per_warp * 2;
 
-        __shared__ unsigned fifo_resources[num_resources];
-        __shared__ unsigned fifo_head;
-        __shared__ unsigned fifo_tail;
+        using Fifo = spio::WarpFifo<num_resources>;
 
-        auto fifo = spio::WarpFifo<num_resources>::make_resource_queue(
-            fifo_resources, &fifo_head, &fifo_tail, threadIdx.x, num_resources);
+        __shared__ unsigned smem[Fifo::smem_size];
+
+        auto fifo = Fifo::make_resource_queue(smem, threadIdx.x, num_resources);
 
         __syncthreads();
 

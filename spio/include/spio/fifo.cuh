@@ -26,6 +26,8 @@ namespace spio
 
         static constexpr unsigned capacity = Capacity;
 
+        static constexpr unsigned smem_size = capacity + 2;
+
         /// @brief  Constructor
         /// The user must initialize the FIFO array head and tail indexes to their initial values
         /// before calling the constructor. Empty slots must be initialized to SENTINEL_VALUE.
@@ -60,6 +62,24 @@ namespace spio
                 *tail = num_resources;
             }
             return WarpFifo(fifo, head, tail, tid);
+        }
+
+        /// @brief Create a reousrce queue.
+        /// This is a simpler form of the make_resource_queue() function that uses a single shared memory buffer.
+        /// The buffer must be large enough to hold the FIFO array, the head and tail indexes. The total size
+        /// of the buffer must be WarpFifo::smem_size.
+        /// @param smem_buffer a shared memory buffer of size WarpFifo::smem_size
+        /// @param tid the thread's unique identifier among the threads that participate in the FIFO.
+        /// @param num_resources the number of resources to initialize the FIFO with. Must be less than or equal to Capacity.
+        /// @return WarpFifo initialized with the requested number of resource ids [0, num_resources).
+        __device__ static WarpFifo make_resource_queue(unsigned *smem_buffer, int tid, int num_resources)
+        {
+            return make_resource_queue(
+                smem_buffer,
+                smem_buffer + capacity,
+                smem_buffer + capacity + 1,
+                tid,
+                num_resources);
         }
 
         /// @brief Push a value into the FIFO.
