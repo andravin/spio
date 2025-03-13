@@ -249,6 +249,7 @@ UTEST(DenseTensor, offset_from_tensor)
             }}
         }}
     }}
+
     DenseTensor tensor(data);
     for (auto n : tensor.N) {{
         for (auto h : tensor.H) {{
@@ -263,6 +264,11 @@ UTEST(DenseTensor, offset_from_tensor)
             }}
         }}
     }}
+
+    for (int offset = 0; offset < size; ++offset) {{
+        EXPECT_EQ(*tensor.offset(offset), data[offset]);
+    }}
+    
     EXPECT_EQ(DenseTensor::size, size);
     EXPECT_EQ(DenseTensor::num_bytes, static_cast<int>(num_bytes));
 

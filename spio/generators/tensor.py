@@ -217,6 +217,8 @@ def _class(
         DEVICE constexpr {class_name}(const {base} &other) : Base(other) {{}}
 
         DEVICE const {class_name}& operator=(const {base} &other) {{ this->reset(other.get()); return *this; }}
+
+        DEVICE constexpr {class_name} offset(int idx) const {{ return {class_name}(this->get() + idx); }}
  """
 
 
