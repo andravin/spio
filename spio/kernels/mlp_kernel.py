@@ -144,6 +144,8 @@ def _get_kernel_spec(
         gen.Strides(x=smem_input_x_stride),
     )
 
+    smem_input_idx = gen.Index("SmemInputIdx", gen.Dims(x=config.warp_x, c8=c8))
+
     fifo_size = num_warps_per_partition + 2
     input_buffer_fifos = gen.Tensor(
         "InputBufferFifoData",
@@ -174,6 +176,7 @@ def _get_kernel_spec(
         smem_exp_weights_tensor,
         smem_prj_weights_tensor,
         input_buffer_fifos,
+        smem_input_idx,
     ]
 
     launch_params = LaunchParams(

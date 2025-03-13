@@ -96,12 +96,12 @@ extern "C"
 
                 constexpr int InputLoads = SmemInput::X * SmemInput::C8;
 
-                for (auto idx = lane; idx < InputLoads; idx += Lanes)
+                for (auto offset = lane; offset < InputLoads; offset += Lanes)
                 {
-                    SmemInput::Index smem_idx(idx);
+                    SmemInputIdx smem_idx(offset);
                     memcpy_async(
-                        smem_input[smem_idx.x()][smem_idx.c8()].get(),
-                        input.offset(idx).get(),
+                        smem_input[smem_idx].get(),
+                        input.offset(offset).get(),
                         global_x + smem_idx.x() < Input::X);
                 }
                 __pipeline_commit();
@@ -115,13 +115,13 @@ extern "C"
                 // No block synchronization is needed here, because each warp is loading its own input tile.
                 __pipeline_wait_prior(0);
 
-                LdmatrixAIdx smem_input_lane_idx(warp_idx.lane());
-                auto smem_input_load = SmemInput(smem_input_ptr).warp_x(warp_idx.warp()).x(smem_input_lane_idx.m()).c8(smem_input_lane_idx.k8());
-                for (int c16 = 0; c16 < Params::c16; ++c16)
+                In::data_type::LoadIndex in_load_idx(lane);
+                auto smem_input_load = SmemInput(smem_input_ptr).warp_x(warp)[in_load_idx.x()][in_load_idx.c8()];
+                for (auto c16 : in.C16)
                 {
-                    for (int x16 = 0; x16 < Params::warp_x16; ++x16)
+                    for (auto x16 : in.X16)
                     {
-                        in.c16(c16).x16(x16)->reg4() = ldmatrix_x4(smem_input_load.x(x16 * 16).c8(c16 * 2).get());
+                        in[c16][x16].load(smem_input_load[x16.unfold()][c16.fold<8>()].get());
                     }
                 }
             }
