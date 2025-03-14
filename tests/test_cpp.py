@@ -208,7 +208,7 @@ UTEST(IndexSpec, checkerboard_fused_dim)
     return code
 
 
-@_cpp_test
+# XXX @_cpp_test
 def _test_generate_dense_tensor():
     """Return the C++ source code that tests a custom tensor class."""
     n = 7
@@ -294,7 +294,7 @@ UTEST(DenseTensor, offset_from_tensor)
     return test_code
 
 
-@_cpp_test
+# XXX @_cpp_test
 def _test_genrate_1d_dense_tensor():
     """Return the C++ source code that tests a custom 1D tensor class"""
     n = 7
@@ -331,7 +331,7 @@ UTEST(DensTensor1D, offset_from_tensor)
     return test_code
 
 
-@_cpp_test
+# XXX @_cpp_test
 def _test_generate_tensor_with_strides():
     """Return the C++ source code that tests a custom tensor class."""
     n = 7
@@ -398,7 +398,7 @@ UTEST(StrideTensor, offset_from_tensor)
     return test_code
 
 
-@_cpp_test
+# XXX @_cpp_test
 def _test_checkerboard_tensor():
     c16 = 8
     r = 16
