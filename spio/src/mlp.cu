@@ -72,7 +72,27 @@ extern "C"
 
         BLOCK_X_Dim block_x(blockIdx.x);
 
-        // TODO load the weights into shared memory.
+        // Load the expansion weights from global memory to shared memory.
+        for (int offset = threadIdx.x; offset < ExpWeight::size; offset += blockDim.x)
+        {
+            ExpWeight exp_weight(exp_weights_ptr);
+            ExpWeight::Index idx(offset);
+            memcpy_async(
+                smem_exp_weights[idx.c16()][idx.r().fold<16>()].checkers(idx.r() % 16, idx.c8()).get(),
+                exp_weight.offset(offset).get())
+        }
+        __pipeline_commit();
+
+        // Load the projection weights from global memory to shared memory.
+        for (int offset = threadIdx.x; offset < PrjWeight::size, offset += blockDim.x)
+        {
+            PrjWeight prj_weight(prj_weights_ptr);
+            PrjWeight::Index idx(offset);
+            memcpy_async(
+                smem_prj_weights[idx.r16()][idx.k().fold<16>()].checkers(idx.k() % 16, idx.r8()).get(),
+                prj_weight.offset(offset).get())
+        }
+        __pipeline_commit();
 
         // Load the warp's input tile.
         In::data_type in_array[In::size];
@@ -117,142 +137,73 @@ extern "C"
         // Initialize the output accumulators.
         Out::data_type out_array[Out::size];
         Out out_acc(out_array);
-        for (int k16 = 0; k16 < Out::K16; ++k16)
+        for (auto k16 = out_acc.K16)
         {
-            for (int x16 = 0; x16 < Out::X16; ++x16)
+            for (auto x16 : out_acc.X16)
             {
-                out_acc.k16(k16).x16(x16)->zero();
+                out_acc[k16][x16]->zero();
             }
         }
-
-        CheckerboardGlobal global_lane_idx(warp_idx.lane());
-
-        // Map the expansion weights to shared memory.
-        constexpr int exp_max_warp_loads = divup(ExpWeight::C16, ExpWeightLoadIdx::WARP_C16);
-        int exp_num_warp_loads = (ExpWeight::C16 - 1 - warp_idx.warp()) / ExpWeightLoadIdx::WARP_C16;
-        ExpWeight exp_weight(exp_weights_ptr);
-        SmemExpWeight smem_exp_weight_store(smem_exp_weights_ptr);
-        {
-            ExpWeightLoadIdx idx(warp_idx.warp());
-            int lane_c8 = global_lane_idx.k8();
-            int lane_r = global_lane_idx.m();
-            int global_r = idx.warp_r16() * 16 + lane_r;
-            exp_weight = exp_weight.c16(idx.warp_c16()).r(global_r).c8(lane_c8);
-            smem_exp_weight_store = smem_exp_weight_store.r16(idx.warp_r16()).c16(idx.warp_c16()).checkerboard(global_lane_idx.offset<8>());
-        }
-
-        // Map the projection weights to shared memory.
-        constexpr int prj_max_warp_loads = divup(PrjWeight::K, PrjWeightLoadIdx::WARP_K16 * 16);
-        int prj_num_warp_loads = (PrjWeight::K / 16 - 1 - warp_idx.warp()) / PrjWeightLoadIdx::WARP_K16;
-        PrjWeight prj_weight(prj_weights_ptr);
-        SmemPrjWeight smem_prj_weight_store(smem_prj_weights_ptr);
-        {
-            PrjWeightLoadIdx idx(warp_idx.warp());
-            int lane_r8 = global_lane_idx.k8();
-            int lane_k = global_lane_idx.m();
-            int global_k = idx.warp_k16() * 16 + lane_k;
-            prj_weight = prj_weight.k(global_k).r16(idx.warp_r16()).r8(lane_r8);
-            smem_prj_weight_store = smem_prj_weight_store.k16(idx.warp_k16()).r16(idx.warp_r16()).checkerboard(global_lane_idx.offset<8>());
-        }
-
-        CheckerboardB smem_weight_load_lane_idx(warp_idx.lane());
-        auto smem_exp_weight_load = SmemExpWeight(smem_exp_weights_ptr).checkerboard(smem_weight_load_lane_idx.offset<8>());
-        auto smem_prj_weight_load = SmemPrjWeight(smem_prj_weights_ptr).checkerboard(smem_weight_load_lane_idx.offset<8>());
-
-        int ping_pong = 0;
 
         // Main loop over hidden layer chunks.
-        for (int iter = 0; iter < Params::num_r_chunks + 1; ++iter)
+        for (int iter = 0; iter < Params::num_r_chunks; ++iter)
         {
             int iter_r16 = iter * Params::r16_chunk;
-            if (iter < Params::num_r_chunks)
-            {
-                // Load the expansion weights asynchronously for the next iteration.
-                for (int load_idx = 0; load_idx < exp_num_warp_loads; ++load_idx)
-                {
-                    int iter_c16 = load_idx * ExpWeightLoadIdx::WARP_C16;
-                    // TODO: bounds checking for c16 and r16.
-                    __pipeline_memcpy_async(
-                        smem_exp_weight_store.c16(iter_c16).ping_pong(ping_pong).get(),
-                        exp_weight.c16(iter_c16).r(iter_r16 * 16).get(),
-                        16);
-                }
 
-                // Load the projection weights asynchronously for the next iteration.
-                for (int load_idx = 0; load_idx < prj_num_warp_loads; ++load_idx)
+            // Initialize the accumulators for the hidden layer pre-activations.
+            Hidden::data_type hidden_acc_array[Hidden::size];
+            Hidden hidden_acc(hidden_acc_array);
+            for (auto r16 : hidden_acc.R16)
+            {
+                for (auto x16 : hidden_acc.X16)
                 {
-                    int iter_k16 = load_idx * PrjWeightLoadIdx::WARP_K16;
-                    // TODO: bounds checking for k16 and r16.
-                    __pipeline_memcpy_async(
-                        smem_prj_weight_store.k16(iter_k16).ping_pong(ping_pong).get(),
-                        prj_weight.k(iter_k16 * 16).r16(iter_r16).get(),
-                        16);
+                    hidden_acc[r16][x16]->zero();
                 }
-                __pipeline_commit();
             }
 
-            ping_pong = 1 - ping_pong;
-
-            if (iter > 0)
+            // Compute the hidden layer pre-activations.
+            for (auto c16 : in.C16)
             {
-                __pipeline_wait_prior((iter < Params::num_r_chunks) ? 1 : 0);
-                __syncthreads();
-
-                // Initialize the accumulators for the hidden layer pre-activations.
-                Hidden::data_type hidden_acc_array[Hidden::size];
-                Hidden hidden_acc(hidden_acc_array);
-                for (int r16 = 0; r16 < Hidden::R16; ++r16)
+                for (auto r16: hidden_acc.R16)
                 {
-                    for (int x16 = 0; x16 < Hidden::X16; ++x16)
+                    MMA_N16_K16_F16_B wgt_exp;
+                    wgt_exp.vector() = ldmatrix_x4(smem_exp_weight_load.ping_pong(ping_pong).r16(r16).c16(c16).get());
+                    for (int x16 = 0; x16 < In::X16; ++x16)
                     {
-                        hidden_acc.r16(r16).x16(x16)->zero();
+                        matmul_trans(*hidden_acc.x16(x16).r16(r16), *in.c16(c16).x16(x16), wgt_exp, *hidden_acc.x16(x16).r16(r16));
                     }
                 }
-
-                // Compute the hidden layer pre-activations.
-                for (int c16 = 0; c16 < In::C16; ++c16)
-                {
-                    for (int r16 = 0; r16 < Hidden::R16; ++r16)
-                    {
-                        MMA_N16_K16_F16_B wgt_exp;
-                        wgt_exp.vector() = ldmatrix_x4(smem_exp_weight_load.ping_pong(ping_pong).r16(r16).c16(c16).get());
-                        for (int x16 = 0; x16 < In::X16; ++x16)
-                        {
-                            matmul_trans(*hidden_acc.x16(x16).r16(r16), *in.c16(c16).x16(x16), wgt_exp, *hidden_acc.x16(x16).r16(r16));
-                        }
-                    }
-                }
-
-                // Compute the hidden layer activations.
-                HiddenAct::data_type hidden_act_array[HiddenAct::size];
-                HiddenAct hidden_act(hidden_act_array);
-                for (int r16 = 0; r16 < Hidden::R16; ++r16)
-                {
-                    for (int x16 = 0; x16 < Hidden::X16; ++x16)
-                    {
-                        for (int idx = 0; idx < 4; ++idx)
-                        {
-                            hidden_act.r16(r16).x16(x16)->fragment(idx) = hidden_acc.r16(r16).x16(x16)->to_half2(idx);
-                        }
-                    }
-                }
-
-                // Compute the projection.
-                for (int r16 = 0; r16 < HiddenAct::R16; ++r16)
-                {
-                    for (int k16 = 0; k16 < Params::k16; ++k16)
-                    {
-                        MMA_N16_K16_F16_B wgt_prj;
-                        wgt_prj.vector() = ldmatrix_x4(smem_prj_weight_load.ping_pong(ping_pong).k16(k16).r16(16).get());
-                        for (int x16 = 0; x16 < HiddenAct::X16; ++x16)
-                        {
-                            matmul_trans(*out_acc.k16(k16).x16(x16), *hidden_act.r16(r16).x16(x16), wgt_prj, *out_acc.k16(k16).x16(x16));
-                        }
-                    }
-                }
-
-                __syncthreads();
             }
+
+            // Compute the hidden layer activations.
+            HiddenAct::data_type hidden_act_array[HiddenAct::size];
+            HiddenAct hidden_act(hidden_act_array);
+            for (int r16 = 0; r16 < Hidden::R16; ++r16)
+            {
+                for (int x16 = 0; x16 < Hidden::X16; ++x16)
+                {
+                    for (int idx = 0; idx < 4; ++idx)
+                    {
+                        hidden_act.r16(r16).x16(x16)->fragment(idx) = hidden_acc.r16(r16).x16(x16)->to_half2(idx);
+                    }
+                }
+            }
+
+            // Compute the projection.
+            for (int r16 = 0; r16 < HiddenAct::R16; ++r16)
+            {
+                for (int k16 = 0; k16 < Params::k16; ++k16)
+                {
+                    MMA_N16_K16_F16_B wgt_prj;
+                    wgt_prj.vector() = ldmatrix_x4(smem_prj_weight_load.ping_pong(ping_pong).k16(k16).r16(16).get());
+                    for (int x16 = 0; x16 < HiddenAct::X16; ++x16)
+                    {
+                        matmul_trans(*out_acc.k16(k16).x16(x16), *hidden_act.r16(r16).x16(x16), wgt_prj, *out_acc.k16(k16).x16(x16));
+                    }
+                }
+            }
+
+            __syncthreads();
         }
 
         // Store the outputs to shared memory.
