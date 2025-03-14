@@ -175,8 +175,7 @@ extern "C"
             {
                 for (auto r16: hidden_acc.R16)
                 {
-                    Exp wgt_exp;
-                    wgt_exp.load(smem_exp_weight_load[r16][c16].get());
+                    auto wgt_exp = Exp::from_smem(smem_exp_weight_load[r16][c16].get());
                     for (auto x16: in.X16)
                     {
                         matmul_trans(*hidden_acc[x16][r16], *in[c16][x16], wgt_exp, *hidden_acc[x16][r16]);
@@ -203,8 +202,7 @@ extern "C"
             {
                 for (auto k16 : out_acc.K16)
                 {
-                    Prj wgt_prj;
-                    wgt_prj.load(smem_prj_weight_load[16][r16].get());
+                    auto wgt_prj = Prj::from_smem(smem_prj_weight_load[16][r16].get());
                     for (auto x16 : out_acc.X16)
                     {
                         matmul_trans(*out_acc[k16][x16], hidden_act[r16][x16], wgt_prj, *out_acc[k16][x16]);
