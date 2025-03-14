@@ -79,6 +79,7 @@ def _get_foldspec_names(gen_specs: List[GenSpecs]) -> Set[str]:
 
 def _include_files():
     return """
+#include "spio/allocator.h"
 #include "spio/index.h"
 #include "spio/tensor.h"
 #include "spio/dim.h"

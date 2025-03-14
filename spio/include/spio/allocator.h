@@ -1,6 +1,8 @@
 #ifndef SPIO_ALLOCATOR_H_
 #define SPIO_ALLOCATOR_H_
 
+#include "spio/macros.h"
+
 namespace spio
 {
     /// @brief Stack based allocator for shared memory.
@@ -18,22 +20,22 @@ namespace spio
     /// memory buffers that are only used in one stage of the kernel, such as input loading,
     /// main loop, and output writing. The user can deallocate the memory that is specific
     /// to a stage after it is no longer needed, allowing the memory to be reused for the next stage.
-    class SmemAllocator
+    class StackAllocator
     {
         /// @brief Calculate the size of an array of type T in terms of unsigned integers.
         /// @param size The number of elements in the array.
         /// @return The size of the array in terms of unsigned integers.
         /// @tparam T The type of the elements in the array.
         template <typename T>
-        static constexpr __device__ int _unsigned_size(int size) { return size * (sizeof(T) / sizeof(unsigned)); }
+        static constexpr DEVICE int _unsigned_size(int size) { return size * (sizeof(T) / sizeof(unsigned)); }
 
         /// @brief  Cast the shared memory pointer to a pointer of type T.
         template <typename T>
-        __device__ T *_cast() { return reinterpret_cast<T *>(_smem_ptr); }
+        DEVICE T *_cast() { return reinterpret_cast<T *>(_stack_ptr); }
 
         /// @brief Compile time check to ensure that the size of T is a multiple of the size of unsigned and greater than zero.
         template <typename T>
-        __device__ void _static_check()
+        DEVICE void _static_check()
         {
             static_assert(sizeof(T) % sizeof(unsigned) == 0, "Size of T must be a multiple of the size of unsigned.");
             static_assert(sizeof(T) > 0, "Size of T must be greater than zero.");
@@ -42,18 +44,18 @@ namespace spio
     public:
         /// @brief Construct the allocator with a pointer to shared memory.
         /// @details The pointer must be aligned to the size of unsigned.
-        __device__ SmemAllocator(void *smem_ptr) : _smem_ptr(reinterpret_cast<unsigned *>(smem_ptr)) {}
+        DEVICE StackAllocator(void *smem_ptr) : _stack_ptr(reinterpret_cast<unsigned *>(smem_ptr)) {}
 
         /// @brief Allocate an array of type T in shared memory.
         /// @tparam T the data-type of the array elements.
         /// @param size the number of elements in the array.
         /// @return a pointer to the array.
         template <typename T>
-        __device__ T *allocate(int size)
+        DEVICE T *allocate(int size)
         {
             _static_check<T>();
             auto ptr = _cast<T>();
-            _smem_ptr += _unsigned_size<T>(size);
+            _stack_ptr += _unsigned_size<T>(size);
             return ptr;
         }
 
@@ -64,14 +66,14 @@ namespace spio
         /// @param ptr the pointer to the array to deallocate.
         /// @param size the number of elements in the array.
         template <typename T>
-        __device__ void deallocate(T *ptr, int size)
+        DEVICE void deallocate(T *ptr, int size)
         {
             _static_check<T>();
-            _smem_ptr -= _unsigned_size<T>(size);
+            _stack_ptr -= _unsigned_size<T>(size);
         }
 
     private:
-        unsigned *_smem_ptr;
+        unsigned *_stack_ptr;
     };
 }
 

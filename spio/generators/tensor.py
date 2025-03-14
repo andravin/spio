@@ -222,6 +222,14 @@ def _class(
 
         template<typename IndexType>
         DEVICE constexpr {class_name} operator[](IndexType idx) const {{ return {class_name}(idx.offset_tensor(*this)); }}
+
+        DEVICE static {class_name} allocate(spio::StackAllocator &allocator) {{           
+            return {class_name}(allocator.allocate<data_type>(size));
+        }}
+
+        DEVICE void deallocate(spio::StackAllocator &allocator) {{
+            allocator.deallocate(this->get(), size);
+        }}
  """
 
 

@@ -1,6 +1,6 @@
 #include "spio.cuh"
 
-#include "spio/allocator.cuh"
+#include "spio/allocator.h"
 
 #include "parameters.h"
 
@@ -27,9 +27,9 @@ extern "C"
     {
         __shared__ uint4 smem[spio::max(SmemA::size + SmemB::size, SmemCLoad::size)];
 
-        SmemAllocator alloc(smem);
-        auto smem_a = alloc.allocate<uint4>(SmemA::size);
-        auto smem_b = alloc.allocate<uint4>(SmemB::size);
+        StackAllocator smem_allocator(smem);
+        auto smem_a = SmemA::allocate(smem_allocator);
+        auto smem_b = SmemB::allocate(smem_allocator);
 
         BLOCK_I_Dim block_i(blockIdx.x);
         BLOCK_J_Dim block_j(blockIdx.y);
@@ -134,9 +134,9 @@ extern "C"
         }
 
         // Store outputs through shared memory.
-        alloc.deallocate(smem_a, SmemA::size);
-        alloc.deallocate(smem_b, SmemB::size);
-        auto *smem_c_array = alloc.allocate<__half2>(SmemCStore::size);
+        smem_a.deallocate(smem_allocator);
+        smem_b.deallocate(smem_allocator);
+        auto smem_c_array = smem_allocator.allocate<__half2>(SmemCStore::size);
 
         C_Fragments::data_type::Index c_idx(compute_idx.lane());
         auto smem_c_store = SmemCStore(smem_c_array)[compute_idx.i32()][compute_idx.j64()][c_idx.j2m4()];
