@@ -13,7 +13,7 @@ namespace spio
     /// @param src Source pointer.
     /// @param mask if false, this thread skips the memcpy and fills its element with zeros instead.
     template <typename data_type>
-    __device__ void memcpy_async(data_type *dst, const data_type *src, bool mask)
+    __device__ void memcpy_async(data_type *dst, const data_type *src, bool mask = true)
     {
         __pipeline_memcpy_async(
             dst,
