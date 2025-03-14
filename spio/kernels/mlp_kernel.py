@@ -177,6 +177,18 @@ def _get_kernel_spec(
         smem_prj_weights_tensor,
         input_buffer_fifos,
         smem_input_idx,
+        gen.Fragment("_In", gen.FragmentType.M16_K16_F16_A, "x", "c"),
+        gen.Fragment("_Exp", gen.FragmentType.N16_K16_F16_B, "c", "r"),
+        gen.Fragment("_Hidden", gen.FragmentType.M16_N16_F32_C, "x", "r"),
+        gen.Fragment("_HiddenAct", gen.FragmentType.M16_K16_F16_A, "x", "r"),
+        gen.Fragment("_Prj", gen.FragmentType.N16_K16_F16_B, "r", "k"),
+        gen.Fragment("_Out", gen.FragmentType.M16_N16_F32_C, "x", "k"),
+        gen.Tensor("In", "_In", gen.Dims(x16=config.warp_x16, c16=c16)),
+        gen.Tensor("Exp", "_Exp", gen.Dims(r16=r16)),
+        gen.Tensor("Hidden", "_Hidden", gen.Dims(x16=config.warp_x16, r16=config.r16_chunk)),
+        gen.Tensor("HiddenAct", "_HiddenAct", gen.Dims(x16=config.warp_x16, r16=config.r16_chunk)),
+        gen.Tensor("Prj", "_Prj", gen.Dims(k16=k16)),
+        gen.Tensor("Out", "_Out", gen.Dims(x16=config.warp_x16, k16=k16)),
     ]
 
     launch_params = LaunchParams(

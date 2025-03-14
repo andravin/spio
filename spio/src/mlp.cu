@@ -54,7 +54,7 @@ extern "C"
 
         using InputBufferGuard = WarpFifoGuard<Params::warps_per_smsp>;
 
-        auto warp = get_warp();
+        auto warp = threadIdx / 32;
         auto lane = get_lane();
 
         auto warpgroup = get_warpgroup();
@@ -145,6 +145,15 @@ extern "C"
             }
         }
 
+        // Initialize the load address for the expansion weights.
+        Exp::data_type::LoadIndex exp_load_idx(lane);
+        auto smem_exp_load = smem_exp_weights.checkers(exp_load_idx.r(), exp_load_idx.c8());
+
+        // Initialize the load address for the projection weights.
+        Prj::data_type::LoadIndex prj_load_idx(lane);
+        auto smem_prj_load = smem_prj_weights.checkers(proj_load_idx.k(), proj_load_idx.r8());
+
+
         // Main loop over hidden layer chunks.
         for (int iter = 0; iter < Params::num_r_chunks; ++iter)
         {
@@ -166,11 +175,11 @@ extern "C"
             {
                 for (auto r16: hidden_acc.R16)
                 {
-                    MMA_N16_K16_F16_B wgt_exp;
-                    wgt_exp.vector() = ldmatrix_x4(smem_exp_weight_load.ping_pong(ping_pong).r16(r16).c16(c16).get());
-                    for (int x16 = 0; x16 < In::X16; ++x16)
+                    Exp wgt_exp;
+                    wgt_exp.load(smem_exp_weight_load[r16][c16].get());
+                    for (auto x16: in.X16)
                     {
-                        matmul_trans(*hidden_acc.x16(x16).r16(r16), *in.c16(c16).x16(x16), wgt_exp, *hidden_acc.x16(x16).r16(r16));
+                        matmul_trans(*hidden_acc[x16][r16], *in[c16][x16], wgt_exp, *hidden_acc[x16][r16]);
                     }
                 }
             }
@@ -178,32 +187,30 @@ extern "C"
             // Compute the hidden layer activations.
             HiddenAct::data_type hidden_act_array[HiddenAct::size];
             HiddenAct hidden_act(hidden_act_array);
-            for (int r16 = 0; r16 < Hidden::R16; ++r16)
+            for (auto r16 : hidden_act.R16)
             {
-                for (int x16 = 0; x16 < Hidden::X16; ++x16)
+                for (auto x16 : hidden_act.X16)
                 {
-                    for (int idx = 0; idx < 4; ++idx)
+                    for (int idx = 0; idx < HiddenAct::data_type::size(); ++idx)
                     {
-                        hidden_act.r16(r16).x16(x16)->fragment(idx) = hidden_acc.r16(r16).x16(x16)->to_half2(idx);
+                        hidden_act[16][x16]->fragment(idx) = hidden_acc[r16][x16]->to_half2(idx);
                     }
                 }
             }
 
             // Compute the projection.
-            for (int r16 = 0; r16 < HiddenAct::R16; ++r16)
+            for (auto r16 : hidden_act.R16)
             {
-                for (int k16 = 0; k16 < Params::k16; ++k16)
+                for (auto k16 : out_acc.K16)
                 {
-                    MMA_N16_K16_F16_B wgt_prj;
-                    wgt_prj.vector() = ldmatrix_x4(smem_prj_weight_load.ping_pong(ping_pong).k16(k16).r16(16).get());
-                    for (int x16 = 0; x16 < HiddenAct::X16; ++x16)
+                    Prj wgt_prj;
+                    wgt_prj.load(smem_prj_weight_load[16][r16].get());
+                    for (auto x16 : out_acc.X16)
                     {
-                        matmul_trans(*out_acc.k16(k16).x16(x16), *hidden_act.r16(r16).x16(x16), wgt_prj, *out_acc.k16(k16).x16(x16));
+                        matmul_trans(*out_acc[k16][x16], hidden_act[r16][x16], wgt_prj, *out_acc[k16][x16]);
                     }
                 }
             }
-
-            __syncthreads();
         }
 
         // Store the outputs to shared memory.
