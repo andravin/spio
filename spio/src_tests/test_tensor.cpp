@@ -2,19 +2,48 @@
 #include "spio/tensor.h"
 #include "spio/dim.h"
 
-UTEST(Tensor1D, indexing)
+namespace
 {
     class D0 : public spio::Dim
     {
     public:
         using spio::Dim::Dim;
+        D0 operator-(D0 i) const { return D0(get() - i.get()); }
+        D0 operator+(D0 i) const { return D0(get() + i.get()); }
+        bool operator==(D0 i) const { return get() == i.get(); }
     };
 
+    class D1 : public spio::Dim
+    {
+    public:
+        using spio::Dim::Dim;
+        D1 operator-(D1 i) const { return D1(get() - i.get()); }
+        D1 operator+(D1 i) const { return D1(get() + i.get()); }
+        bool operator==(D1 i) const { return get() == i.get(); }
+    };
+
+}
+
+struct Tensor1D_Fixture
+{
     using Tensor = spio::Tensor1D<float, D0, 8>;
-
     float data[Tensor::size];
-    Tensor tensor(data);
+    Tensor tensor;
+};
 
+UTEST_F_SETUP(Tensor1D_Fixture)
+{
+    utest_fixture->tensor = Tensor1D_Fixture::Tensor(utest_fixture->data);
+}
+
+UTEST_F_TEARDOWN(Tensor1D_Fixture)
+{
+}
+
+UTEST_F(Tensor1D_Fixture, indexing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
     for (auto d0 : spio::range(tensor.size_0))
     {
         auto p1 = tensor[d0].get();
@@ -23,25 +52,96 @@ UTEST(Tensor1D, indexing)
     }
 }
 
-// UTEST(Tensor2D, indexing)
-// {
-//     constexpr int D0 = 8;
-//     constexpr int D1 = 16;
+UTEST_F(Tensor1D_Fixture, slicing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0 - D0(2)))
+    {
+        auto slice = tensor.slice<2>(d0);
+        EXPECT_TRUE(slice.size_0 == D0(2));
+        for (auto s0 : spio::range(slice.size_0))
+        {
+            EXPECT_EQ(slice[s0].get(), &data[d0.get() + s0.get()]);
+        }
+        for (int i = 0; i < 2; ++i) {
+            EXPECT_EQ(slice[D0(i)].get(), &data[d0.get() + i]);
+        }
+    }
+}
 
-//     using Tensor = spio::Tensor2D<float, D1>;
+struct Tensor2D_Fixture
+{
+    using Tensor = spio::Tensor2D<float, D0, D1, 8, 16>;
+    float data[Tensor::size];
+    Tensor tensor;
+};
 
-//     float data[D0 * D1];
+UTEST_F_SETUP(Tensor2D_Fixture)
+{
+    utest_fixture->tensor = Tensor2D_Fixture::Tensor(utest_fixture->data);
+}
 
-//     for (int d0 = 0; d0 < D0; ++d0)
-//     {
-//         for (int d1 = 0; d1 < D1; ++d1)
-//         {
-//             auto p1 = Tensor(data)._d0(d0)._d1(d1).get();
-//             auto p2 = data + d0 * D1 + d1;
-//             EXPECT_EQ(p1, p2);
-//         }
-//     }
-// }
+UTEST_F_TEARDOWN(Tensor2D_Fixture)
+{
+}
+
+UTEST_F(Tensor2D_Fixture, indexing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0))
+    {
+        for (auto d1 : spio::range(tensor.size_1))
+        {
+            auto p1 = tensor[d0][d1].get();
+            auto p2 = &data[d0.get() * tensor.stride_0 + d1.get() * tensor.stride_1];
+            EXPECT_EQ(p1, p2);
+        }
+    }
+}
+
+UTEST_F(Tensor2D_Fixture, slicing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0 - D0(2)))
+    {
+        auto slice = tensor.slice<2>(d0);
+        auto p2 = &data[d0.get() * tensor.stride_0];
+        EXPECT_EQ(slice.get(), p2);
+        EXPECT_TRUE(slice.size_0 == D0(2));
+    }
+    for (auto d1 : spio::range(tensor.size_1 - D1(2)))
+    {
+        auto slice = tensor.slice<2>(d1);
+        auto p2 = &data[d1.get() * tensor.stride_1];
+        EXPECT_EQ(slice.get(), p2);
+        EXPECT_TRUE(slice.size_1 == D1(2));
+    }
+}
+
+UTEST_F(Tensor2D_Fixture, nested_slicing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0 - D0(2)))
+    {
+        for (auto d1 : spio::range(tensor.size_1 - D1(4)))
+        {
+            auto slice = tensor.slice<2>(d0).slice<4>(d1);
+            for (auto s0 : spio::range(slice.size_0))
+            {
+                for (auto s1 : spio::range(slice.size_1))
+                {
+                    EXPECT_EQ(slice[s0][s1].get(), &data[(d0 + s0).get() * tensor.stride_0 + (d1 + s1).get() * tensor.stride_1]);
+                }
+            }
+            EXPECT_TRUE(slice.size_0 == D0(2));
+            EXPECT_TRUE(slice.size_1 == D1(4));
+        }
+    }
+}
 
 // UTEST(Tensor3D, indexing)
 // {

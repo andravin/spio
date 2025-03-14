@@ -38,10 +38,9 @@ namespace spio
         DEVICE constexpr Tensor1D operator[](dim_0 d0) const { return Tensor1D(get() + d0.get() * stride_0); }
 
         template <int _size>
-        DEVICE constexpr Tensor1D<data_type, dim_0, size_0.get() - _size, stride_0>
-        slice(dim_0 slice_start)
+        DEVICE constexpr auto slice(dim_0 slice_start)
         {
-            return Tensor1D<data_type, dim_0, size_0.get() - _size, stride_0>((*this)[slice_start].get());
+            return Tensor1D<data_type, dim_0, _size, stride_0>((*this)[slice_start].get());
         }
     };
 
@@ -73,17 +72,15 @@ namespace spio
         DEVICE constexpr Tensor2D operator[](dim_1 d1) const { return Tensor2D(get() + d1.get() * stride_1); }
 
         template <int _size>
-        DEVICE constexpr Tensor2D<data_type, dim_0, dim_1, size_0.get() - _size, size_1, stride_1, stride_0>
-        slice(dim_0 slice_start)
+        DEVICE constexpr auto slice(dim_0 slice_start)
         {
-            return Tensor2D<data_type, dim_0, dim_1, size_0.get() - _size, size_1, stride_1, stride_0>((*this)[slice_start].get());
+            return Tensor2D<data_type, dim_0, dim_1, _size, size_1.get(), stride_1, stride_0>((*this)[slice_start].get());
         }
 
         template <int _size>
-        DEVICE constexpr Tensor2D<data_type, dim_0, dim_1, size_0, size_1.get() - _size, stride_1, stride_0>
-        slice(dim_1 slice_start)
+        DEVICE constexpr auto slice(dim_1 slice_start)
         {
-            return Tensor2D<data_type, dim_0, dim_1, size_0, size_1.get() - _size, stride_1, stride_0>((*this)[slice_start].get());
+            return Tensor2D<data_type, dim_0, dim_1, size_0.get(), _size, stride_1, stride_0>((*this)[slice_start].get());
         }
     };
 
