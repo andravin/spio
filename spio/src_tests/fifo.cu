@@ -12,7 +12,9 @@ extern "C"
 
         __shared__ unsigned smem[Guard::Fifo::smem_size];
 
-        auto fifo = Guard::Fifo::make_resource_queue(smem, threadIdx.x, num_resources);
+        spio::StackAllocator allocator(smem);
+
+        auto fifo = Guard::Fifo::allocate_resource_queue(allocator, threadIdx.x, num_resources);
 
         __syncthreads();
 
