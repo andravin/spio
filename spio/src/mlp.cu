@@ -202,7 +202,7 @@ extern "C"
             {
                 for (auto k16 : out_acc.K16)
                 {
-                    auto wgt_prj = Prj::from_smem(smem_prj_weight_load[16][r16].get());
+                    auto wgt_prj = Prj::from_smem(smem_prj_weight_load[k16][r16].get());
                     for (auto x16 : out_acc.X16)
                     {
                         matmul_trans(*out_acc[k16][x16], hidden_act[r16][x16], wgt_prj, *out_acc[k16][x16]);
@@ -211,7 +211,8 @@ extern "C"
             }
         }
 
-        // Store the outputs to shared memory.
+        // Store the outputs to shared memory
+        // TODO define SmemOutputStore and SmemOutputLoad tensors.
         SmemOutputStore smem_output_store(reinterpret_cast<__half2 *>(smem));
         {
             int warp_x16 = warp_idx.warp() * Params::warp_x16;
@@ -219,12 +220,10 @@ extern "C"
             smem_output_store = smem_output_store.x8(warp_x8).lane(warp_idx.lane());
         }
 
-        for (int x16 = 0; x16 < HiddenAct::X16; ++x16)
+        for (auto x16: out_acc.X16)
         {
-            for (int k16 = 0; k16 < Params::k16; ++k16)
+            for (auto k16 : out_acc.K16)
             {
-                // TODO: Use a FragmentSpec  to define the output_acc fragment type.
-                // TODO: Use Out::data_type::Index to compute x8() and k2().
                 for (int k8 = 0; k8 < 2; ++k8)
                 {
                     for (int x8 = 0; x8 < 2; ++x8)
