@@ -452,6 +452,207 @@ namespace spio
             return Tensor5D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, size_0.get(), size_1.get(), size_2.get(), size_3.get(), _size, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
         }
     };
+
+    template <
+        typename _data_type,
+        class _dim_0,
+        class _dim_1,
+        class _dim_2,
+        class _dim_3,
+        class _dim_4,
+        class _dim_5,
+        int _size_0,
+        int _size_1,
+        int _size_2,
+        int _size_3,
+        int _size_4,
+        int _size_5,
+        int _stride_5 = 1,
+        int _stride_4 = _size_5 * _stride_5,
+        int _stride_3 = _size_4 * _stride_4,
+        int _stride_2 = _size_3 * _stride_3,
+        int _stride_1 = _size_2 * _stride_2,
+        int _stride_0 = _size_1 * _stride_1>
+    class Tensor6D : public TensorBase<_data_type>
+    {
+    public:
+        using data_type = _data_type;
+        using TensorBase<data_type>::TensorBase;
+        using TensorBase<data_type>::get;
+
+        using dim_0 = _dim_0;
+        using dim_1 = _dim_1;
+        using dim_2 = _dim_2;
+        using dim_3 = _dim_3;
+        using dim_4 = _dim_4;
+        using dim_5 = _dim_5;
+
+        using cursor_type = Cursor6D<data_type, _dim_0, _dim_1, _dim_2, _dim_3, _dim_4, _dim_5, _stride_5, _stride_4, _stride_3, _stride_2, _stride_1, _stride_0>;
+
+        static constexpr dim_0 size_0 = _size_0;
+        static constexpr dim_1 size_1 = _size_1;
+        static constexpr dim_2 size_2 = _size_2;
+        static constexpr dim_3 size_3 = _size_3;
+        static constexpr dim_4 size_4 = _size_4;
+        static constexpr dim_5 size_5 = _size_5;
+        static constexpr int stride_0 = _stride_0;
+        static constexpr int stride_1 = _stride_1;
+        static constexpr int stride_2 = _stride_2;
+        static constexpr int stride_3 = _stride_3;
+        static constexpr int stride_4 = _stride_4;
+        static constexpr int stride_5 = _stride_5;
+        static constexpr int size = size_0.get() * size_1.get() * size_2.get() * size_3.get() * size_4.get() * size_5.get();
+
+        DEVICE constexpr cursor_type operator[](dim_0 d0) const { return cursor_type(get())[d0]; }
+        DEVICE constexpr cursor_type operator[](dim_1 d1) const { return cursor_type(get())[d1]; }
+        DEVICE constexpr cursor_type operator[](dim_2 d2) const { return cursor_type(get())[d2]; }
+        DEVICE constexpr cursor_type operator[](dim_3 d3) const { return cursor_type(get())[d3]; }
+        DEVICE constexpr cursor_type operator[](dim_4 d4) const { return cursor_type(get())[d4]; }
+        DEVICE constexpr cursor_type operator[](dim_5 d5) const { return cursor_type(get())[d5]; }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_0 slice_start)
+        {
+            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, _size, size_1.get(), size_2.get(), size_3.get(), size_4.get(), size_5.get(), stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_1 slice_start)
+        {
+            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, size_0.get(), _size, size_2.get(), size_3.get(), size_4.get(), size_5.get(), stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_2 slice_start)
+        {
+            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, size_0.get(), size_1.get(), _size, size_3.get(), size_4.get(), size_5.get(), stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_3 slice_start)
+        {
+            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, size_0.get(), size_1.get(), size_2.get(), _size, size_4.get(), size_5.get(), stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_4 slice_start)
+        {
+            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, size_0.get(), size_1.get(), size_2.get(), size_3.get(), _size, size_5.get(), stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_5 slice_start)
+        {
+            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, size_0.get(), size_1.get(), size_2.get(), size_3.get(), size_4.get(), _size, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+    };
+
+    template <
+        typename _data_type,
+        class _dim_0,
+        class _dim_1,
+        class _dim_2,
+        class _dim_3,
+        class _dim_4,
+        class _dim_5,
+        class _dim_6,
+        int _size_0,
+        int _size_1,
+        int _size_2,
+        int _size_3,
+        int _size_4,
+        int _size_5,
+        int _size_6,
+        int _stride_6 = 1,
+        int _stride_5 = _size_6 * _stride_6,
+        int _stride_4 = _size_5 * _stride_5,
+        int _stride_3 = _size_4 * _stride_4,
+        int _stride_2 = _size_3 * _stride_3,
+        int _stride_1 = _size_2 * _stride_2,
+        int _stride_0 = _size_1 * _stride_1>
+    class Tensor7D : public TensorBase<_data_type>
+    {
+    public:
+        using data_type = _data_type;
+        using TensorBase<data_type>::TensorBase;
+        using TensorBase<data_type>::get;
+
+        using dim_0 = _dim_0;
+        using dim_1 = _dim_1;
+        using dim_2 = _dim_2;
+        using dim_3 = _dim_3;
+        using dim_4 = _dim_4;
+        using dim_5 = _dim_5;
+        using dim_6 = _dim_6;
+
+        using cursor_type = Cursor7D<data_type, _dim_0, _dim_1, _dim_2, _dim_3, _dim_4, _dim_5, _dim_6, _stride_6, _stride_5, _stride_4, _stride_3, _stride_2, _stride_1, _stride_0>;
+
+        static constexpr dim_0 size_0 = _size_0;
+        static constexpr dim_1 size_1 = _size_1;
+        static constexpr dim_2 size_2 = _size_2;
+        static constexpr dim_3 size_3 = _size_3;
+        static constexpr dim_4 size_4 = _size_4;
+        static constexpr dim_5 size_5 = _size_5;
+        static constexpr dim_6 size_6 = _size_6;
+        static constexpr int stride_0 = _stride_0;
+        static constexpr int stride_1 = _stride_1;
+        static constexpr int stride_2 = _stride_2;
+        static constexpr int stride_3 = _stride_3;
+        static constexpr int stride_4 = _stride_4;
+        static constexpr int stride_5 = _stride_5;
+        static constexpr int stride_6 = _stride_6;
+        static constexpr int size = size_0.get() * size_1.get() * size_2.get() * size_3.get() * size_4.get() * size_5.get() * size_6.get();
+
+        DEVICE constexpr cursor_type operator[](dim_0 d0) const { return cursor_type(get())[d0]; }
+        DEVICE constexpr cursor_type operator[](dim_1 d1) const { return cursor_type(get())[d1]; }
+        DEVICE constexpr cursor_type operator[](dim_2 d2) const { return cursor_type(get())[d2]; }
+        DEVICE constexpr cursor_type operator[](dim_3 d3) const { return cursor_type(get())[d3]; }
+        DEVICE constexpr cursor_type operator[](dim_4 d4) const { return cursor_type(get())[d4]; }
+        DEVICE constexpr cursor_type operator[](dim_5 d5) const { return cursor_type(get())[d5]; }
+        DEVICE constexpr cursor_type operator[](dim_6 d6) const { return cursor_type(get())[d6]; }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_0 slice_start)
+        {
+            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, _size, size_1.get(), size_2.get(), size_3.get(), size_4.get(), size_5.get(), size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_1 slice_start)
+        {
+            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), _size, size_2.get(), size_3.get(), size_4.get(), size_5.get(), size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_2 slice_start)
+        {
+            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), size_1.get(), _size, size_3.get(), size_4.get(), size_5.get(), size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_3 slice_start)
+        {
+            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), size_1.get(), size_2.get(), _size, size_4.get(), size_5.get(), size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_4 slice_start)
+        {
+            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), size_1.get(), size_2.get(), size_3.get(), _size, size_5.get(), size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_5 slice_start)
+        {
+            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), size_1.get(), size_2.get(), size_3.get(), size_4.get(), _size, size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+
+        template <int _size>
+        DEVICE constexpr auto slice(dim_6 slice_start)
+        {
+            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), size_1.get(), size_2.get(), size_3.get(), size_4.get(), size_5.get(), _size, stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+        }
+    };
 }
 
 #endif

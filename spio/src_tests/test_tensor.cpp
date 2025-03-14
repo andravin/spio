@@ -22,6 +22,50 @@ namespace
         bool operator==(D1 i) const { return get() == i.get(); }
     };
 
+    class D2 : public spio::Dim
+    {
+    public:
+        using spio::Dim::Dim;
+        D2 operator-(D2 i) const { return D2(get() - i.get()); }
+        D2 operator+(D2 i) const { return D2(get() + i.get()); }
+        bool operator==(D2 i) const { return get() == i.get(); }
+    };
+
+    class D3 : public spio::Dim
+    {
+    public:
+        using spio::Dim::Dim;
+        D3 operator-(D3 i) const { return D3(get() - i.get()); }
+        D3 operator+(D3 i) const { return D3(get() + i.get()); }
+        bool operator==(D3 i) const { return get() == i.get(); }
+    };
+
+    class D4 : public spio::Dim
+    {
+    public:
+        using spio::Dim::Dim;
+        D4 operator-(D4 i) const { return D4(get() - i.get()); }
+        D4 operator+(D4 i) const { return D4(get() + i.get()); }
+        bool operator==(D4 i) const { return get() == i.get(); }
+    };
+
+    class D5 : public spio::Dim
+    {
+    public:
+        using spio::Dim::Dim;
+        D5 operator-(D5 i) const { return D5(get() - i.get()); }
+        D5 operator+(D5 i) const { return D5(get() + i.get()); }
+        bool operator==(D5 i) const { return get() == i.get(); }
+    };
+
+    class D6 : public spio::Dim
+    {
+    public:
+        using spio::Dim::Dim;
+        D6 operator-(D6 i) const { return D6(get() - i.get()); }
+        D6 operator+(D6 i) const { return D6(get() + i.get()); }
+        bool operator==(D6 i) const { return get() == i.get(); }
+    };
 }
 
 struct Tensor1D_Fixture
@@ -37,6 +81,102 @@ UTEST_F_SETUP(Tensor1D_Fixture)
 }
 
 UTEST_F_TEARDOWN(Tensor1D_Fixture)
+{
+}
+
+struct Tensor2D_Fixture
+{
+    using Tensor = spio::Tensor2D<float, D0, D1, 8, 16>;
+    float data[Tensor::size];
+    Tensor tensor;
+};
+
+UTEST_F_SETUP(Tensor2D_Fixture)
+{
+    utest_fixture->tensor = Tensor2D_Fixture::Tensor(utest_fixture->data);
+}
+
+UTEST_F_TEARDOWN(Tensor2D_Fixture)
+{
+}
+
+struct Tensor3D_Fixture
+{
+    using Tensor = spio::Tensor3D<float, D0, D1, D2, 8, 16, 4>;
+    float data[Tensor::size];
+    Tensor tensor;
+};
+
+UTEST_F_SETUP(Tensor3D_Fixture)
+{
+    utest_fixture->tensor = Tensor3D_Fixture::Tensor(utest_fixture->data);
+}
+
+UTEST_F_TEARDOWN(Tensor3D_Fixture)
+{
+}
+
+struct Tensor4D_Fixture
+{
+    using Tensor = spio::Tensor4D<float, D0, D1, D2, D3, 8, 16, 4, 2>;
+    float data[Tensor::size];
+    Tensor tensor;
+};
+
+UTEST_F_SETUP(Tensor4D_Fixture)
+{
+    utest_fixture->tensor = Tensor4D_Fixture::Tensor(utest_fixture->data);
+}
+
+UTEST_F_TEARDOWN(Tensor4D_Fixture)
+{
+}
+
+struct Tensor5D_Fixture
+{
+    using Tensor = spio::Tensor5D<float, D0, D1, D2, D3, D4, 8, 16, 32, 4, 2>;
+    float data[Tensor::size];
+    Tensor tensor;
+};
+
+UTEST_F_SETUP(Tensor5D_Fixture)
+{
+    utest_fixture->tensor = Tensor5D_Fixture::Tensor(utest_fixture->data);
+}
+
+UTEST_F_TEARDOWN(Tensor5D_Fixture)
+{
+}
+
+struct Tensor6D_Fixture
+{
+    using Tensor = spio::Tensor6D<float, D0, D1, D2, D3, D4, D5, 8, 16, 32, 4, 2, 8>;
+    float data[Tensor::size];
+    Tensor tensor;
+};
+
+UTEST_F_SETUP(Tensor6D_Fixture)
+{
+    utest_fixture->tensor = Tensor6D_Fixture::Tensor(utest_fixture->data);
+}
+
+UTEST_F_TEARDOWN(Tensor6D_Fixture)
+{
+}
+
+struct Tensor7D_Fixture
+{
+    using Tensor = spio::Tensor7D<float, D0, D1, D2, D3, D4, D5, D6, 8, 16, 32, 4, 2, 8, 3>;
+    float data[Tensor::size];
+    Tensor tensor;
+};
+
+UTEST_F_SETUP(Tensor7D_Fixture)
+{
+    utest_fixture->tensor = Tensor7D_Fixture::Tensor(utest_fixture->data);
+}
+
+UTEST_F_TEARDOWN(Tensor7D_Fixture)
 {
 }
 
@@ -64,26 +204,11 @@ UTEST_F(Tensor1D_Fixture, slicing)
         {
             EXPECT_EQ(slice[s0].get(), &data[d0.get() + s0.get()]);
         }
-        for (int i = 0; i < 2; ++i) {
+        for (int i = 0; i < 2; ++i)
+        {
             EXPECT_EQ(slice[D0(i)].get(), &data[d0.get() + i]);
         }
     }
-}
-
-struct Tensor2D_Fixture
-{
-    using Tensor = spio::Tensor2D<float, D0, D1, 8, 16>;
-    float data[Tensor::size];
-    Tensor tensor;
-};
-
-UTEST_F_SETUP(Tensor2D_Fixture)
-{
-    utest_fixture->tensor = Tensor2D_Fixture::Tensor(utest_fixture->data);
-}
-
-UTEST_F_TEARDOWN(Tensor2D_Fixture)
-{
 }
 
 UTEST_F(Tensor2D_Fixture, indexing)
@@ -130,6 +255,8 @@ UTEST_F(Tensor2D_Fixture, nested_slicing)
         for (auto d1 : spio::range(tensor.size_1 - D1(4)))
         {
             auto slice = tensor.slice<2>(d0).slice<4>(d1);
+            EXPECT_TRUE(slice.size_0 == D0(2));
+            EXPECT_TRUE(slice.size_1 == D1(4));
             for (auto s0 : spio::range(slice.size_0))
             {
                 for (auto s1 : spio::range(slice.size_1))
@@ -137,286 +264,391 @@ UTEST_F(Tensor2D_Fixture, nested_slicing)
                     EXPECT_EQ(slice[s0][s1].get(), &data[(d0 + s0).get() * tensor.stride_0 + (d1 + s1).get() * tensor.stride_1]);
                 }
             }
-            EXPECT_TRUE(slice.size_0 == D0(2));
-            EXPECT_TRUE(slice.size_1 == D1(4));
         }
     }
 }
 
-// UTEST(Tensor3D, indexing)
-// {
-//     constexpr int D0 = 3;
-//     constexpr int D1 = 7;
-//     constexpr int D2 = 13;
+UTEST_F(Tensor3D_Fixture, indexing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0))
+    {
+        for (auto d1 : spio::range(tensor.size_1))
+        {
+            for (auto d2 : spio::range(tensor.size_2))
+            {
+                auto p1 = tensor[d0][d1][d2].get();
+                auto p2 = &data[d0.get() * tensor.stride_0 +
+                                d1.get() * tensor.stride_1 +
+                                d2.get() * tensor.stride_2];
+                EXPECT_EQ(p1, p2);
+            }
+        }
+    }
+}
 
-//     using Tensor = spio::Tensor3D<float, D1, D2>;
+UTEST_F(Tensor3D_Fixture, nested_slicing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0 - D0(2)))
+    {
+        for (auto d1 : spio::range(tensor.size_1 - D1(2)))
+        {
+            for (auto d2 : spio::range(tensor.size_2 - D2(4)))
+            {
+                auto slice = tensor.slice<2>(d0).slice<2>(d1).slice<4>(d2);
+                EXPECT_TRUE(slice.size_0 == D0(2));
+                EXPECT_TRUE(slice.size_1 == D1(2));
+                EXPECT_TRUE(slice.size_2 == D2(4));
+                for (auto s0 : spio::range(slice.size_0))
+                {
+                    for (auto s1 : spio::range(slice.size_1))
+                    {
+                        for (auto s2 : spio::range(slice.size_2))
+                        {
+                            EXPECT_EQ(
+                                slice[s0][s1][s2].get(),
+                                &data[(d0 + s0).get() * tensor.stride_0 +
+                                      (d1 + s1).get() * tensor.stride_1 +
+                                      (d2 + s2).get() * tensor.stride_2]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
-//     float data[D0 * D1 * D2];
+UTEST_F(Tensor4D_Fixture, indexing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0))
+    {
+        for (auto d1 : spio::range(tensor.size_1))
+        {
+            for (auto d2 : spio::range(tensor.size_2))
+            {
+                for (auto d3 : spio::range(tensor.size_3))
+                {
+                    auto p1 = tensor[d0][d1][d2][d3].get();
+                    auto p2 = &data[d0.get() * tensor.stride_0 +
+                                    d1.get() * tensor.stride_1 +
+                                    d2.get() * tensor.stride_2 +
+                                    d3.get() * tensor.stride_3];
+                    EXPECT_EQ(p1, p2);
+                }
+            }
+        }
+    }
+}
 
-//     for (int d0 = 0; d0 < D0; ++d0)
-//     {
-//         for (int d1 = 0; d1 < D1; ++d1)
-//         {
-//             for (int d2 = 0; d2 < D2; ++d2)
-//             {
-//                 auto p1 = Tensor(data)._d0(d0)._d1(d1)._d2(d2).get();
-//                 auto p2 = data + d0 * D1 * D2 + d1 * D2 + d2;
-//                 EXPECT_EQ(p1, p2);
-//             }
-//         }
-//     }
-// }
+UTEST_F(Tensor4D_Fixture, nested_slicing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0 - D0(2)))
+    {
+        for (auto d1 : spio::range(tensor.size_1 - D1(2)))
+        {
+            for (auto d2 : spio::range(tensor.size_2 - D2(1)))
+            {
+                for (auto d3 : spio::range(tensor.size_3 - D3(1)))
+                {
+                    auto slice = tensor.slice<2>(d0).slice<2>(d1).slice<1>(d2).slice<1>(d3);
+                    EXPECT_TRUE(slice.size_0 == D0(2));
+                    EXPECT_TRUE(slice.size_1 == D1(2));
+                    EXPECT_TRUE(slice.size_2 == D2(1));
+                    EXPECT_TRUE(slice.size_3 == D3(1));
+                    for (auto s0 : spio::range(slice.size_0))
+                    {
+                        for (auto s1 : spio::range(slice.size_1))
+                        {
+                            for (auto s2 : spio::range(slice.size_2))
+                            {
+                                for (auto s3 : spio::range(slice.size_3))
+                                {
+                                    EXPECT_EQ(
+                                        slice[s0][s1][s2][s3].get(),
+                                        &data[(d0 + s0).get() * tensor.stride_0 +
+                                              (d1 + s1).get() * tensor.stride_1 +
+                                              (d2 + s2).get() * tensor.stride_2 +
+                                              (d3 + s3).get() * tensor.stride_3]);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
-// UTEST(Tensor4D, indexing)
-// {
-//     constexpr int D0 = 3;
-//     constexpr int D1 = 7;
-//     constexpr int D2 = 13;
-//     constexpr int D3 = 17;
+UTEST_F(Tensor5D_Fixture, indexing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0))
+    {
+        for (auto d1 : spio::range(tensor.size_1))
+        {
+            for (auto d2 : spio::range(tensor.size_2))
+            {
+                for (auto d3 : spio::range(tensor.size_3))
+                {
+                    for (auto d4 : spio::range(tensor.size_4))
+                    {
+                        auto p1 = tensor[d0][d1][d2][d3][d4].get();
+                        auto p2 = &data[d0.get() * tensor.stride_0 +
+                                        d1.get() * tensor.stride_1 +
+                                        d2.get() * tensor.stride_2 +
+                                        d3.get() * tensor.stride_3 +
+                                        d4.get() * tensor.stride_4];
+                        EXPECT_EQ(p1, p2);
+                    }
+                }
+            }
+        }
+    }
+}
 
-//     using Tensor = spio::Tensor4D<float, D1, D2, D3>;
+UTEST_F(Tensor5D_Fixture, nested_slicing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0 - D0(2)))
+    {
+        for (auto d1 : spio::range(tensor.size_1 - D1(2)))
+        {
+            for (auto d2 : spio::range(tensor.size_2 - D2(1)))
+            {
+                for (auto d3 : spio::range(tensor.size_3 - D3(1)))
+                {
+                    for (auto d4 : spio::range(tensor.size_4 - D4(1)))
+                    {
+                        auto slice = tensor.slice<2>(d0).slice<2>(d1).slice<1>(d2).slice<1>(d3).slice<1>(d4);
+                        EXPECT_TRUE(slice.size_0 == D0(2));
+                        EXPECT_TRUE(slice.size_1 == D1(2));
+                        EXPECT_TRUE(slice.size_2 == D2(1));
+                        EXPECT_TRUE(slice.size_3 == D3(1));
+                        EXPECT_TRUE(slice.size_4 == D4(1));
+                        for (auto s0 : spio::range(slice.size_0))
+                        {
+                            for (auto s1 : spio::range(slice.size_1))
+                            {
+                                for (auto s2 : spio::range(slice.size_2))
+                                {
+                                    for (auto s3 : spio::range(slice.size_3))
+                                    {
+                                        for (auto s4 : spio::range(slice.size_4))
+                                        {
+                                            EXPECT_EQ(
+                                                slice[s0][s1][s2][s3][s4].get(),
+                                                &data[(d0 + s0).get() * tensor.stride_0 +
+                                                      (d1 + s1).get() * tensor.stride_1 +
+                                                      (d2 + s2).get() * tensor.stride_2 +
+                                                      (d3 + s3).get() * tensor.stride_3 +
+                                                      (d4 + s4).get() * tensor.stride_4]);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
-//     float data[D0 * D1 * D2 * D3];
+UTEST_F(Tensor6D_Fixture, indexing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0))
+    {
+        for (auto d1 : spio::range(tensor.size_1))
+        {
+            for (auto d2 : spio::range(tensor.size_2))
+            {
+                for (auto d3 : spio::range(tensor.size_3))
+                {
+                    for (auto d4 : spio::range(tensor.size_4))
+                    {
+                        for (auto d5 : spio::range(tensor.size_5))
+                        {
+                            auto p1 = tensor[d0][d1][d2][d3][d4][d5].get();
+                            auto p2 = &data[d0.get() * tensor.stride_0 +
+                                            d1.get() * tensor.stride_1 +
+                                            d2.get() * tensor.stride_2 +
+                                            d3.get() * tensor.stride_3 +
+                                            d4.get() * tensor.stride_4 +
+                                            d5.get() * tensor.stride_5];
+                            EXPECT_EQ(p1, p2);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
-//     for (int d0 = 0; d0 < D0; ++d0)
-//     {
-//         for (int d1 = 0; d1 < D1; ++d1)
-//         {
-//             for (int d2 = 0; d2 < D2; ++d2)
-//             {
-//                 for (int d3 = 0; d3 < D3; ++d3)
-//                 {
-//                     auto p1 = Tensor(data)._d0(d0)._d1(d1)._d2(d2)._d3(d3).get();
-//                     auto p2 = data + d0 * D1 * D2 * D3 + d1 * D2 * D3 + d2 * D3 + d3;
-//                     EXPECT_EQ(p1, p2);
-//                 }
-//             }
-//         }
-//     }
-// }
+UTEST_F(Tensor6D_Fixture, nested_slicing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0 - D0(2)))
+    {
+        for (auto d1 : spio::range(tensor.size_1 - D1(2)))
+        {
+            for (auto d2 : spio::range(tensor.size_2 - D2(1)))
+            {
+                for (auto d3 : spio::range(tensor.size_3 - D3(1)))
+                {
+                    for (auto d4 : spio::range(tensor.size_4 - D4(1)))
+                    {
+                        for (auto d5 : spio::range(tensor.size_5 - D5(1)))
+                        {
+                            auto slice = tensor.slice<2>(d0).slice<2>(d1).slice<1>(d2).slice<1>(d3).slice<1>(d4).slice<1>(d5);
+                            EXPECT_TRUE(slice.size_0 == D0(2));
+                            EXPECT_TRUE(slice.size_1 == D1(2));
+                            EXPECT_TRUE(slice.size_2 == D2(1));
+                            EXPECT_TRUE(slice.size_3 == D3(1));
+                            EXPECT_TRUE(slice.size_4 == D4(1));
+                            EXPECT_TRUE(slice.size_5 == D5(1));
+                            for (auto s0 : spio::range(slice.size_0))
+                            {
+                                for (auto s1 : spio::range(slice.size_1))
+                                {
+                                    for (auto s2 : spio::range(slice.size_2))
+                                    {
+                                        for (auto s3 : spio::range(slice.size_3))
+                                        {
+                                            for (auto s4 : spio::range(slice.size_4))
+                                            {
+                                                for (auto s5 : spio::range(slice.size_5))
+                                                {
+                                                    EXPECT_EQ(
+                                                        slice[s0][s1][s2][s3][s4][s5].get(),
+                                                        &data[(d0 + s0).get() * tensor.stride_0 +
+                                                              (d1 + s1).get() * tensor.stride_1 +
+                                                              (d2 + s2).get() * tensor.stride_2 +
+                                                              (d3 + s3).get() * tensor.stride_3 +
+                                                              (d4 + s4).get() * tensor.stride_4 +
+                                                              (d5 + s5).get() * tensor.stride_5]);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
-// UTEST(Tensor5D, indexing)
-// {
-//     constexpr int D0 = 3;
-//     constexpr int D1 = 7;
-//     constexpr int D2 = 13;
-//     constexpr int D3 = 17;
-//     constexpr int D4 = 19;
+UTEST_F(Tensor7D_Fixture, indexing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0))
+    {
+        for (auto d1 : spio::range(tensor.size_1))
+        {
+            for (auto d2 : spio::range(tensor.size_2))
+            {
+                for (auto d3 : spio::range(tensor.size_3))
+                {
+                    for (auto d4 : spio::range(tensor.size_4))
+                    {
+                        for (auto d5 : spio::range(tensor.size_5))
+                        {
+                            for (auto d6 : spio::range(tensor.size_6))
+                            {
+                                auto p1 = tensor[d0][d1][d2][d3][d4][d5][d6].get();
+                                auto p2 = &data[d0.get() * tensor.stride_0 +
+                                                d1.get() * tensor.stride_1 +
+                                                d2.get() * tensor.stride_2 +
+                                                d3.get() * tensor.stride_3 +
+                                                d4.get() * tensor.stride_4 +
+                                                d5.get() * tensor.stride_5 +
+                                                d6.get() * tensor.stride_6];
+                                EXPECT_EQ(p1, p2);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
-//     using Tensor = spio::Tensor5D<float, D1, D2, D3, D4>;
-
-//     float data[D0 * D1 * D2 * D3 * D4];
-
-//     for (int d0 = 0; d0 < D0; ++d0)
-//     {
-//         for (int d1 = 0; d1 < D1; ++d1)
-//         {
-//             for (int d2 = 0; d2 < D2; ++d2)
-//             {
-//                 for (int d3 = 0; d3 < D3; ++d3)
-//                 {
-//                     for (int d4 = 0; d4 < D4; ++d4)
-//                     {
-//                         auto p1 = Tensor(data)._d0(d0)._d1(d1)._d2(d2)._d3(d3)._d4(d4).get();
-//                         auto p2 = data + d0 * D1 * D2 * D3 * D4 + d1 * D2 * D3 * D4 + d2 * D3 * D4 + d3 * D4 + d4;
-//                         EXPECT_EQ(p1, p2);
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
-
-// UTEST(Tensor6D, indexing)
-// {
-//     constexpr int D0 = 3;
-//     constexpr int D1 = 7;
-//     constexpr int D2 = 13;
-//     constexpr int D3 = 17;
-//     constexpr int D4 = 19;
-//     constexpr int D5 = 23;
-
-//     using Tensor = spio::Tensor6D<float, D1, D2, D3, D4, D5>;
-
-//     float data[D0 * D1 * D2 * D3 * D4 * D5];
-
-//     for (int d0 = 0; d0 < D0; ++d0)
-//     {
-//         for (int d1 = 0; d1 < D1; ++d1)
-//         {
-//             for (int d2 = 0; d2 < D2; ++d2)
-//             {
-//                 for (int d3 = 0; d3 < D3; ++d3)
-//                 {
-//                     for (int d4 = 0; d4 < D4; ++d4)
-//                     {
-//                         for (int d5 = 0; d5 < D5; ++d5)
-//                         {
-//                             auto p1 = Tensor(data)._d0(d0)._d1(d1)._d2(d2)._d3(d3)._d4(d4)._d5(d5).get();
-//                             auto p2 = data + d0 * D1 * D2 * D3 * D4 * D5 + d1 * D2 * D3 * D4 * D5 + d2 * D3 * D4 * D5 + d3 * D4 * D5 + d4 * D5 + d5;
-//                             EXPECT_EQ(p1, p2);
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
-
-// UTEST(Tensor7D, indexing)
-// {
-//     constexpr int D0 = 3;
-//     constexpr int D1 = 7;
-//     constexpr int D2 = 13;
-//     constexpr int D3 = 17;
-//     constexpr int D4 = 4;
-//     constexpr int D5 = 2;
-//     constexpr int D6 = 8;
-
-//     using Tensor = spio::Tensor7D<float, D1, D2, D3, D4, D5, D6>;
-
-//     float data[D0 * D1 * D2 * D3 * D4 * D5 * D6];
-
-//     for (int d0 = 0; d0 < D0; ++d0)
-//     {
-//         for (int d1 = 0; d1 < D1; ++d1)
-//         {
-//             for (int d2 = 0; d2 < D2; ++d2)
-//             {
-//                 for (int d3 = 0; d3 < D3; ++d3)
-//                 {
-//                     for (int d4 = 0; d4 < D4; ++d4)
-//                     {
-//                         for (int d5 = 0; d5 < D5; ++d5)
-//                         {
-//                             for (int d6 = 0; d6 < D6; ++d6)
-//                             {
-//                                 auto p1 = Tensor(data)._d0(d0)._d1(d1)._d2(d2)._d3(d3)._d4(d4)._d5(d5)._d6(d6).get();
-//                                 auto p2 = data + d0 * D1 * D2 * D3 * D4 * D5 * D6 + d1 * D2 * D3 * D4 * D5 * D6 + d2 * D3 * D4 * D5 * D6 + d3 * D4 * D5 * D6 + d4 * D5 * D6 + d5 * D6 + d6;
-//                                 EXPECT_EQ(p1, p2);
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
-
-// UTEST(Tensor2D, custom_stride)
-// {
-//     constexpr int D0 = 8;
-//     constexpr int D1 = 16;
-//     constexpr int D1_stride = 1;
-//     constexpr int D0_stride = D1 + 1;
-
-//     using Tensor = spio::Tensor2D<float, D1, D1_stride, D0_stride>;
-
-//     float data[D0_stride * D1_stride];
-
-//     for (int d0 = 0; d0 < D0; ++d0)
-//     {
-//         for (int d1 = 0; d1 < D1; ++d1)
-//         {
-//             auto p1 = Tensor(data)._d0(d0)._d1(d1).get();
-//             auto p2 = data + d0 * D0_stride + d1 * D1_stride;
-//             EXPECT_EQ(p1, p2);
-//         }
-//     }
-// }
-
-// UTEST(Tensor3D, custom_stride)
-// {
-//     constexpr int D0 = 3;
-//     constexpr int D1 = 7;
-//     constexpr int D2 = 13;
-//     constexpr int D2_stride = 1;
-//     constexpr int D1_stride = D2 + 1;
-//     constexpr int D0_stride = D1 * D1_stride + 2;
-
-//     using Tensor = spio::Tensor3D<float, D1, D2, D2_stride, D1_stride, D0_stride>;
-
-//     float data[D0_stride * D1_stride * D0_stride];
-
-//     for (int d0 = 0; d0 < D0; ++d0)
-//     {
-//         for (int d1 = 0; d1 < D1; ++d1)
-//         {
-//             for (int d2 = 0; d2 < D2; ++d2)
-//             {
-//                 auto p1 = Tensor(data)._d0(d0)._d1(d1)._d2(d2).get();
-//                 auto p2 = data + d0 * D0_stride + d1 * D1_stride + d2 * D2_stride;
-//                 EXPECT_EQ(p1, p2);
-//             }
-//         }
-//     }
-// }
-
-// UTEST(Tensor4D, custom_stride)
-// {
-//     constexpr int D0 = 3;
-//     constexpr int D1 = 7;
-//     constexpr int D2 = 8;
-//     constexpr int D3 = 5;
-//     constexpr int D3_stride = 1;
-//     constexpr int D2_stride = D3 + 1;
-//     constexpr int D1_stride = D2 * D2_stride + 2;
-//     constexpr int D0_stride = D1 * D1_stride + 3;
-
-//     using Tensor = spio::Tensor4D<float, D1, D2, D3, D3_stride, D2_stride, D1_stride, D0_stride>;
-
-//     float data[D0_stride * D1_stride * D2_stride * D3_stride];
-
-//     for (int d0 = 0; d0 < D0; ++d0)
-//     {
-//         for (int d1 = 0; d1 < D1; ++d1)
-//         {
-//             for (int d2 = 0; d2 < D2; ++d2)
-//             {
-//                 for (int d3 = 0; d3 < D3; ++d3)
-//                 {
-//                     auto p1 = Tensor(data)._d0(d0)._d1(d1)._d2(d2)._d3(d3).get();
-//                     auto p2 = data + d0 * D0_stride + d1 * D1_stride + d2 * D2_stride + d3 * D3_stride;
-//                     EXPECT_EQ(p1, p2);
-//                 }
-//             }
-//         }
-//     }
-// }
-
-// UTEST(Tensor5D, custom_stride)
-// {
-//     constexpr int D0 = 3;
-//     constexpr int D1 = 2;
-//     constexpr int D2 = 8;
-//     constexpr int D3 = 5;
-//     constexpr int D4 = 2;
-//     constexpr int D4_stride = 1;
-//     constexpr int D3_stride = D4 + 1;
-//     constexpr int D2_stride = D3 * D3_stride + 2;
-//     constexpr int D1_stride = D2 * D2_stride + 3;
-//     constexpr int D0_stride = D1 * D1_stride + 4;
-
-//     using Tensor = spio::Tensor5D<float, D1, D2, D3, D4, D4_stride, D3_stride, D2_stride, D1_stride, D0_stride>;
-
-//     float data[D0_stride * D1_stride * D2_stride * D3_stride * D4_stride];
-
-//     for (int d0 = 0; d0 < D0; ++d0)
-//     {
-//         for (int d1 = 0; d1 < D1; ++d1)
-//         {
-//             for (int d2 = 0; d2 < D2; ++d2)
-//             {
-//                 for (int d3 = 0; d3 < D3; ++d3)
-//                 {
-//                     for (int d4 = 0; d4 < D4; ++d4)
-//                     {
-//                         auto p1 = Tensor(data)._d0(d0)._d1(d1)._d2(d2)._d3(d3)._d4(d4).get();
-//                         auto p2 = data + d0 * D0_stride + d1 * D1_stride + d2 * D2_stride + d3 * D3_stride + d4 * D4_stride;
-//                         EXPECT_EQ(p1, p2);
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
+UTEST_F(Tensor7D_Fixture, nested_slicing)
+{
+    auto &tensor = utest_fixture->tensor;
+    auto &data = utest_fixture->data;
+    for (auto d0 : spio::range(tensor.size_0 - D0(2)))
+    {
+        for (auto d1 : spio::range(tensor.size_1 - D1(2)))
+        {
+            for (auto d2 : spio::range(tensor.size_2 - D2(1)))
+            {
+                for (auto d3 : spio::range(tensor.size_3 - D3(1)))
+                {
+                    for (auto d4 : spio::range(tensor.size_4 - D4(1)))
+                    {
+                        for (auto d5 : spio::range(tensor.size_5 - D5(1)))
+                        {
+                            for (auto d6 : spio::range(tensor.size_6 - D6(1)))
+                            {
+                                auto slice = tensor.slice<2>(d0).slice<2>(d1).slice<1>(d2).slice<1>(d3).slice<1>(d4).slice<1>(d5).slice<1>(d6);
+                                EXPECT_TRUE(slice.size_0 == D0(2));
+                                EXPECT_TRUE(slice.size_1 == D1(2));
+                                EXPECT_TRUE(slice.size_2 == D2(1));
+                                EXPECT_TRUE(slice.size_3 == D3(1));
+                                EXPECT_TRUE(slice.size_4 == D4(1));
+                                EXPECT_TRUE(slice.size_5 == D5(1));
+                                EXPECT_TRUE(slice.size_6 == D6(1));
+                                for (auto s0 : spio::range(slice.size_0))
+                                {
+                                    for (auto s1 : spio::range(slice.size_1))
+                                    {
+                                        for (auto s2 : spio::range(slice.size_2))
+                                        {
+                                            for (auto s3 : spio::range(slice.size_3))
+                                            {
+                                                for (auto s4 : spio::range(slice.size_4))
+                                                {
+                                                    for (auto s5 : spio::range(slice.size_5))
+                                                    {
+                                                        for (auto s6 : spio::range(slice.size_6))
+                                                        {
+                                                            EXPECT_EQ(
+                                                                slice[s0][s1][s2][s3][s4][s5][s6].get(),
+                                                                &data[(d0 + s0).get() * tensor.stride_0 +
+                                                                      (d1 + s1).get() * tensor.stride_1 +
+                                                                      (d2 + s2).get() * tensor.stride_2 +
+                                                                      (d3 + s3).get() * tensor.stride_3 +
+                                                                      (d4 + s4).get() * tensor.stride_4 +
+                                                                      (d5 + s5).get() * tensor.stride_5 +
+                                                                      (d6 + s6).get() * tensor.stride_6]);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
