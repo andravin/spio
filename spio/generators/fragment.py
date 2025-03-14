@@ -52,9 +52,15 @@ class Fragment:
 
         if load_index_class:
             load_method = f"""
-    __device__ static {self.class_name} load_new(const void *p) {{ 
+        __device__ static {self.class_name} from_smem(const void *p) {{ 
             {self.class_name} f;
             f.load(p);
+            return f;
+        }}
+
+        __device__ static {self.class_name} from_smem_trans(const void *p) {{ 
+            {self.class_name} f;
+            f.load_trans(p);
             return f;
         }}
 """
