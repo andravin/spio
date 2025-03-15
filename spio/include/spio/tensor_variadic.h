@@ -8,7 +8,7 @@
 
 namespace spio
 {
-    // The private dimension type for linear offsets
+    // The private dimension dim_type for linear offsets
     class _OffsetDim : public Dim
     {
     public:
@@ -24,13 +24,13 @@ namespace spio
     template <typename DataType>
     class TensorBase;
     
-    // Store dimension information (user type, size, fold)
+    // Store dimension information (user dim_type, size, fold)
     template <typename DimType, int Size, unsigned Stride>
     struct DimInfo {
-        using type = DimType;
+        using dim_type = DimType;
         static constexpr DimType size = DimType(Size);
         
-        // Create fold type for this dimension
+        // Create fold dim_type for this dimension
         using fold_type = Fold<_OffsetDim, Stride>;
         
         // Map from dimension to offset.
@@ -64,7 +64,7 @@ namespace spio
     template <typename DimType, typename FirstDimInfo, typename... RestDimInfos>
     struct has_dim<DimType, FirstDimInfo, RestDimInfos...> {
         static constexpr bool value = 
-            std::is_same<DimType, typename FirstDimInfo::type>::value || 
+            std::is_same<DimType, typename FirstDimInfo::dim_type>::value || 
             has_dim<DimType, RestDimInfos...>::value;
     };
 
@@ -79,7 +79,7 @@ namespace spio
 
     template <typename DimType, typename FirstDimInfo, typename... RestDimInfos>
     struct find_dim_info_impl<DimType, FirstDimInfo, RestDimInfos...> {
-        static constexpr bool is_match = std::is_same<DimType, typename FirstDimInfo::type>::value;
+        static constexpr bool is_match = std::is_same<DimType, typename FirstDimInfo::dim_type>::value;
 
         using info = std::conditional_t<
             is_match,
@@ -100,7 +100,7 @@ namespace spio
     struct find_dim_info {
         // First check if dimension exists - fail early with clear message
         static_assert(has_dim<DimType, DimInfos...>::value,
-                     "Dimension type not found in tensor - ensure you're using the correct dimension type");
+                     "Dimension dim_type not found in tensor - ensure you're using the correct dimension dim_type");
         
         // If we get here, dimension exists, so safe to use find_dim_info_impl
         using impl = find_dim_info_impl<DimType, DimInfos...>;
@@ -114,20 +114,20 @@ namespace spio
     template <typename DimType, int NewSize, typename FirstInfo, typename... RestInfos>
     struct update_dim_info<DimType, NewSize, FirstInfo, RestInfos...> {
         // Check if this is the dimension to update
-        static constexpr bool is_match = std::is_same<DimType, typename FirstInfo::type>::value;
+        static constexpr bool is_match = std::is_same<DimType, typename FirstInfo::dim_type>::value;
         
         // Create updated info (either with new size or unchanged)
         using current = std::conditional_t<
             is_match,
-            DimInfo<typename FirstInfo::type, NewSize, FirstInfo::fold_type::stride.get()>,
+            DimInfo<typename FirstInfo::dim_type, NewSize, FirstInfo::fold_type::stride.get()>,
             FirstInfo
         >;
         
         // Recursive case: process rest of infos
-        using next = typename update_dim_info<DimType, NewSize, RestInfos...>::type;
+        using next = typename update_dim_info<DimType, NewSize, RestInfos...>::dim_type;
         
         // Combine with the rest
-        using type = decltype(std::tuple_cat(
+        using dim_type = decltype(std::tuple_cat(
             std::tuple<current>(),
             std::declval<next>()
         ));
@@ -136,7 +136,7 @@ namespace spio
     // Base case for update_dim_info
     template <typename DimType, int NewSize>
     struct update_dim_info<DimType, NewSize> {
-        using type = std::tuple<>;
+        using dim_type = std::tuple<>;
     };
     
     // Forward declare expansion helper
@@ -152,7 +152,7 @@ namespace spio
         using TensorBase<data_type>::TensorBase;
         using TensorBase<data_type>::get;
         
-        // Index with any dimension type
+        // Index with any dimension dim_type
         template <typename DimType>
         DEVICE constexpr Cursor operator[](DimType d) const
         {
@@ -173,7 +173,7 @@ namespace spio
         using TensorBase<data_type>::TensorBase;
         using TensorBase<data_type>::get;
         
-        // Define cursor type
+        // Define cursor dim_type
         using cursor_type = Cursor<DataType, DimInfos...>;
         
         // Get size for a specific dimension
@@ -182,7 +182,7 @@ namespace spio
             return find_dim_info<DimType, DimInfos...>::info::size;
         }
         
-        // Index with any dimension type
+        // Index with any dimension dim_type
         template <typename DimType>
         DEVICE constexpr cursor_type operator[](DimType d) const {
             // Get the offset for this dimension
@@ -196,10 +196,10 @@ namespace spio
         template <int NewSize, typename SliceDimType>
         DEVICE constexpr auto slice(SliceDimType slice_start) {
             // Create new dim infos with the specified dimension's size updated
-            using updated_infos = typename update_dim_info<SliceDimType, NewSize, DimInfos...>::type;
+            using updated_infos = typename update_dim_info<SliceDimType, NewSize, DimInfos...>::dim_type;
 
-            // Create new tensor type with the updated dim infos
-            using result_type = typename expand_dim_infos<DataType, updated_infos>::type;
+            // Create new tensor dim_type with the updated dim infos
+            using result_type = typename expand_dim_infos<DataType, updated_infos>::dim_type;
             
             // Use existing operator[] to get the cursor at the correct offset
             // and construct the new tensor at that position
@@ -210,7 +210,7 @@ namespace spio
     // Now define the expansion helper
     template <typename DataType, typename... InfoTypes>
     struct expand_dim_infos<DataType, std::tuple<InfoTypes...>> {
-        using type = Tensor<DataType, InfoTypes...>;
+        using dim_type = Tensor<DataType, InfoTypes...>;
     };
     
     // 2D tensor creation helper
