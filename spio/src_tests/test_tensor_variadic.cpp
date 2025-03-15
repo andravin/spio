@@ -4,46 +4,64 @@
 
 using namespace spio;
 
-namespace
+struct HeightDim : public Dim
 {
-    struct HeightDim : public Dim
-    {
-        using Dim::Dim;
-    };
+    using Dim::Dim;
+    constexpr bool operator==(const HeightDim &other) const { return get() == other.get(); }
+};
 
-    struct WidthDim : public Dim
+struct WidthDim : public Dim
+{
+    using Dim::Dim;
+    constexpr bool operator==(const WidthDim &other) const { return get() == other.get(); }
+};
+
+template <>
+struct utest_type_deducer<HeightDim>
+{
+    static void _(const HeightDim &d)
     {
-        using Dim::Dim;
-    };
-}
+        UTEST_PRINTF("%d", d.get());
+    }
+};
+
+template <>
+struct utest_type_deducer<WidthDim>
+{
+    static void _(const WidthDim &d)
+    {
+        UTEST_PRINTF("%d", d.get());
+    }
+};
 
 UTEST(TensorVariadic, tensor_2d)
 {
-    constexpr int Height = 480;
-    constexpr int Width = 640;
+    constexpr HeightDim Height = 480;
+    constexpr WidthDim Width = 640;
+    constexpr int Size = Height.get() * Width.get();
 
-    float tensor_data[Height * Width];
-    for (int i = 0; i < Height * Width; ++i)
+    float tensor_data[Size];
+    for (int i = 0; i < Size; ++i)
     {
         tensor_data[i] = static_cast<float>(i);
     }
 
-    auto tensor = make_tensor<float, HeightDim, WidthDim, Height, Width>(tensor_data);
+    auto tensor = make_tensor<float, HeightDim, WidthDim, Height.get(), Width.get()>(tensor_data);
 
     EXPECT_EQ(*tensor, tensor_data[0]);
     EXPECT_EQ(*tensor[WidthDim(320)], tensor_data[320]);
-    EXPECT_EQ(*tensor[HeightDim(240)], tensor_data[240 * Width]);
+    EXPECT_EQ(*tensor[HeightDim(240)], tensor_data[240 * Width.get()]);
     EXPECT_EQ(tensor.get_size<HeightDim>(), Height);
 
     auto hslice = tensor.slice<240>(HeightDim(20));
-    EXPECT_EQ(hslice.get_size<HeightDim>(), 240);
-    EXPECT_EQ(*hslice, tensor_data[20 * Width]);
-    EXPECT_EQ(*hslice[HeightDim(20)][WidthDim(40)], tensor_data[40 * Width + 40]);
+    EXPECT_EQ(hslice.get_size<HeightDim>(), HeightDim(240));
+    EXPECT_EQ(*hslice, tensor_data[20 * Width.get()]);
+    EXPECT_EQ(*hslice[HeightDim(20)][WidthDim(40)], tensor_data[40 * Width.get() + 40]);
 
     auto wslice = tensor.slice<320>(WidthDim(10));
     EXPECT_EQ(wslice.get_size<WidthDim>(), 320);
     EXPECT_EQ(*wslice, tensor_data[10]);
-    EXPECT_EQ(*wslice[HeightDim(20)][WidthDim(10)], tensor_data[20 * Width + 20]);
+    EXPECT_EQ(*wslice[HeightDim(20)][WidthDim(10)], tensor_data[20 * Width.get() + 20]);
 }
 
 UTEST(TensorVariadic, tensor_2d_custom_stride)
@@ -60,7 +78,7 @@ UTEST(TensorVariadic, tensor_2d_custom_stride)
             tensor_data[h * Stride + w] = static_cast<float>(h * Width + w);
         }
     }
-    
+
     auto tensor = make_tensor_with_strides<float, HeightDim, WidthDim, Height, Width, Stride, 1>(tensor_data);
 
     EXPECT_EQ(*tensor, tensor_data[0]);
