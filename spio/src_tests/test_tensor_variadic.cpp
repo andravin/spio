@@ -34,6 +34,29 @@ struct utest_type_deducer<WidthDim>
     }
 };
 
+// 2D tensor creation helper
+template <typename DataType, typename HeightDimType, typename WidthDimType,
+          int HeightSize, int WidthSize>
+DEVICE constexpr auto make_tensor(DataType *data = nullptr)
+{
+    return Tensor<
+        DataType,
+        DimInfo<HeightDimType, HeightSize, WidthSize>, // Height folded by width
+        DimInfo<WidthDimType, WidthSize, 1>            // Width with unit stride
+        >(data);
+}
+
+// Version with custom strides
+template <typename DataType, typename HeightDimType, typename WidthDimType,
+          int HeightSize, int WidthSize, int HeightStride, int WidthStride>
+DEVICE constexpr auto make_tensor_with_strides(DataType *data = nullptr)
+{
+    return Tensor<
+        DataType,
+        DimInfo<HeightDimType, HeightSize, HeightStride>,
+        DimInfo<WidthDimType, WidthSize, WidthStride>>(data);
+}
+
 UTEST(TensorVariadic, tensor_2d)
 {
     constexpr HeightDim Height = 480;
@@ -96,4 +119,3 @@ UTEST(TensorVariadic, tensor_2d_custom_stride)
     EXPECT_EQ(*wslice, tensor_data[10]);
     EXPECT_EQ(*wslice[HeightDim(20)][WidthDim(10)], tensor_data[20 * Stride + 20]);
 }
-
