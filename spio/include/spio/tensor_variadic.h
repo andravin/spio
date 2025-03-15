@@ -8,7 +8,7 @@
 
 namespace spio
 {
-    /// @brief The private dimension dim_type   for linear offsets.
+    /// @brief The private dimension type for linear offsets.
     class _OffsetDim : public Dim
     {
     public:
@@ -36,7 +36,7 @@ namespace spio
 
         /// @brief Map from dimension to offset.
         /// Convert a dimension index to a folded offset dimension and unfold it.
-        /// @param d the dine
+        /// @param d the dimension
         DEVICE constexpr static _OffsetDim to_offset(DimType d)
         {
             return fold_type(d.get()).unfold();
@@ -60,90 +60,129 @@ namespace spio
         _data_type *_data;
     };
 
-    /// @brief Check if a dimension exists in the tensor.
-    /// @tparap DimType the dimension type to check
-    /// @tparam DimInfos the dimension infos
-    template <typename DimType, typename... DimInfos>
-    struct has_dim;
+    // Forward declaration of Tensor class
+    template <typename DataType, typename... DimInfos>
+    class Tensor;
 
-    template <typename DimType, typename FirstDimInfo, typename... RestDimInfos>
-    struct has_dim<DimType, FirstDimInfo, RestDimInfos...>
+    // Implementation details
+    namespace detail
     {
-        static constexpr bool value =
-            std::is_same<DimType, typename FirstDimInfo::dim_type>::value ||
-            has_dim<DimType, RestDimInfos...>::value;
-    };
+        /// @brief Check if a dimension exists in the tensor.
+        /// @tparap DimType the dimension type to check
+        /// @tparam DimInfos the dimension infos
+        template <typename DimType, typename... DimInfos>
+        struct has_dim;
 
-    template <typename DimType>
-    struct has_dim<DimType>
+        template <typename DimType, typename FirstDimInfo, typename... RestDimInfos>
+        struct has_dim<DimType, FirstDimInfo, RestDimInfos...>
+        {
+            static constexpr bool value =
+                std::is_same<DimType, typename FirstDimInfo::dim_type>::value ||
+                has_dim<DimType, RestDimInfos...>::value;
+        };
+
+        template <typename DimType>
+        struct has_dim<DimType>
+        {
+            static constexpr bool value = false;
+        };
+
+        template <typename DimType, typename... DimInfos>
+        struct find_dim_info_impl;
+
+        template <typename DimType, typename FirstDimInfo, typename... RestDimInfos>
+        struct find_dim_info_impl<DimType, FirstDimInfo, RestDimInfos...>
+        {
+            static constexpr bool is_match = std::is_same<DimType, typename FirstDimInfo::dim_type>::value;
+            using info = std::conditional_t<
+                is_match,
+                FirstDimInfo,
+                typename find_dim_info_impl<DimType, RestDimInfos...>::info>;
+        };
+
+        /// @brief Base case with dummy DimInfo instantiation for error handling.
+        template <typename DimType>
+        struct find_dim_info_impl<DimType>
+        {
+            using info = DimInfo<DimType, 0, 1>;
+        };
+
+        /// @brief Update dimension info by replacing a given dimension with a new size.
+        /// @tparam DimType the dimension type to update
+        /// @tparam SliceSize the new size of the dimension
+        /// @tparam DimInfos the dimension infos
+        template <typename DimType, int SliceSize, typename... DimInfos>
+        struct update_dim_info;
+
+        template <typename DimType, int SliceSize, typename FirstInfo, typename... RestInfos>
+        struct update_dim_info<DimType, SliceSize, FirstInfo, RestInfos...>
+        {
+            static constexpr bool is_match = std::is_same<DimType, typename FirstInfo::dim_type>::value;
+            using current = std::conditional_t<
+                is_match,
+                DimInfo<typename FirstInfo::dim_type, SliceSize, FirstInfo::fold_type::stride.get()>,
+                FirstInfo>;
+            using next = typename update_dim_info<DimType, SliceSize, RestInfos...>::dim_type;
+            using dim_type = decltype(std::tuple_cat(
+                std::tuple<current>(),
+                std::declval<next>()));
+        };
+
+        template <typename DimType, int SliceSize>
+        struct update_dim_info<DimType, SliceSize>
+        {
+            using dim_type = std::tuple<>;
+        };
+
+        template <typename, typename>
+        struct tensor_type_from_dim_info_tuple;
+
+        /// @brief Create a tensor type from a tuple of dimension infos.
+        /// @tparam DataType the data type of the tensor
+        /// @tparam DimInfos the dimension infos
+        template <typename DataType, typename... DimInfos>
+        struct tensor_type_from_dim_info_tuple<DataType, std::tuple<DimInfos...>>
+        {
+            using tensor_type = Tensor<DataType, DimInfos...>;
+        };
+    }
+
+    // Type traits for tensor operations
+    namespace tensor_traits
     {
-        static constexpr bool value = false;
-    };
+        /// @brief Find dimension info for a given dimension type.
+        /// @tparam DimType the dimension type to find
+        /// @tparam ...DimInfos the dimension infos
+        template <typename DimType, typename... DimInfos>
+        struct find_dim_info
+        {
+            // First check if dimension exists and show a clear error message if it doesn't.
+            static_assert(detail::has_dim<DimType, DimInfos...>::value,
+                          "Dimension type not found in tensor - ensure you're using the correct dimension type");
 
-    template <typename DimType, typename... DimInfos>
-    struct find_dim_info_impl;
+            // Then find the dimension info.
+            using impl = detail::find_dim_info_impl<DimType, DimInfos...>;
+            using info = typename impl::info;
+        };
 
-    template <typename DimType, typename FirstDimInfo, typename... RestDimInfos>
-    struct find_dim_info_impl<DimType, FirstDimInfo, RestDimInfos...>
-    {
-        static constexpr bool is_match = std::is_same<DimType, typename FirstDimInfo::dim_type>::value;
-        using info = std::conditional_t<
-            is_match,
-            FirstDimInfo,
-            typename find_dim_info_impl<DimType, RestDimInfos...>::info>;
-    };
+        /// @brief Check if a dimension exists in the tensor (public interface).
+        /// @tparam DimType the dimension type to check
+        /// @tparam DimInfos the dimension infos
+        template <typename DimType, typename... DimInfos>
+        struct has_dimension
+        {
+            static constexpr bool value = detail::has_dim<DimType, DimInfos...>::value;
+        };
 
-    /// @brief Base case with dummy DimInfo instantiation for error handling.
-    template <typename DimType>
-    struct find_dim_info_impl<DimType>
-    {
-        using info = DimInfo<DimType, 0, 1>;
-    };
-
-    /// @brief Find dimension info for a given dimension type.
-    /// @tparam DimType the dimension type to find
-    /// @tparam ...DimInfos the dimension infos
-    template <typename DimType, typename... DimInfos>
-    struct find_dim_info
-    {
-        // First check if dimension exists and show a clear error message if it doesn't.
-        static_assert(has_dim<DimType, DimInfos...>::value,
-                      "Dimension type not found in tensor - ensure you're using the correct dimension dim_type ");
-
-        // Then find the dmension info.
-        using impl = find_dim_info_impl<DimType, DimInfos...>;
-        using info = typename impl::info;
-    };
-
-    /// @brief Update dimension info by replacing a given dimension with a new size.
-    /// @tparam DimType the dimension type to update
-    /// @tparam SliceSize the new size of the dimension
-    /// @tparam DimInfos the dimension infos
-    template <typename DimType, int SliceSize, typename... DimInfos>
-    struct update_dim_info;
-
-    template <typename DimType, int SliceSize, typename FirstInfo, typename... RestInfos>
-    struct update_dim_info<DimType, SliceSize, FirstInfo, RestInfos...>
-    {
-        static constexpr bool is_match = std::is_same<DimType, typename FirstInfo::dim_type>::value;
-        using current = std::conditional_t<
-            is_match,
-            DimInfo<typename FirstInfo::dim_type, SliceSize, FirstInfo::fold_type::stride.get()>,
-            FirstInfo>;
-        using next = typename update_dim_info<DimType, SliceSize, RestInfos...>::dim_type;
-        using dim_type = decltype(std::tuple_cat(
-            std::tuple<current>(),
-            std::declval<next>()));
-    };
-
-    template <typename DimType, int SliceSize>
-    struct update_dim_info<DimType, SliceSize>
-    {
-        using dim_type = std::tuple<>;
-    };
-
-    template <typename, typename>
-    struct tensor_type_from_dim_info_tuple;
+        /// @brief Get the size of a specific dimension.
+        /// @tparam DimType the dimension type
+        /// @tparam DimInfos the dimension infos
+        template <typename DimType, typename... DimInfos>
+        struct dimension_size
+        {
+            static constexpr DimType value = find_dim_info<DimType, DimInfos...>::info::size;
+        };
+    }
 
     /// @brief Cursor with folded dimensions.
     /// Cursor is a class that represents a position in a tensor. It provides a subscript
@@ -166,7 +205,7 @@ namespace spio
         DEVICE constexpr Cursor operator[](DimType d) const
         {
             // Get the offset for this dimension
-            _OffsetDim offset = find_dim_info<DimType, DimInfos...>::info::to_offset(d);
+            _OffsetDim offset = tensor_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(d);
 
             // Return new cursor at the offset position
             return Cursor(get() + offset.get());
@@ -204,16 +243,16 @@ namespace spio
         template <typename DimType>
         static constexpr DimType get_size()
         {
-            return find_dim_info<DimType, DimInfos...>::info::size;
+            return tensor_traits::dimension_size<DimType, DimInfos...>::value;
         }
 
-        /// @brief Subscript operator with any dimension dim_type  .
+        /// @brief Subscript operator with any dimension type.
         /// @tparam DimType the dimension to apply the subscript index to.
         /// @return a Cursor that points to the element at the specified position.
         template <typename DimType>
         DEVICE constexpr cursor_type operator[](DimType d) const
         {
-            _OffsetDim offset = find_dim_info<DimType, DimInfos...>::info::to_offset(d);
+            _OffsetDim offset = tensor_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(d);
             return cursor_type(get() + offset.get());
         }
 
@@ -225,19 +264,10 @@ namespace spio
         template <int SliceSize, typename SliceDimType>
         DEVICE constexpr auto slice(SliceDimType slice_start)
         {
-            using updated_infos = typename update_dim_info<SliceDimType, SliceSize, DimInfos...>::dim_type;
-            using tensor_type = typename tensor_type_from_dim_info_tuple<DataType, updated_infos>::tensor_type;
+            using updated_infos = typename detail::update_dim_info<SliceDimType, SliceSize, DimInfos...>::dim_type;
+            using tensor_type = typename detail::tensor_type_from_dim_info_tuple<DataType, updated_infos>::tensor_type;
             return tensor_type((*this)[slice_start].get());
         }
-    };
-
-    /// @brief Create a tensor type from a tuple of dimension infos.
-    /// @tparam DataType the data type of the tensor
-    /// @tparam DimInfos the dimension infos
-    template <typename DataType, typename... DimInfos>
-    struct tensor_type_from_dim_info_tuple<DataType, std::tuple<DimInfos...>>
-    {
-        using tensor_type = Tensor<DataType, DimInfos...>;
     };
 }
 
