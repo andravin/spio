@@ -6,18 +6,14 @@ using namespace spio;
 
 namespace
 {
-    struct HeightDim
+    struct HeightDim : public Dim
     {
-        int value;
-        constexpr HeightDim(int v) : value(v) {}
-        constexpr int get() const { return value; }
+        using Dim::Dim;
     };
 
-    struct WidthDim
+    struct WidthDim : public Dim
     {
-        int value;
-        constexpr WidthDim(int v) : value(v) {}
-        constexpr int get() const { return value; }
+        using Dim::Dim;
     };
 }
 
@@ -65,7 +61,7 @@ UTEST(TensorVariadic, tensor_2d_custom_stride)
         }
     }
     
-    auto tensor = make_tensor<float, HeightDim, WidthDim, Height, Width, Stride, 1>(tensor_data);
+    auto tensor = make_tensor_with_strides<float, HeightDim, WidthDim, Height, Width, Stride, 1>(tensor_data);
 
     EXPECT_EQ(*tensor, tensor_data[0]);
     EXPECT_EQ(*tensor[WidthDim(320)], tensor_data[320]);
