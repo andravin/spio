@@ -17,6 +17,9 @@ namespace spio
 
         DEVICE constexpr int get() const { return _i; }
 
+        template <class OtherDimType>
+        DEVICE constexpr auto cast() const -> OtherDimType { return OtherDimType(_i); }
+
     protected:
         DEVICE constexpr int _add(const Dim other) const { return _i + other._i; }
         DEVICE constexpr int _sub(const Dim other) const { return _i - other._i; }
