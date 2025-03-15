@@ -4,22 +4,23 @@
 
 using namespace spio;
 
-struct HeightDim : public Dim
+class HeightDim : public Dim<HeightDim>
 {
-    using Dim::Dim;
-    constexpr bool operator==(const HeightDim &other) const { return get() == other.get(); }
+public:
+    using Dim<HeightDim>::Dim;
 };
 
-struct WidthDim : public Dim
+class WidthDim : public Dim<WidthDim>
 {
-    using Dim::Dim;
-    constexpr bool operator==(const WidthDim &other) const { return get() == other.get(); }
+public:
+    using Dim<WidthDim>::Dim;
 };
+
 
 template <>
 struct utest_type_deducer<HeightDim>
 {
-    static void _(const HeightDim &d)
+    static void _(const HeightDim d)
     {
         UTEST_PRINTF("%d", d.get());
     }
@@ -28,7 +29,7 @@ struct utest_type_deducer<HeightDim>
 template <>
 struct utest_type_deducer<WidthDim>
 {
-    static void _(const WidthDim &d)
+    static void _(const WidthDim d)
     {
         UTEST_PRINTF("%d", d.get());
     }

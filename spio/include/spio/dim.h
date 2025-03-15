@@ -6,10 +6,17 @@
 
 namespace spio
 {
-    /// @brief A base class for tensor dimensions.
-    /// Users generate custom dimension subclasses for the dimensions they need.
+    template<class DimType, unsigned Stride>
+    class Fold;
+
+    /// @brief A base class for tensor dimensions using CRTP.
+    /// Spio uses "typed tensors" which means that each tensor dimensions is a unique types.
+    /// This prevents accidental mixing of different dimensions in index arithmetic
+    /// expressions or subscripting operations.
     /// Normally, all dimensions classes referenced by custom tensors and indexes are
     /// generated automatically by the code generation system.
+    /// @tparam Derived The derived dimension type (CRTP pattern)
+    template <typename Derived>
     class Dim
     {
     public:
@@ -17,15 +24,71 @@ namespace spio
 
         DEVICE constexpr int get() const { return _i; }
 
-        template <class OtherDimType>
-        DEVICE constexpr auto cast() const -> OtherDimType { return OtherDimType(_i); }
+        /// @brief Fold the dimension by a given stride.
+        /// @tparam Stride the stride to fold by.
+        /// @return a Fold object that is the result of folding the current dimension by the given stride.
+        template<unsigned Stride>
+        DEVICE constexpr Fold<Derived, Stride> fold() const {
+            return Fold<Derived, Stride>(static_cast<const Derived &>(*this));
+        }
 
-    protected:
-        DEVICE constexpr int _add(const Dim other) const { return _i + other._i; }
-        DEVICE constexpr int _sub(const Dim other) const { return _i - other._i; }
-        DEVICE constexpr bool operator<(const Dim other) const { return _i < other._i; }
-        DEVICE constexpr bool operator==(const Dim other) const { return _i == other._i; }
-        DEVICE constexpr int _modulus(const Dim other) const { return _i % other._i; }
+        /// @brief Cast the dimension to a new dimension type.
+        /// @tparam NewDimType the type to cast the dimension to.
+        /// @return the same dimension index value in a new dimension type.
+        template<class NewDimType>
+        DEVICE constexpr NewDimType cast() const {
+            return NewDimType(_i);
+        }
+
+        /// @brief  Type-safe arithmetic operators that return the derived type.
+        /// @param other the index value to add to this one.
+        /// @return a new index value that is the sum of this and the other.
+        DEVICE constexpr Derived operator+(Derived other) const {
+            return Derived(_i + other._i);
+        }
+
+        DEVICE constexpr Derived operator-(Derived other) const {
+            return Derived(_i - other._i);
+        }
+
+        DEVICE constexpr Derived operator*(int scalar) const {
+            return Derived(_i * scalar);
+        }
+
+        DEVICE constexpr Derived operator/(int scalar) const {
+            return Derived(_i / scalar);
+        }
+
+        DEVICE constexpr Derived operator%(Derived other) const {
+            return Derived(_i % other._i);
+        }
+
+        /// @brief Type-safe comparison operator that prevent accidental comparison of different dimension types.
+        /// @param other the dimension to compare to.
+        /// @return true if this dimension is less than the other, false otherwise.
+        DEVICE constexpr bool operator<(Derived other) const {
+            return _i < other._i;
+        }
+
+        DEVICE constexpr bool operator>(Derived other) const {
+            return _i > other._i;
+        }
+
+        DEVICE constexpr bool operator<=(Derived other) const {
+            return _i <= other._i;
+        }
+
+        DEVICE constexpr bool operator>=(Derived other) const {
+            return _i >= other._i;
+        }
+
+        DEVICE constexpr bool operator==(Derived other) const {
+            return _i == other._i;
+        }
+
+        DEVICE constexpr bool operator!=(Derived other) const {
+            return _i != other._i;
+        }
 
     private:
         const int _i;

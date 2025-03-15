@@ -9,16 +9,10 @@
 namespace spio
 {
     /// @brief The private dimension type for linear offsets.
-    class _OffsetDim : public Dim
+    class _OffsetDim : public Dim<_OffsetDim>
     {
     public:
-        DEVICE constexpr _OffsetDim(int offset) : Dim(offset) {}
-
-        // Allow addition of offset dimensions
-        DEVICE constexpr _OffsetDim operator+(_OffsetDim other) const
-        {
-            return _OffsetDim(_add(other));
-        }
+        using Dim<_OffsetDim>::Dim;
     };
 
     /// @brief Store information about a tensor dimension.

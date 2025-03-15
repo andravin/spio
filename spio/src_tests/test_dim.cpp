@@ -4,49 +4,18 @@
 
 #include <array>
 
-UTEST(Dim, accessors)
-{
-    EXPECT_EQ(spio::Dim(7).get(), 7);
-}
-
 namespace
 {
-    class IDim : public spio::Dim
+    class IDim : public spio::Dim<IDim>
     {
     public:
-        using Base = spio::Dim;
-        using Base::Base;
-        template <class NewDimType>
-        DEVICE constexpr auto cast() const -> NewDimType
-        {
-            {
-                return NewDimType(Base::get());
-            }
-        }
-        template <unsigned Stride>
-        DEVICE constexpr spio::Fold<IDim, Stride> fold() const
-        {
-            {
-                return spio::Fold<IDim, Stride>(*this);
-            }
-        }
-        bool operator<(const IDim &other) const { return Base::operator<(other); }
-        bool operator>(const IDim &other) const { return other < *this; }
-        bool operator<=(const IDim &other) const { return !(*this > other); }
-        bool operator>=(const IDim &other) const { return !(*this < other); }
-        bool operator==(const IDim &other) const { return Base::operator==(other); }
-        bool operator!=(const IDim &other) const { return !(*this == other); }
-        IDim operator+(const IDim &other) const { return IDim(Base::_add(other)); }
-        IDim operator-(const IDim &other) const { return IDim(Base::_sub(other)); }
-        IDim operator%(const IDim &other) const { return IDim(Base::_modulus(other)); }
+        using spio::Dim<IDim>::Dim;
     };
 
-    class JDim : public spio::Dim
+    class JDim : public spio::Dim<JDim>
     {
     public:
-        using Base = spio::Dim;
-        using Base::Base;
-        bool operator==(const JDim &other) const { return Base::operator==(other); }
+        using spio::Dim<JDim>::Dim;
     };
 }
 
@@ -82,8 +51,8 @@ UTEST(IDim, cast)
 
 UTEST(Fold, methods)
 {
-    using F8 = spio::Fold<spio::Dim, 8>;
-    using F16 = spio::Fold<spio::Dim, 16>;
+    using F8 = spio::Fold<IDim, 8>;
+    using F16 = spio::Fold<IDim, 16>;
     EXPECT_EQ(F8(32).get(), 32);
     EXPECT_EQ(F8(32).unfold().get(), 8 * 32);
     EXPECT_EQ(F8(32).fold<16>().get(), 32 * 8 / 16);
