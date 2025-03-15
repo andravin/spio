@@ -57,10 +57,6 @@ namespace spio
         _data_type *_data;
     };
     
-    // Helper to create dependent false values (for better error messages)
-    template <typename T>
-    struct dependent_false { static constexpr bool value = false; };
-
     // First, check if dimension exists in tensor
     template <typename DimType, typename... DimInfos>
     struct has_dim;
