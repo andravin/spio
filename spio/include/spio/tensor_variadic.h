@@ -25,14 +25,13 @@ namespace spio
     class TensorBase;
     
     // Store dimension information (user type, size, fold)
-    template <typename DimType, int Size, unsigned FoldStride>
+    template <typename DimType, int Size, unsigned Stride>
     struct DimInfo {
         using type = DimType;
-        static constexpr int size = Size;
-        static constexpr unsigned fold_stride = FoldStride;
+        static constexpr DimType size = DimType(Size);
         
         // Create fold type for this dimension
-        using fold_type = Fold<_OffsetDim, FoldStride>;
+        using fold_type = Fold<_OffsetDim, Stride>;
         
         // Map from dimension to offset.
         // Convert the user dimension to a folded tensor dimension
@@ -120,7 +119,7 @@ namespace spio
         // Create updated info (either with new size or unchanged)
         using current = std::conditional_t<
             is_match,
-            DimInfo<typename FirstInfo::type, NewSize, FirstInfo::fold_stride>,
+            DimInfo<typename FirstInfo::type, NewSize, FirstInfo::fold_type::stride.get()>,
             FirstInfo
         >;
         
@@ -146,7 +145,7 @@ namespace spio
     
     // Cursor with folded dimensions
     template <typename DataType, typename... DimInfos>
-    class CursorWithFolds : public TensorBase<DataType>
+    class Cursor : public TensorBase<DataType>
     {
     public:
         using data_type = DataType;
@@ -155,13 +154,13 @@ namespace spio
         
         // Index with any dimension type
         template <typename DimType>
-        DEVICE constexpr CursorWithFolds operator[](DimType d) const
+        DEVICE constexpr Cursor operator[](DimType d) const
         {
             // Get the offset for this dimension
             _OffsetDim offset = find_dim_info<DimType, DimInfos...>::info::to_offset(d);
             
             // Return new cursor at the offset position
-            return CursorWithFolds(get() + offset.get());
+            return Cursor(get() + offset.get());
         }
     };
     
@@ -175,11 +174,11 @@ namespace spio
         using TensorBase<data_type>::get;
         
         // Define cursor type
-        using cursor_type = CursorWithFolds<DataType, DimInfos...>;
+        using cursor_type = Cursor<DataType, DimInfos...>;
         
         // Get size for a specific dimension
         template <typename DimType>
-        static constexpr int get_size() {
+        static constexpr DimType get_size() {
             return find_dim_info<DimType, DimInfos...>::info::size;
         }
         
