@@ -81,55 +81,23 @@ namespace spio
     template <typename DimType, typename FirstDimInfo, typename... RestDimInfos>
     struct find_dim_info_impl<DimType, FirstDimInfo, RestDimInfos...> {
         static constexpr bool is_match = std::is_same<DimType, typename FirstDimInfo::type>::value;
-        
-        // Only reference the next level when needed
-        static constexpr int size = is_match ? 
-            FirstDimInfo::size : 
-            find_dim_info_impl<DimType, RestDimInfos...>::size;
-            
-        static constexpr unsigned fold_stride = is_match ? 
-            FirstDimInfo::fold_stride : 
-            find_dim_info_impl<DimType, RestDimInfos...>::fold_stride;
-            
-        // For info and fold_type, use conditional_t to avoid instantiations we don't need
+
         using info = std::conditional_t<
             is_match,
             FirstDimInfo,
             typename find_dim_info_impl<DimType, RestDimInfos...>::info
         >;
-        
-        // Also use conditional_t for fold_type 
-        using fold_type = std::conditional_t<
-            is_match,
-            typename FirstDimInfo::fold_type,
-            typename find_dim_info_impl<DimType, RestDimInfos...>::fold_type
-        >;
     };
 
     // Base case with DefaultDimInfo for error handling
     template <typename DimType>
-    struct DefaultDimInfo {
-        using type = DimType;
-        static constexpr int size = 0;
-        static constexpr unsigned fold_stride = 1;
-        
-        // This gives us a valid fold_type for compiler purposes
-        // (will never be used due to static_assert in public interface)
-        using fold_type = Fold<_OffsetDim, 1>;
-        
-        DEVICE constexpr static _OffsetDim to_offset(DimType d) {
-            // This would only be called if we got past the static assertion
-            return _OffsetDim(d.get());
-        }
+    struct DefaultDimInfo : public DimInfo<DimType, 0, 1> {
     };
 
     template <typename DimType>
     struct find_dim_info_impl<DimType> {
         // Use DefaultDimInfo instead of void
         using info = DefaultDimInfo<DimType>;
-        static constexpr int size = 0;
-        static constexpr unsigned fold_stride = 0;
-        using fold_type = typename info::fold_type;
     };
 
     // Public interface with static assertion first
@@ -142,9 +110,6 @@ namespace spio
         // If we get here, dimension exists, so safe to use find_dim_info_impl
         using impl = find_dim_info_impl<DimType, DimInfos...>;
         using info = typename impl::info;
-        static constexpr int size = impl::size;
-        static constexpr unsigned fold_stride = impl::fold_stride;
-        using fold_type = typename impl::fold_type;
     };
     
     // Helper to update dimension info for slicing
@@ -219,7 +184,7 @@ namespace spio
         // Get size for a specific dimension
         template <typename DimType>
         static constexpr int get_size() {
-            return find_dim_info<DimType, DimInfos...>::size;
+            return find_dim_info<DimType, DimInfos...>::info::size;
         }
         
         // Index with any dimension type
@@ -256,7 +221,7 @@ namespace spio
     // 2D tensor creation helper
     template <typename DataType, typename HeightDimType, typename WidthDimType,
               int HeightSize, int WidthSize>
-    constexpr auto make_tensor(DataType* data = nullptr) {
+    DEVICE constexpr auto make_tensor(DataType* data = nullptr) {
         return Tensor<
             DataType,
             DimInfo<HeightDimType, HeightSize, WidthSize>, // Height folded by width
@@ -267,7 +232,7 @@ namespace spio
     // Version with custom strides
     template <typename DataType, typename HeightDimType, typename WidthDimType,
               int HeightSize, int WidthSize, int HeightStride, int WidthStride>
-    constexpr auto make_tensor_with_strides(DataType* data = nullptr) {
+    DEVICE constexpr auto make_tensor_with_strides(DataType* data = nullptr) {
         return Tensor<
             DataType,
             DimInfo<HeightDimType, HeightSize, HeightStride>,
