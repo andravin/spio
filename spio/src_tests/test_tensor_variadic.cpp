@@ -97,4 +97,3 @@ UTEST(TensorVariadic, tensor_2d_custom_stride)
     EXPECT_EQ(*wslice[HeightDim(20)][WidthDim(10)], tensor_data[20 * Stride + 20]);
 }
 
-UTEST_MAIN()
