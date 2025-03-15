@@ -89,15 +89,11 @@ namespace spio
         >;
     };
 
-    // Base case with DefaultDimInfo for error handling
-    template <typename DimType>
-    struct DefaultDimInfo : public DimInfo<DimType, 0, 1> {
-    };
-
+    // Base case with dummy DimInfo instantiation for error handling.
     template <typename DimType>
     struct find_dim_info_impl<DimType> {
         // Use DefaultDimInfo instead of void
-        using info = DefaultDimInfo<DimType>;
+        using info = DimInfo<DimType, 0, 1>;
     };
 
     // Public interface with static assertion first
