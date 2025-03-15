@@ -15,7 +15,7 @@ namespace spio
         DEVICE constexpr _OffsetDim(int offset) : Dim(offset) {}
         
         // Allow addition of offset dimensions
-        DEVICE constexpr _OffsetDim operator+(const _OffsetDim& other) const {
+        DEVICE constexpr _OffsetDim operator+( _OffsetDim other) const {
             return _OffsetDim(_add(other));
         }
     };
@@ -34,9 +34,10 @@ namespace spio
         // Create fold type for this dimension
         using fold_type = Fold<_OffsetDim, FoldStride>;
         
-        // Map from dimension to offset
-        DEVICE constexpr static _OffsetDim to_offset(const DimType& d) {
-            // Calculate row-major offset directly 
+        // Map from dimension to offset.
+        // Convert the user dimension to a folded tensor dimension
+        // and unfold it.
+        DEVICE constexpr static _OffsetDim to_offset(DimType d) {
             return fold_type(d.get()).unfold();
         }
     };
@@ -116,7 +117,7 @@ namespace spio
         // (will never be used due to static_assert in public interface)
         using fold_type = Fold<_OffsetDim, 1>;
         
-        DEVICE constexpr static _OffsetDim to_offset(const DimType& d) {
+        DEVICE constexpr static _OffsetDim to_offset(DimType d) {
             // This would only be called if we got past the static assertion
             return _OffsetDim(d.get());
         }
