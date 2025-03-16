@@ -8,6 +8,86 @@
 namespace spio
 {
     namespace detail {
+        // Simple tuple implementation
+        template<typename... Ts>
+        struct tuple;
+        
+        template<>
+        struct tuple<> {};
+        
+        template<typename T, typename... Ts>
+        struct tuple<T, Ts...> {
+            T first;
+            tuple<Ts...> rest;
+            
+            DEVICE constexpr tuple(T t, Ts... ts) : first(t), rest(ts...) {}
+        };
+        
+        // Helper to make a tuple
+        template<typename... Ts>
+        DEVICE constexpr auto make_tuple(Ts... ts) {
+            return tuple<Ts...>(ts...);
+        }
+        
+        // Helper to get an element from a tuple
+        template<size_t I, typename TupleType>
+        struct tuple_element;
+        
+        // Base case: index 0 returns the first element
+        template<typename T, typename... Ts>
+        struct tuple_element<0, tuple<T, Ts...>> {
+            using type = T;
+            DEVICE static constexpr T& get(tuple<T, Ts...>& t) { return t.first; }
+            DEVICE static constexpr const T& get(const tuple<T, Ts...>& t) { return t.first; }
+        };
+        
+        // Recursive case: index > 0, delegate to the rest of the tuple
+        template<size_t I, typename T, typename... Ts>
+        struct tuple_element<I, tuple<T, Ts...>> {
+            using type = typename tuple_element<I-1, tuple<Ts...>>::type;
+            DEVICE static constexpr type& get(tuple<T, Ts...>& t) {
+                return tuple_element<I-1, tuple<Ts...>>::get(t.rest);
+            }
+            DEVICE static constexpr const type& get(const tuple<T, Ts...>& t) {
+                return tuple_element<I-1, tuple<Ts...>>::get(t.rest);
+            }
+        };
+        
+        // Helper to get element I from tuple t
+        template<size_t I, typename... Ts>
+        DEVICE constexpr auto& get(tuple<Ts...>& t) {
+            return tuple_element<I, tuple<Ts...>>::get(t);
+        }
+        
+        template<size_t I, typename... Ts>
+        DEVICE constexpr const auto& get(const tuple<Ts...>& t) {
+            return tuple_element<I, tuple<Ts...>>::get(t);
+        }
+        
+        // Helper for type decay to remove reference/const
+        template<typename T>
+        struct decay {
+            using type = T;
+        };
+        
+        template<typename T>
+        struct decay<T&> {
+            using type = T;
+        };
+        
+        template<typename T>
+        struct decay<const T> {
+            using type = T;
+        };
+        
+        template<typename T>
+        struct decay<const T&> {
+            using type = T;
+        };
+        
+        template<typename T>
+        using decay_t = typename decay<T>::type;
+        
         // Helper template to compute product of sizes at compile time
         template<typename... Ts>
         struct product_sizes;
@@ -63,6 +143,12 @@ namespace spio
             return dim_traits::find_dim_info<DimType, DimInfos...>::info::from_offset(_OffsetDim(_offset));
         }
         
+        /// @brief Get all dimensions as a tuple of typed coordinates
+        /// @return A tuple containing all dimension values in order
+        DEVICE constexpr auto get_all_dimensions() const {
+            return detail::make_tuple(get<typename DimInfos::dim_type>()...);
+        }
+        
         /// @brief Create an index from individual typed coordinates
         /// @tparam Coords Types of the dimension coordinates
         /// @param coords The typed dimension coordinates
@@ -71,13 +157,14 @@ namespace spio
         DEVICE static constexpr Index from_coords(Coords... coords) {
             unsigned offset = 0;
             
-            // Sum the contributions from each dimension
-            // Use fold expression if using C++17
-            (void)std::initializer_list<int>{
-                (offset += dim_traits::find_dim_info<
-                    typename std::decay<decltype(coords)>::type, 
-                    DimInfos...>::info::to_offset(coords).get(), 0)...
-            };
+            // Simpler implementation without initializer_list
+            // Using fold expression pattern in C++11 via comma operator
+            int dummy[] = {0, ((
+                offset += dim_traits::find_dim_info<
+                    detail::decay_t<decltype(coords)>, 
+                    DimInfos...>::info::to_offset(coords).get()
+            ), 0)...};
+            (void)dummy; // Suppress unused variable warning
             
             return Index(offset);
         }        

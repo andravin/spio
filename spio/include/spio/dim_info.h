@@ -1,11 +1,64 @@
-
 #ifndef SPIO_DIM_INFO_H
 #define SPIO_DIM_INFO_H
 
 #include "spio/dim.h"
+// Remove the standard header that's causing problems
+// #include <type_traits>
 
 namespace spio
 {
+    // Add our own implementations of the required type traits
+    namespace detail
+    {
+        // Add true_type and false_type
+        struct true_type {
+            static constexpr bool value = true;
+        };
+        
+        struct false_type {
+            static constexpr bool value = false;
+        };
+        
+        // Simple initializer_list replacement for pack expansion
+        template<typename T>
+        struct initializer_list {
+            // This is just a placeholder for parameter pack expansion
+            // It doesn't need actual functionality
+            DEVICE constexpr initializer_list(const T*, int) {}
+            DEVICE constexpr initializer_list(T) {}
+        };
+        
+        // Helper function to create an initializer_list
+        template<typename T>
+        DEVICE constexpr initializer_list<T> make_initializer_list(T t) {
+            return initializer_list<T>(t);
+        }
+        
+        // Implementation of is_same
+        template<typename T, typename U>
+        struct is_same {
+            static constexpr bool value = false;
+        };
+        
+        template<typename T>
+        struct is_same<T, T> {
+            static constexpr bool value = true;
+        };
+        
+        // Implementation of conditional_t
+        template<bool Condition, typename TrueType, typename FalseType>
+        struct conditional {
+            using type = FalseType;
+        };
+        
+        template<typename TrueType, typename FalseType>
+        struct conditional<true, TrueType, FalseType> {
+            using type = TrueType;
+        };
+        
+        template<bool Condition, typename TrueType, typename FalseType>
+        using conditional_t = typename conditional<Condition, TrueType, FalseType>::type;
+    }
 
    /// @brief The private dimension type for linear offsets.
     class _OffsetDim : public Dim<_OffsetDim>
@@ -52,7 +105,7 @@ namespace spio
         struct has_dim<DimType, FirstDimInfo, RestDimInfos...>
         {
             static constexpr bool value =
-                std::is_same<DimType, typename FirstDimInfo::dim_type>::value ||
+                detail::is_same<DimType, typename FirstDimInfo::dim_type>::value ||
                 has_dim<DimType, RestDimInfos...>::value;
         };
 
@@ -68,8 +121,8 @@ namespace spio
         template <typename DimType, typename FirstDimInfo, typename... RestDimInfos>
         struct find_dim_info_impl<DimType, FirstDimInfo, RestDimInfos...>
         {
-            static constexpr bool is_match = std::is_same<DimType, typename FirstDimInfo::dim_type>::value;
-            using info = std::conditional_t<
+            static constexpr bool is_match = detail::is_same<DimType, typename FirstDimInfo::dim_type>::value;
+            using info = detail::conditional_t<
                 is_match,
                 FirstDimInfo,
                 typename find_dim_info_impl<DimType, RestDimInfos...>::info>;

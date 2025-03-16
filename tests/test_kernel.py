@@ -72,6 +72,30 @@ def test_memcpy_kernel():
     assert torch.equal(outputs, inputs)
 
 
+def test_index_variadic():
+    """Test the index variadic class."""
+    debug = False
+    lineinfo = True
+
+    _, index_variadic = compile_and_load_kernel(
+        kernel_name="index_variadic",
+        debug=debug,
+        lineinfo=lineinfo,
+        src_module="spio.src_tests",
+    )
+
+    BLOCKS = 1
+    THREADS = 256
+    I = 64
+    J = 4
+
+    inputs = torch.randn((I, J), device="cuda", dtype=torch.float32)
+    outputs = torch.zeros((I, J), device="cuda", dtype=torch.float32)
+
+    index_variadic.launch((BLOCKS, 1, 1), (THREADS, 1, 1), (outputs, inputs))
+    assert torch.equal(outputs, inputs)
+
+
 def test_row_memcpy_kernel():
     """Test the row-by-row memcpy kernel."""
     debug = False
@@ -124,7 +148,12 @@ def test_row_memcpy_kernel():
                 },
             ),
             gen.Index("InputIdx", {"x": BLOCK_W, "c4": BLOCK_C4}),
-            gen.Tensor("Input", gen.dtype.float4, {"n": N, "y": H, "x": W, "c4": C4}, constant=True),
+            gen.Tensor(
+                "Input",
+                gen.dtype.float4,
+                {"n": N, "y": H, "x": W, "c4": C4},
+                constant=True,
+            ),
             gen.Tensor("Output", gen.dtype.float4, {"n": N, "p": H, "q": W, "c4": C4}),
             gen.Tensor(
                 "SmemInput",
@@ -147,7 +176,7 @@ def test_row_memcpy_kernel():
                 "ConstSmemOutput",
                 gen.dtype.float4,
                 {"q": BLOCK_Q, "c4": BLOCK_C4 + 1},
-                constant=True
+                constant=True,
             ),
         ]
     )
