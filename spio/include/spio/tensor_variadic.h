@@ -125,7 +125,7 @@ namespace spio
         /// @param idx The index containing coordinates for multiple dimensions
         /// @return A cursor pointing to the element at the specified position
         template <typename... IndexDimInfos>
-        DEVICE constexpr Cursor operator[](const Index<IndexDimInfos...>& idx) const
+        DEVICE constexpr Cursor operator[](Index<IndexDimInfos...> idx) const
         {
             // Let the Index apply itself to this cursor, just like with Tensor
             return idx.apply_to(*this);
@@ -181,7 +181,7 @@ namespace spio
         /// @param idx The index containing coordinates for multiple dimensions
         /// @return A cursor pointing to the element at the specified position
         template <typename... IndexDimInfos>
-        DEVICE constexpr cursor_type operator[](const Index<IndexDimInfos...>& idx) const
+        DEVICE constexpr cursor_type operator[](Index<IndexDimInfos...> idx) const
         {
             // Let the Index apply itself to this tensor
             return idx.apply_to(*this);
