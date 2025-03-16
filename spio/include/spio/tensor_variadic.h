@@ -3,39 +3,12 @@
 
 #include "spio/macros.h"
 #include "spio/dim.h"
+#include "spio/dim_info.h"
 #include <type_traits>
 #include <tuple>
 
 namespace spio
 {
-    /// @brief The private dimension type for linear offsets.
-    class _OffsetDim : public Dim<_OffsetDim>
-    {
-    public:
-        using Dim<_OffsetDim>::Dim;
-    };
-
-    /// @brief Store information about a tensor dimension.
-    /// @tparam DimType the dimension type
-    /// @tparam Size the size of the dimension
-    /// @tparam Stride the stride of the dimension
-    template <typename DimType, int Size, unsigned Stride>
-    struct DimInfo
-    {
-        using dim_type = DimType;
-        static constexpr DimType size = DimType(Size);
-
-        /// @brief  How this dimension folds the tensor's linear offset dimension.
-        using fold_type = Fold<_OffsetDim, Stride>;
-
-        /// @brief Map from dimension to offset.
-        /// Convert a dimension index to a folded offset dimension and unfold it.
-        /// @param d the dimension
-        DEVICE constexpr static _OffsetDim to_offset(DimType d)
-        {
-            return fold_type(d.get()).unfold();
-        }
-    };
 
     /// @brief Base class for tensor data.
     template <typename _data_type>
@@ -61,45 +34,6 @@ namespace spio
     // Implementation details
     namespace detail
     {
-        /// @brief Check if a dimension exists in the tensor.
-        /// @tparap DimType the dimension type to check
-        /// @tparam DimInfos the dimension infos
-        template <typename DimType, typename... DimInfos>
-        struct has_dim;
-
-        template <typename DimType, typename FirstDimInfo, typename... RestDimInfos>
-        struct has_dim<DimType, FirstDimInfo, RestDimInfos...>
-        {
-            static constexpr bool value =
-                std::is_same<DimType, typename FirstDimInfo::dim_type>::value ||
-                has_dim<DimType, RestDimInfos...>::value;
-        };
-
-        template <typename DimType>
-        struct has_dim<DimType>
-        {
-            static constexpr bool value = false;
-        };
-
-        template <typename DimType, typename... DimInfos>
-        struct find_dim_info_impl;
-
-        template <typename DimType, typename FirstDimInfo, typename... RestDimInfos>
-        struct find_dim_info_impl<DimType, FirstDimInfo, RestDimInfos...>
-        {
-            static constexpr bool is_match = std::is_same<DimType, typename FirstDimInfo::dim_type>::value;
-            using info = std::conditional_t<
-                is_match,
-                FirstDimInfo,
-                typename find_dim_info_impl<DimType, RestDimInfos...>::info>;
-        };
-
-        /// @brief Base case with dummy DimInfo instantiation for error handling.
-        template <typename DimType>
-        struct find_dim_info_impl<DimType>
-        {
-            using info = DimInfo<DimType, 0, 1>;
-        };
 
         /// @brief Update dimension info by replacing a given dimension with a new size.
         /// @tparam DimType the dimension type to update
@@ -114,7 +48,7 @@ namespace spio
             static constexpr bool is_match = std::is_same<DimType, typename FirstInfo::dim_type>::value;
             using current = std::conditional_t<
                 is_match,
-                DimInfo<typename FirstInfo::dim_type, SliceSize, FirstInfo::fold_type::stride.get()>,
+                DimInfo<typename FirstInfo::dim_type, SliceSize, FirstInfo::module_type::stride.get()>,
                 FirstInfo>;
             using next = typename update_dim_info<DimType, SliceSize, RestInfos...>::dim_type;
             using dim_type = decltype(std::tuple_cat(
@@ -141,43 +75,6 @@ namespace spio
         };
     }
 
-    // Type traits for tensor operations
-    namespace tensor_traits
-    {
-        /// @brief Find dimension info for a given dimension type.
-        /// @tparam DimType the dimension type to find
-        /// @tparam ...DimInfos the dimension infos
-        template <typename DimType, typename... DimInfos>
-        struct find_dim_info
-        {
-            // First check if dimension exists and show a clear error message if it doesn't.
-            static_assert(detail::has_dim<DimType, DimInfos...>::value,
-                          "Dimension type not found in tensor - ensure you're using the correct dimension type");
-
-            // Then find the dimension info.
-            using impl = detail::find_dim_info_impl<DimType, DimInfos...>;
-            using info = typename impl::info;
-        };
-
-        /// @brief Check if a dimension exists in the tensor (public interface).
-        /// @tparam DimType the dimension type to check
-        /// @tparam DimInfos the dimension infos
-        template <typename DimType, typename... DimInfos>
-        struct has_dimension
-        {
-            static constexpr bool value = detail::has_dim<DimType, DimInfos...>::value;
-        };
-
-        /// @brief Get the size of a specific dimension.
-        /// @tparam DimType the dimension type
-        /// @tparam DimInfos the dimension infos
-        template <typename DimType, typename... DimInfos>
-        struct dimension_size
-        {
-            static constexpr DimType value = find_dim_info<DimType, DimInfos...>::info::size;
-        };
-    }
-
     /// @brief Cursor with folded dimensions.
     /// Cursor is a class that represents a position in a tensor. It provides a subscript
     /// operator to access elements at a specific index in a given dimension.
@@ -199,7 +96,7 @@ namespace spio
         DEVICE constexpr Cursor operator[](DimType d) const
         {
             // Get the offset for this dimension
-            _OffsetDim offset = tensor_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(d);
+            _OffsetDim offset = dim_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(d);
 
             // Return new cursor at the offset position
             return Cursor(get() + offset.get());
@@ -237,7 +134,7 @@ namespace spio
         template <typename DimType>
         static constexpr DimType get_size()
         {
-            return tensor_traits::dimension_size<DimType, DimInfos...>::value;
+            return dim_traits::dimension_size<DimType, DimInfos...>::value;
         }
 
         /// @brief Subscript operator with any dimension type.
@@ -246,7 +143,7 @@ namespace spio
         template <typename DimType>
         DEVICE constexpr cursor_type operator[](DimType d) const
         {
-            _OffsetDim offset = tensor_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(d);
+            _OffsetDim offset = dim_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(d);
             return cursor_type(get() + offset.get());
         }
 
