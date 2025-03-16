@@ -19,51 +19,8 @@ namespace spio
         struct tuple<T, Ts...> {
             T first;
             tuple<Ts...> rest;
-            
-            DEVICE constexpr tuple(T t, Ts... ts) : first(t), rest(ts...) {}
         };
-        
-        // Helper to make a tuple
-        template<typename... Ts>
-        DEVICE constexpr auto make_tuple(Ts... ts) {
-            return tuple<Ts...>(ts...);
-        }
-        
-        // Helper to get an element from a tuple
-        template<size_t I, typename TupleType>
-        struct tuple_element;
-        
-        // Base case: index 0 returns the first element
-        template<typename T, typename... Ts>
-        struct tuple_element<0, tuple<T, Ts...>> {
-            using type = T;
-            DEVICE static constexpr T& get(tuple<T, Ts...>& t) { return t.first; }
-            DEVICE static constexpr const T& get(const tuple<T, Ts...>& t) { return t.first; }
-        };
-        
-        // Recursive case: index > 0, delegate to the rest of the tuple
-        template<size_t I, typename T, typename... Ts>
-        struct tuple_element<I, tuple<T, Ts...>> {
-            using type = typename tuple_element<I-1, tuple<Ts...>>::type;
-            DEVICE static constexpr type& get(tuple<T, Ts...>& t) {
-                return tuple_element<I-1, tuple<Ts...>>::get(t.rest);
-            }
-            DEVICE static constexpr const type& get(const tuple<T, Ts...>& t) {
-                return tuple_element<I-1, tuple<Ts...>>::get(t.rest);
-            }
-        };
-        
-        // Helper to get element I from tuple t
-        template<size_t I, typename... Ts>
-        DEVICE constexpr auto& get(tuple<Ts...>& t) {
-            return tuple_element<I, tuple<Ts...>>::get(t);
-        }
-        
-        template<size_t I, typename... Ts>
-        DEVICE constexpr const auto& get(const tuple<Ts...>& t) {
-            return tuple_element<I, tuple<Ts...>>::get(t);
-        }
-        
+                
         // Helper for type decay to remove reference/const
         template<typename T>
         struct decay {
@@ -143,12 +100,6 @@ namespace spio
             return dim_traits::find_dim_info<DimType, DimInfos...>::info::from_offset(_OffsetDim(_offset));
         }
         
-        /// @brief Get all dimensions as a tuple of typed coordinates
-        /// @return A tuple containing all dimension values in order
-        DEVICE constexpr auto get_all_dimensions() const {
-            return detail::make_tuple(get<typename DimInfos::dim_type>()...);
-        }
-        
         /// @brief Create an index from individual typed coordinates
         /// @tparam Coords Types of the dimension coordinates
         /// @param coords The typed dimension coordinates
@@ -171,6 +122,34 @@ namespace spio
 
         // Alternative method form if you prefer function syntax
         DEVICE static constexpr unsigned size() { return total_size; }
+
+        template <typename TensorOrCursor>
+        DEVICE constexpr auto apply_to(TensorOrCursor tensor) const {
+            // Start the recursive application with the first dimension
+            return apply_dimensions<DimInfos...>(tensor);
+        }
+
+    private:
+        // Base case: no more dimensions to apply
+        template <typename TensorOrCursor>
+        DEVICE constexpr auto apply_dimensions(TensorOrCursor tensor) const {
+            // All dimensions applied, return the tensor/cursor
+            return tensor;
+        }
+
+        // Recursive case: apply the first dimension, then recurse with the rest
+        template <typename FirstDimInfo, typename... RestDimInfos, typename TensorOrCursor>
+        DEVICE constexpr auto apply_dimensions(TensorOrCursor tensor) const {
+            // Get this dimension's value using its type
+            using CurrentDimType = typename FirstDimInfo::dim_type;
+            auto dim_value = get<CurrentDimType>();
+            
+            // Apply it to the tensor
+            auto next_tensor = tensor[dim_value];
+            
+            // Continue recursively with remaining dimensions
+            return apply_dimensions<RestDimInfos...>(next_tensor);
+        }
     };
 }
 

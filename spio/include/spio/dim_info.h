@@ -19,21 +19,6 @@ namespace spio
             static constexpr bool value = false;
         };
         
-        // Simple initializer_list replacement for pack expansion
-        template<typename T>
-        struct initializer_list {
-            // This is just a placeholder for parameter pack expansion
-            // It doesn't need actual functionality
-            DEVICE constexpr initializer_list(const T*, int) {}
-            DEVICE constexpr initializer_list(T) {}
-        };
-        
-        // Helper function to create an initializer_list
-        template<typename T>
-        DEVICE constexpr initializer_list<T> make_initializer_list(T t) {
-            return initializer_list<T>(t);
-        }
-        
         // Implementation of is_same
         template<typename T, typename U>
         struct is_same {

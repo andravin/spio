@@ -41,40 +41,17 @@ namespace spio
         template<typename... Ts>
         struct tuple_cat_impl<spio::detail::tuple<>, spio::detail::tuple<Ts...>> {
             using type = spio::detail::tuple<Ts...>;
-            
-            template<typename... Args>
-            DEVICE static constexpr spio::detail::tuple<Ts...> concat(
-                const spio::detail::tuple<>&,
-                const spio::detail::tuple<Ts...>& t2,
-                Args&&... args) {
-                return t2;
-            }
         };
         
         // Specialization for non-empty first tuple
         template<typename T, typename... Ts, typename... Us>
         struct tuple_cat_impl<spio::detail::tuple<T, Ts...>, spio::detail::tuple<Us...>> {
-            using rest_cat = typename tuple_cat_impl<spio::detail::tuple<Ts...>, spio::detail::tuple<Us...>>::type;
             using type = spio::detail::tuple<T, Us...>;
-            
-            template<typename... Args>
-            DEVICE static constexpr type concat(
-                const spio::detail::tuple<T, Ts...>& t1,
-                const spio::detail::tuple<Us...>& t2,
-                Args&&... args) {
-                return type(t1.first, tuple_cat_impl<spio::detail::tuple<Ts...>, 
-                           spio::detail::tuple<Us...>>::concat(t1.rest, t2, args...));
-            }
         };
         
         // Helper function to concatenate two tuples
         template<typename T1, typename T2>
         using tuple_cat_t = typename tuple_cat_impl<T1, T2>::type;
-        
-        template<typename T1, typename T2>
-        DEVICE constexpr auto tuple_cat(const T1& t1, const T2& t2) {
-            return tuple_cat_impl<T1, T2>::concat(t1, t2);
-        }
 
         /// @brief Update dimension info by replacing a given dimension with a new size.
         /// @tparam DimType the dimension type to update
@@ -150,53 +127,8 @@ namespace spio
         template <typename... IndexDimInfos>
         DEVICE constexpr Cursor operator[](const Index<IndexDimInfos...>& idx) const
         {
-            // Create a cursor pointing to the right place by applying each dimension
-            data_type* result = get();
-            
-            // Apply offsets for each dimension (ignoring dimensions not in tensor)
-            int dummy[] = {0, ((
-                result += apply_dimension<typename IndexDimInfos::dim_type>(idx)
-            ), 0)...};
-            (void)dummy; // Suppress unused variable warning
-            
-            return Cursor(result);
-        }
-        
-    private:
-        // Helper to apply a single dimension if it exists in the tensor
-        template <typename DimType, typename... IndexDimInfos>
-        DEVICE constexpr int apply_dimension(const Index<IndexDimInfos...>& idx) const {
-            // Check if this dimension exists in our tensor using tag dispatching
-            // instead of constexpr if (which isn't supported in all CUDA versions)
-            return apply_dimension_impl<DimType>(
-                idx, 
-                spio::detail::conditional_t<
-                    dim_traits::has_dimension<DimType, DimInfos...>::value,
-                    spio::detail::true_type,
-                    spio::detail::false_type
-                >()
-            );
-        }
-        
-        // Implementation for when dimension exists
-        template <typename DimType, typename... IndexDimInfos, typename = void>
-        DEVICE constexpr int apply_dimension_impl(
-            const Index<IndexDimInfos...>& idx, 
-            const spio::detail::true_type&
-        ) const {
-            // Get dimension value and apply offset
-            auto dim_value = idx.template get<DimType>();
-            return dim_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(dim_value).get();
-        }
-        
-        // Implementation for when dimension doesn't exist
-        template <typename DimType, typename... IndexDimInfos>
-        DEVICE constexpr int apply_dimension_impl(
-            const Index<IndexDimInfos...>&, 
-            const spio::detail::false_type&
-        ) const {
-            // Dimension doesn't exist in this tensor, no offset change
-            return 0;
+            // Let the Index apply itself to this cursor, just like with Tensor
+            return idx.apply_to(*this);
         }
     };
 
@@ -251,53 +183,8 @@ namespace spio
         template <typename... IndexDimInfos>
         DEVICE constexpr cursor_type operator[](const Index<IndexDimInfos...>& idx) const
         {
-            // Create a cursor pointing to the right place by applying each dimension
-            data_type* result = get();
-            
-            // Apply offsets for each dimension (ignoring dimensions not in tensor)
-            int dummy[] = {0, ((
-                result += apply_dimension<typename IndexDimInfos::dim_type>(idx)
-            ), 0)...};
-            (void)dummy; // Suppress unused variable warning
-            
-            return cursor_type(result);
-        }
-        
-    private:
-        // Helper to apply a single dimension if it exists in the tensor
-        template <typename DimType, typename... IndexDimInfos>
-        DEVICE constexpr int apply_dimension(const Index<IndexDimInfos...>& idx) const {
-            // Check if this dimension exists in our tensor using tag dispatching
-            // instead of constexpr if (which isn't supported in all CUDA versions)
-            return apply_dimension_impl<DimType>(
-                idx, 
-                spio::detail::conditional_t<
-                    dim_traits::has_dimension<DimType, DimInfos...>::value,
-                    spio::detail::true_type,
-                    spio::detail::false_type
-                >()
-            );
-        }
-        
-        // Implementation for when dimension exists
-        template <typename DimType, typename... IndexDimInfos, typename = void>
-        DEVICE constexpr int apply_dimension_impl(
-            const Index<IndexDimInfos...>& idx, 
-            const spio::detail::true_type&
-        ) const {
-            // Get dimension value and apply offset
-            auto dim_value = idx.template get<DimType>();
-            return dim_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(dim_value).get();
-        }
-        
-        // Implementation for when dimension doesn't exist
-        template <typename DimType, typename... IndexDimInfos>
-        DEVICE constexpr int apply_dimension_impl(
-            const Index<IndexDimInfos...>&, 
-            const spio::detail::false_type&
-        ) const {
-            // Dimension doesn't exist in this tensor, no offset change
-            return 0;
+            // Let the Index apply itself to this tensor
+            return idx.apply_to(*this);
         }
     
     public:
