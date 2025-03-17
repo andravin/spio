@@ -159,6 +159,16 @@ namespace spio
 
         using cursor_type = Cursor<DataType, DimInfos...>;
 
+        // Total number of elements (product of all dimension sizes)
+        // NOTE: this changes the meaning of the "size" method from
+        // the previous implementation. Now it is just the number of elements.
+        // It is not longer the storage size of the tensor. We need a 
+        // separate method to get the storage size.
+        static constexpr unsigned total_size = detail::product_sizes<DimInfos...>::value;
+        
+        // For compatibility with existing code
+        DEVICE static constexpr unsigned size() { return total_size; }
+
         // Get size for a specific dimension
         template <typename DimType>
         DEVICE static constexpr DimType size()
