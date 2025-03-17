@@ -1,3 +1,5 @@
+#error This file is deprecated. Use tensor_variadic.h instead.
+
 #ifndef SPIO_TENSOR_H_
 #define SPIO_TENSOR_H_
 

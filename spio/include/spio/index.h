@@ -1,3 +1,5 @@
+#error This file is deprecated. Use index_variadic.h instead.
+
 #ifndef SPIO_INDEX_H_
 #define SPIO_INDEX_H_
 
