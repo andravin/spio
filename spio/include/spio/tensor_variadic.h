@@ -161,7 +161,7 @@ namespace spio
 
         // Get size for a specific dimension
         template <typename DimType>
-        DEVICE static constexpr DimType get_size()
+        DEVICE static constexpr DimType size()
         {
             return dim_traits::dimension_size<DimType, DimInfos...>::value;
         }
