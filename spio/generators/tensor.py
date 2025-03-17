@@ -89,26 +89,19 @@ def _generate_tensor(
     """Generate a using statement for a Tensor template instantiation."""
     dim_infos = []
 
-    # Generate DimInfo parameters for each dimension
     for name, size_value in dims.items():
-        # Now we only handle integer sizes
         size_str = str(size_value)
-
-        # Get the stride for this dimension
         stride = strides[name]
-
-        # Use dim_name_to_dim_or_fold_class_name to handle both regular and fold dimensions
         dim_class = dim_name_to_dim_or_fold_class_name(name)
-
-        # Add the DimInfo parameter
         dim_infos.append(f"spio::DimInfo<{dim_class}, {size_str}, {stride}>")
 
-    # Generate the tensor type using statement
-    tensor_using = (
-        f"using {class_name} = spio::Tensor<{data_type_name}, {', '.join(dim_infos)}>;"
-    )
-
-    return tensor_using
+    # More concise formatting with line breaks only for longer declarations
+    if len(dim_infos) <= 3:
+        dim_info_str = ", ".join(dim_infos)
+        return f"using {class_name} = spio::Tensor<{data_type_name}, {dim_info_str}>;\n"
+    else:
+        dim_info_str = ",\n    ".join(dim_infos)
+        return f"using {class_name} = spio::Tensor<{data_type_name},\n    {dim_info_str}\n>;\n"
 
 
 def header():

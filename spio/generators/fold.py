@@ -23,15 +23,11 @@ class Fold(GenSpecs):
     dim_name: str
     stride: int
 
-    def generate(self) -> str:
+    def generate(self):
         dim_class_name = dim_name_to_dim_or_fold_class_name(self.dim_name)
-        fold_template_instance = _format_fold_template_instance(
-            dim_class_name, self.stride
-        )
-        fold_class_name = _format_dim_class_name(self.fold_name)
-        return f"""
-using {fold_class_name} = {fold_template_instance};
-"""
+        fold_template_instance = _format_fold_template_instance(dim_class_name, self.stride)
+        fold_class_name = _format_dim_class_name(self.fold_name)       
+        return f"using {fold_class_name} = {fold_template_instance};\n"
 
     @property
     def dim_names(self) -> Tuple[str]:

@@ -52,7 +52,7 @@ def header() -> str:
     The header implements the C++ base template classes from which the
     custom index classes inherit.
     """
-    return '#include "spio/index.h"'
+    return '#include "spio/index_variadic.h"'
 
 
 def _generate_index(

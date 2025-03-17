@@ -28,16 +28,10 @@ class Dim(GenSpecs):
         """Convert the dimension name to a dimension class name."""
         return _format_dim_class_name(self.dim_name)
 
-    def generate(self) -> str:
+    def generate(self):
         """Generate the C++ code for a dimension class using CRTP."""
         class_name = self.class_name
-        return f"""
-class {class_name} : public spio::Dim<{class_name}>
-{{
-public:
-    using spio::Dim<{class_name}>::Dim;
-}};
-"""
+        return f"class {class_name} : public spio::Dim<{class_name}> {{ public: using spio::Dim<{class_name}>::Dim; }};\n"
 
     @property
     def dim_names(self) -> Tuple[str,]:

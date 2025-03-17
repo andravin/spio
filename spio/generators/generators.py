@@ -5,6 +5,8 @@ from typing import List, Set, Union
 from .gen_specs import GenSpecs
 from .dim import Dim, _get_dim_name_and_stride
 from .fold import Fold
+from .tensor import Tensor
+from .index import Index
 from .fragment import Fragment
 
 
@@ -63,26 +65,57 @@ def generate(
 
     # 5. Generate code in a structured way
     user_data_types = _get_user_defined_data_types(gen_specs)
-    code = _include_files()
-    code += "\n"
+    code = _include_files() + "\n"
 
     if namespace is not None:
         code += _start_namespace(namespace)
 
-    # Generate base dimension classes
-    for dim in sorted(base_dims, key=lambda x: x.dim_name):
-        code += dim.generate()
+    # Group 1: Dimension classes
+    if base_dims:
+        code += "// Dimension classes\n"
+        for dim in sorted(base_dims, key=lambda x: x.dim_name):
+            code += dim.generate()
+        code += "\n"
 
-    # Generate fold dimension aliases (both explicit and implicit)
-    for fold in sorted(
-        list(explicit_folds.values()) + list(implicit_folds), key=lambda x: x.fold_name
-    ):
-        code += fold.generate()
+    # Group 2: Fold aliases
+    all_folds = sorted(list(explicit_folds.values()) + list(implicit_folds), key=lambda x: x.fold_name)
+    if all_folds:
+        code += "// Fold aliases\n"
+        for fold in all_folds:
+            code += fold.generate()
+        code += "\n"
 
-    # Generate the rest of the specifications (except for Dim and Fold)
+    # Group 3: Generate other types by category
+    tensors = []
+    indices = []
+    others = []
+
     for spec in gen_specs:
         if isinstance(spec, (Dim, Fold)):
             continue
+        if isinstance(spec, Tensor):
+            tensors.append(spec)
+        elif isinstance(spec, Index):
+            indices.append(spec)
+        else:
+            others.append(spec)
+
+    # Generate tensors
+    if tensors:
+        code += "// Tensor types\n"
+        for tensor in tensors:
+            code += tensor.generate_with_context(user_data_types=user_data_types)
+        code += "\n"
+
+    # Generate indices
+    if indices:
+        code += "// Index types\n"
+        for index in indices:
+            code += index.generate_with_context(user_data_types=user_data_types)
+        code += "\n"
+        
+    # Generate other specs
+    for spec in others:
         if hasattr(spec, "generate_with_context"):
             code += spec.generate_with_context(user_data_types=user_data_types)
         else:

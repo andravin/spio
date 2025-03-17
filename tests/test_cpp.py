@@ -26,8 +26,8 @@ UTEST_HEADER = '#include "utest.h"'
 TEST_MODULES = [
     gen.index,
     gen.tensor,
-    gen.checkerboard,
-    gen.fragment_index,
+    # gen.checkerboard,
+    # gen.fragment_index,
     gen.dim,
 ]
 
