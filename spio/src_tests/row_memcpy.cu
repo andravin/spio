@@ -16,65 +16,71 @@ extern "C"
         //
         // Define the shared memory buffers.
         //
-        __shared__ float4 smem_input_buf[SmemInput::size];
-        __shared__ float4 smem_output_buf[SmemOutput::size];
+        __shared__ float4 smem_input_buf[SmemInput::size()];
+        __shared__ float4 smem_output_buf[SmemOutput::size()];
 
         //
         // Define the block tile.
         //
         BlockIdx block_idx(blockIdx.x);
-        auto block_n = block_idx.n();
-        auto block_p = block_idx.block_p();
-        auto block_q = block_idx.block_q();
-        auto block_c = block_idx.block_c();
+        auto block_n = block_idx.get<N>();
+        auto block_p = block_idx.get<BLOCK_P>();
+        auto block_q = block_idx.get<BLOCK_Q>();
+        auto block_c = block_idx.get<BLOCK_C>();
 
         //
         // Define tile mappings
         //
 
         // Input to smem.
-        Input input(src);
-        SmemInput smem_input_store(smem_input_buf);
+        Input::cursor_type input;
+        SmemInput::cursor_type smem_store;
         bool thread_loads_input;
         int zfill;
         {
             InputIdx idx(threadIdx.x);
-            auto block_x = block_q.unfold().cast<X_Dim>() - Block::padding;
-            auto x = block_x + idx.x();
-            auto c4 = block_c.fold<4>() + idx.c4();
+            auto block_x = block_q.unfold().cast<X>() - Block::padding;
+            auto x = block_x + idx.get<X>();
+            auto c4 = block_c.fold<4>() + idx.get<C4>();
 
-            smem_input_store = smem_input_store[idx.x()][idx.c4()];
-            input = input[block_n][block_p.unfold().cast<Y_Dim>()][x][c4];
+            smem_store = SmemInput(smem_input_buf)[idx.get<X>()][idx.get<C4>()];
+            input = Input(src)[block_n][block_p.unfold().cast<Y>()][x][c4];
 
-            bool x_inbounds = (x >= 0 && x < input.X);
-            bool c4_inbounds = (c4 < input.C4);
+            bool x_inbounds = (x >= 0 && x < Input::size<X>());
+            bool c4_inbounds = (c4 < Input::size<C4>());
             bool thread_inbounds = (x_inbounds && c4_inbounds);
-            thread_loads_input = threadIdx.x < InputIdx::size;
+            thread_loads_input = threadIdx.x < InputIdx::total_size;
             zfill = thread_inbounds ? 0 : sizeof(Input::data_type);
         }
 
         // Input-smem to output-smem.
-        ConstSmemInput smem_input_load(reinterpret_cast<const float2 *>(smem_input_buf));
-        SmemOutput smem_output_store(reinterpret_cast<float2 *>(smem_output_buf));
+        ConstSmemInput::cursor_type smem_input_load;
+        SmemOutput::cursor_type smem_output_store;
         {
             SmemInputLoadIdx idx(threadIdx.x);
-            smem_input_load = smem_input_load[idx.q().cast<X_Dim>() + Block::padding][idx.c4()][idx.c2()];
-            smem_output_store = smem_output_store[idx.q()][idx.c4()][idx.c2()];
+            auto q_dim = idx.get<Q>();
+            auto c4_dim = idx.get<C4>();
+            auto c2_dim = idx.get<C2>();
+            
+            smem_input_load = ConstSmemInput(reinterpret_cast<const float2 *>(smem_input_buf))[q_dim.cast<X>() + Block::padding][c4_dim][c2_dim];
+            smem_output_store = SmemOutput(reinterpret_cast<float2 *>(smem_output_buf))[q_dim][c4_dim][c2_dim];
         }
 
         // Smem to output.
-        ConstSmemOutput smem_output_load(smem_output_buf);
-        Output output(dst);
+        ConstSmemOutput::cursor_type smem_output_load;
+        Output::cursor_type output;
         bool thread_stores_output;
         {
-            ConstSmemOutput::Index idx(threadIdx.x);
-            auto q = block_q.unfold() + idx.q();
-            auto c4 = block_c.fold<4>() + idx.c4();
+            auto idx = ConstSmemOutput::Index(threadIdx.x);
+            auto q = block_q.unfold() + idx.get<Q>();
+            auto c4 = block_c.fold<4>() + idx.get<C4>();
 
-            smem_output_load = smem_output_load[idx.q()][idx.c4()];
-            output = output[block_n][block_p.unfold()][q][c4];
+            smem_output_load = ConstSmemOutput(smem_output_buf)[idx.get<Q>()][idx.get<C4>()];
+            output = Output(dst)[block_n][block_p.unfold()][q][c4];
 
-            thread_stores_output = q.cast<X_Dim>() < input.X && c4 < Block::c4 && threadIdx.x < ConstSmemOutput::Index::size;
+            thread_stores_output = q.cast<X>() < Input::size<X>() && 
+                                  c4 < Block::c4 && 
+                                  threadIdx.x < ConstSmemOutput::Index::total_size;
         }
 
         //
@@ -84,7 +90,7 @@ extern "C"
         constexpr unsigned COPY_STAGE = 1 << 1;
         constexpr unsigned NUM_STAGES = 2;
 
-        auto num_p = min(block_p.stride, input.Y.cast<P_Dim>() - block_p.unfold());
+        auto num_p = min(block_p.stride, Input::size<Y>().cast<P>() - block_p.unfold());
         int num_iters = num_p.get() + NUM_STAGES - 1;
         int ping_pong = 0;
 
@@ -107,7 +113,7 @@ extern "C"
                         zfill);
                 }
                 __pipeline_commit();
-                input = input.y(1);
+                input = input[Y(1)];
             }
             ping_pong = 1 - ping_pong;
             if (pipeline.active(COPY_STAGE))
@@ -120,7 +126,7 @@ extern "C"
                 {
                     *output = *smem_output_load;
                 }
-                output = output.p(1);
+                output = output[P(1)];
             }
         }
     }

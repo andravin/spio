@@ -132,55 +132,63 @@ def test_row_memcpy_kernel():
     WARPS = BLOCK_GROUPS
     THREADS = WARPS * 32
 
-    parameters_header = gen.generate(
-        [
+    # Generate code specifications
+    specs = [
+            # Fold dimensions
             gen.Fold("block_p", "p", BLOCK_P),
             gen.Fold("block_q", "q", BLOCK_Q),
             gen.Fold("block_c", "c", BLOCK_C),
+            
+            # Parameters
             gen.ParamsSpec("Block", {"padding": 1, "c4": BLOCK_C4}),
+            
+            # Index types
             gen.Index(
                 "BlockIdx",
-                {
-                    "n": BLOCKS_N,
-                    "block_p": BLOCKS_P,
-                    "block_q": BLOCKS_Q,
-                    "block_c": BLOCKS_C4,
-                },
+                gen.Dims(
+                    n=BLOCKS_N,
+                    block_p=BLOCKS_P, 
+                    block_q=BLOCKS_Q, 
+                    block_c=BLOCKS_C4
+                ),
             ),
-            gen.Index("InputIdx", {"x": BLOCK_W, "c4": BLOCK_C4}),
+            gen.Index("InputIdx", gen.Dims(x=BLOCK_W, c4=BLOCK_C4)),
+            
+            # Tensor types
             gen.Tensor(
                 "Input",
                 gen.dtype.float4,
-                {"n": N, "y": H, "x": W, "c4": C4},
+                gen.Dims(n=N, y=H, x=W, c4=C4),
                 constant=True,
             ),
-            gen.Tensor("Output", gen.dtype.float4, {"n": N, "p": H, "q": W, "c4": C4}),
+            gen.Tensor("Output", gen.dtype.float4, gen.Dims(n=N, p=H, q=W, c4=C4)),
             gen.Tensor(
                 "SmemInput",
                 gen.dtype.float4,
-                {"ping_pong": 2, "x": BLOCK_W, "c4": BLOCK_C4 + 1},
+                gen.Dims(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1),
             ),
             gen.Tensor(
                 "ConstSmemInput",
                 gen.dtype.float2,
-                {"ping_pong": 2, "x": BLOCK_W, "c4": BLOCK_C4 + 1, "c2": 2},
+                gen.Dims(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1, c2=2),
                 constant=True,
             ),
-            gen.Index("SmemInputLoadIdx", {"c4": BLOCK_C4, "q": BLOCK_Q, "c2": 2}),
+            gen.Index("SmemInputLoadIdx", gen.Dims(c4=BLOCK_C4, q=BLOCK_Q, c2=2)),
             gen.Tensor(
                 "SmemOutput",
                 gen.dtype.float2,
-                {"q": BLOCK_Q, "c4": BLOCK_C4 + 1, "c2": 2},
+                gen.Dims(q=BLOCK_Q, c4=BLOCK_C4 + 1, c2=2),
             ),
             gen.Tensor(
                 "ConstSmemOutput",
                 gen.dtype.float4,
-                {"q": BLOCK_Q, "c4": BLOCK_C4 + 1},
+                gen.Dims(q=BLOCK_Q, c4=BLOCK_C4 + 1),
                 constant=True,
             ),
         ]
-    )
+    parameters_header = gen.generate(specs)
 
+    # Compile the kernel with our generated headers
     _, kernel = compile_and_load_kernel(
         kernel_name="row_memcpy",
         debug=debug,
@@ -189,13 +197,14 @@ def test_row_memcpy_kernel():
         src_module="spio.src_tests",
     )
 
+    # Create test tensors
     inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float32).to(
         memory_format=torch.channels_last
     )
-
     outputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float32).to(
         memory_format=torch.channels_last
     )
 
+    # Run kernel and verify results
     kernel.launch((BLOCKS, 1, 1), (THREADS, 1, 1), (outputs, inputs))
     assert torch.equal(outputs, inputs)
