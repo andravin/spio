@@ -113,7 +113,7 @@ extern "C"
                         zfill);
                 }
                 __pipeline_commit();
-                input = input[Y(1)];
+                input.step<Y>();
             }
             ping_pong = 1 - ping_pong;
             if (pipeline.active(COPY_STAGE))
@@ -126,7 +126,7 @@ extern "C"
                 {
                     *output = *smem_output_load;
                 }
-                output = output[P(1)];
+                output.step<P>();
             }
         }
     }

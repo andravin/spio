@@ -122,6 +122,17 @@ namespace spio
             return Cursor(get() + offset.get());
         }
 
+        /// @brief  Increment the cursor in a specific dimension type.
+        /// @tparam Dim the dimension type in which the increment is applied.
+        /// @param d The amount to increment by.
+        /// @return a reference to the updated cursor.
+        template <typename Dim>
+        DEVICE Cursor &step(Dim d = 1)
+        {
+            *this = (*this)[d];
+            return *this;
+        }
+
         /// @brief Subscript operator that takes an Index object and applies all dimensions
         /// @tparam IndexDimInfos The dimension infos in the Index
         /// @param idx The index containing coordinates for multiple dimensions
