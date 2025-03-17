@@ -11,7 +11,7 @@ from .dim import (
 )
 
 
-@dataclass
+@dataclass(frozen=True)
 class Fold(GenSpecs):
     """CUDA Code generator for custom folded-dimension classes.
 

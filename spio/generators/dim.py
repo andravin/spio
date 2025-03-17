@@ -6,7 +6,7 @@ from typing import Tuple
 from .gen_specs import GenSpecs
 
 
-@dataclass
+@dataclass(frozen=True)
 class Dim(GenSpecs):
     """CUDA Code generator for custom dimension classes.
 
@@ -29,38 +29,13 @@ class Dim(GenSpecs):
         return _format_dim_class_name(self.dim_name)
 
     def generate(self) -> str:
+        """Generate the C++ code for a dimension class using CRTP."""
         class_name = self.class_name
         return f"""
-class {class_name} : public spio::Dim
+class {class_name} : public spio::Dim<{class_name}>
 {{
 public:
-    using Base = spio::Dim;
-    using Base::Base;
-    class Iterator {{
-    public:
-        DEVICE constexpr Iterator(int i) : _i(i) {{}}
-        DEVICE constexpr {class_name} operator*() const {{ return _i; }}
-        DEVICE constexpr Iterator &operator++() {{ ++_i; return *this; }}
-        DEVICE constexpr bool operator!=(const Iterator other) const {{ return _i != other._i; }}
-
-    private:
-        int _i;
-    }};
-    template <class NewDimType>
-    DEVICE constexpr auto cast() const -> NewDimType {{ return NewDimType(Base::get()); }}
-    template <unsigned Stride>
-    DEVICE constexpr spio::Fold<{class_name}, Stride> fold() const {{ return spio::Fold<{class_name}, Stride>(*this); }}
-    DEVICE constexpr Iterator begin() const {{ return Iterator(0); }}
-    DEVICE constexpr Iterator end() const {{ return Iterator(Base::get()); }}
-    DEVICE constexpr bool operator<(const {class_name} other) const {{ return Base::operator<(other); }}
-    DEVICE constexpr bool operator>(const {class_name} other) const {{ return other < *this; }}
-    DEVICE constexpr bool operator<=(const {class_name} other) const {{ return !(*this > other); }}
-    DEVICE constexpr bool operator>=(const {class_name} other) const {{ return !(*this < other); }}
-    DEVICE constexpr bool operator==(const {class_name} other) const {{ return Base::operator==(other); }}
-    DEVICE constexpr bool operator!=(const {class_name} other) const {{ return !(*this == other); }}
-    DEVICE constexpr {class_name} operator+(const {class_name} other) const {{ return {class_name}(Base::_add(other)); }}
-    DEVICE constexpr {class_name} operator-(const {class_name} other) const {{ return {class_name}(Base::_sub(other)); }}
-    DEVICE constexpr {class_name} operator%(const {class_name} other) const {{ return {class_name}(Base::_modulus(other)); }}
+    using spio::Dim<{class_name}>::Dim;
 }};
 """
 
@@ -86,8 +61,8 @@ def _get_dim_or_fold_class_name(name: str, stride: int):
         return _format_fold_template_instance(dim_class_name, stride)
 
 
-def _get_dim_name_and_stride(name: str) -> str:
-    """Convert a dimension name to a dimension class name."""
+def _get_dim_name_and_stride(name: str) -> Tuple[str, int]:
+    """Convert a dimension name to a dimension name and stride."""
     stride = None
     for i, char in enumerate(name):
         if char.isdigit():
@@ -99,7 +74,7 @@ def _get_dim_name_and_stride(name: str) -> str:
 
 def _format_dim_class_name(dim_name: str) -> str:
     """Convert a dimension name to a dimension class name."""
-    return f"{dim_name.upper()}_Dim"
+    return f"{dim_name.upper()}"
 
 
 def _format_fold_template_instance(dim_class_name: str, stride: int) -> str:

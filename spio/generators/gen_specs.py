@@ -20,10 +20,10 @@ class GenSpecs(Protocol):
 class GenSpecsWithContext(GenSpecs, Protocol):
     """Protocol for kernel code generation classes with optional context."""
 
-    def generate_with_context(self, user_types: list[str] = None) -> str:
+    def generate_with_context(self, user_data_types: list[str] = None) -> str:
         """Generate CUDA source code with context.
 
-        @param user_types: List of user-defined types.
+        @param user_data_types: List of user-defined types.
         User-defined types currently include Fragment class-names. Tensors
         allow user-defined types to be used as the tensors data-type.
         """
@@ -33,4 +33,4 @@ class GenSpecsWithContext(GenSpecs, Protocol):
 
         This method is provided for backwards compatibility with the GenSpecs protocol.
         """
-        return self.generate_with_context(user_types=None)
+        return self.generate_with_context(user_data_types=None)

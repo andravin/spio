@@ -1,47 +1,49 @@
 """Code generator for custom index classes in CUDA / C++."""
 
-from math import prod
-from typing import Dict, Tuple, List, Union, Generator
+from typing import List, Generator
 from dataclasses import dataclass
 
-from .gen_specs import GenSpecs
-from .subindex_protocol import SubindexProtocol
+from .dims import Dims, Strides, compute_full_strides
 from .dim import dim_name_to_dim_or_fold_class_name
-from .dims import Dims
 
 
 @dataclass
-class Index(GenSpecs):
+class Index:
     """CUDA Code generator for custom index classes.
 
-    This class is used to generate custom index classes that map named tensor dimensions to offsets.
-    Conversely, it can also map offsets back to named tensor dimensions.
+    This class is used to generate custom index classes that map linear offsets
+    to multidimensional coordinates.
 
     Attributes:
         class_name (str): The name of the custom index class.
-        dims (Dict[str, int]): A dictionary mapping dimension names to their sizes.
+        dims (Dims): A dictionary mapping dimension names to their sizes.
     """
 
     class_name: str
     dims: Dims
+    strides: Strides = None
 
-    def generate(self) -> str:
+    def __post_init__(self):
+        # Ensure strides are calculated for each dimension
+        self.strides = compute_full_strides(self.dims, self.strides)
+
+    def generate_with_context(self, user_data_types: List[str] = None) -> str:
         """Generate the C++ source code for the custom index class."""
-        return _generate_index(self.class_name, self.dims)
+        return _generate_index(self.class_name, self.dims, self.strides)
 
     @property
-    def size(self) -> int:
-        """Return the total number of elements in the index."""
-        return _calc_size(_sizes_gen(self.dims))
+    def total_size(self) -> int:
+        """Total number of elements (product of all dimension sizes)."""
+        product = 1
+        for size in self.dims.values():
+            product *= size
+        return product
 
     @property
     def dim_names(self) -> Generator[str, None, None]:
         """Return the names of the dimensions in the index."""
-        for name, value in self.dims.items():
-            if isinstance(value, SubindexProtocol):
-                yield from value.dim_names
-            else:
-                yield name
+        for name, _ in self.dims.items():
+            yield name
 
 
 def header() -> str:
@@ -54,118 +56,28 @@ def header() -> str:
 
 
 def _generate_index(
-    class_name: str, dims: Dict[str, Union[int, SubindexProtocol]]
+    class_name: str,
+    dims: Dims,
+    strides: Strides,
 ) -> str:
-    """Return the C++ source code that implements a custom index class.
+    """Generate a using statement for an Index template instantiation."""
+    dim_infos = []
 
-    Custom index classes use named tensor dimensions.
+    # Generate DimInfo parameters for each dimension
+    for name, size_value in dims.items():
+        # Handle the size (now all integers)
+        size_str = str(size_value)
 
-    Parameters:
-        class_name(str): the name to use for the C++ class
-        dims(Dict[str, int]): an (ordered) dict that maps dimension names to their sizes.
-    """
-    code = ""
-    sizes = _sizes_gen(dims)
-    code += _class(class_name, sizes)
-    for name, value in dims.items():
-        if isinstance(value, SubindexProtocol):
-            value.class_name = _fused_dim_class_name(name)
-            code += value.generate()
-    for (name, value), size in zip(dims.items(), sizes):
-        code += _dim(name, value, size)
-    for d, (name, value) in enumerate(dims.items()):
-        code += _offset_to_index(d, name, value)
-    code += _size(_calc_size(sizes))
-    code += _offset_tensor(dims)
-    code += _tail()
-    return code
+        # Get the stride for this dimension
+        stride = strides[name]
 
+        # Use dim_name_to_dim_or_fold_class_name to handle both regular and fold dimensions
+        dim_class = dim_name_to_dim_or_fold_class_name(name)
 
-def _class(class_name: str, shape: Tuple[int, ...]) -> str:
-    num_dims = len(shape)
-    shape_str = ", ".join([str(d) for d in shape[1:]])
-    template_pars_str = f"<{shape_str}>" if shape_str else ""
-    base = f"Index{num_dims}D{template_pars_str}"
-    return f"""
-    class {class_name} : public spio::{base} {{
-    public:
-        using Base = {base};
+        # Add the DimInfo parameter
+        dim_infos.append(f"spio::DimInfo<{dim_class}, {size_str}, {stride}>")
 
-        DEVICE constexpr {class_name}(unsigned offset  = 0) : Base(offset) {{}}
+    # Generate the index type using statement
+    index_using = f"using {class_name} = spio::Index<{', '.join(dim_infos)}>;"
 
-        DEVICE constexpr {class_name}(const {base} &other) : Base(other) {{}}
-"""
-
-
-def _fused_dim_class_name(fused_dim_name: str) -> str:
-    return f"_{fused_dim_name.capitalize()}Idx"
-
-
-def _dim(name: str, value: Union[int, SubindexProtocol], size: int) -> str:
-    if isinstance(value, SubindexProtocol):
-        return_type = "unsigned"
-    else:
-        return_type = dim_name_to_dim_or_fold_class_name(name)
-    return f"""
-        static constexpr {return_type} {name.upper()} = {size};
-    """
-
-
-def _size(size) -> str:
-    return f"""
-        static constexpr unsigned size = {size};
-"""
-
-
-def _offset_to_index(d: int, name: str, value: Union[int, SubindexProtocol]) -> str:
-    if isinstance(value, SubindexProtocol):
-        return _offset_to_fused_idx(d, name, value)
-    else:
-        return _offset_to_dim(d, name)
-
-
-def _offset_to_dim(d: int, name: str) -> str:
-    dim_d = f"_d{d}"
-    dim_or_fold_class_name = dim_name_to_dim_or_fold_class_name(name)
-    return f"""
-        DEVICE constexpr {dim_or_fold_class_name} {name}() const {{ return {dim_or_fold_class_name}({dim_d}()); }}
-"""
-
-
-def _offset_to_fused_idx(d: int, name: str, fused_dim_spec: SubindexProtocol) -> str:
-    dim_d = f"_d{d}"
-    return f"""
-        DEVICE constexpr {fused_dim_spec.class_name} {name}() const {{
-            const auto offset = {dim_d}();
-            return {fused_dim_spec.class_name}(offset);
-        }}
-    """
-
-
-def _offset_tensor(dims: Dict[str, Union[int, SubindexProtocol]]) -> str:
-    """Return the C++ source code that implements the offset_tensor method.
-    
-    This method applies every dimension of this index to the subscript operator of the given tensor.
-    It returns a new tensor that is offset by the index.
-    """
-    index_str = "".join(f"[{name}()]" for name in dims.keys())
-    return f"""
-        template<typename TensorType>
-        DEVICE constexpr TensorType offset_tensor(TensorType tensor) const {{
-            return tensor{index_str};
-        }}
-"""
-
-
-def _tail() -> str:
-    return """
-    };
-"""
-
-
-def _sizes_gen(dims: Dict[str, int]):
-    return [d.size if isinstance(d, SubindexProtocol) else d for d in dims.values()]
-
-
-def _calc_size(sizes: List[int]):
-    return prod(sizes)
+    return index_using
