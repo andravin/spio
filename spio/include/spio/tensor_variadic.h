@@ -34,23 +34,25 @@ namespace spio
     namespace detail
     {
         // Helper function to concatenate tuples
-        template<typename T1, typename T2>
+        template <typename T1, typename T2>
         struct tuple_cat_impl;
-        
+
         // Specialization for empty first tuple
-        template<typename... Ts>
-        struct tuple_cat_impl<spio::detail::tuple<>, spio::detail::tuple<Ts...>> {
+        template <typename... Ts>
+        struct tuple_cat_impl<spio::detail::tuple<>, spio::detail::tuple<Ts...>>
+        {
             using type = spio::detail::tuple<Ts...>;
         };
-        
+
         // Specialization for non-empty first tuple
-        template<typename T, typename... Ts, typename... Us>
-        struct tuple_cat_impl<spio::detail::tuple<T, Ts...>, spio::detail::tuple<Us...>> {
+        template <typename T, typename... Ts, typename... Us>
+        struct tuple_cat_impl<spio::detail::tuple<T, Ts...>, spio::detail::tuple<Us...>>
+        {
             using type = spio::detail::tuple<T, Us...>;
         };
-        
+
         // Helper function to concatenate two tuples
-        template<typename T1, typename T2>
+        template <typename T1, typename T2>
         using tuple_cat_t = typename tuple_cat_impl<T1, T2>::type;
 
         /// @brief Update dimension info by replacing a given dimension with a new size.
@@ -119,7 +121,7 @@ namespace spio
             // Return new cursor at the offset position
             return Cursor(get() + offset.get());
         }
-        
+
         /// @brief Subscript operator that takes an Index object and applies all dimensions
         /// @tparam IndexDimInfos The dimension infos in the Index
         /// @param idx The index containing coordinates for multiple dimensions
@@ -159,13 +161,16 @@ namespace spio
 
         using cursor_type = Cursor<DataType, DimInfos...>;
 
+        // Index type that uses tensor's size and strides.
+        using index_type = spio::Index<DimInfos...>;
+
         // Total number of elements (product of all dimension sizes)
         // NOTE: this changes the meaning of the "size" method from
         // the previous implementation. Now it is just the number of elements.
-        // It is not longer the storage size of the tensor. We need a 
+        // It is not longer the storage size of the tensor. We need a
         // separate method to get the storage size.
         static constexpr unsigned total_size = detail::product_sizes<DimInfos...>::value;
-        
+
         // For compatibility with existing code
         DEVICE static constexpr unsigned size() { return total_size; }
 
@@ -185,7 +190,7 @@ namespace spio
             _OffsetDim offset = dim_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(d);
             return cursor_type(get() + offset.get());
         }
-        
+
         /// @brief Subscript operator that takes an Index object and applies all dimensions
         /// @tparam IndexDimInfos The dimension infos in the Index
         /// @param idx The index containing coordinates for multiple dimensions
@@ -196,8 +201,7 @@ namespace spio
             // Let the Index apply itself to this tensor
             return idx.apply_to(*this);
         }
-    
-    public:
+
         /// @brief Slice method to create a view with a different offset and size in one dimension.
         /// @tparam SliceSize the new size of the dimension
         /// @tparam SliceDimType the dimension to slice. SliceDimType is inferred from the type of the slice_start argument.

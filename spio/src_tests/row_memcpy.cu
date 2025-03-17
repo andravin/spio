@@ -34,7 +34,7 @@ extern "C"
 
         // Input to smem.
         Input::cursor_type input;
-        SmemInput::cursor_type smem_store;
+        SmemInput::cursor_type smem_input_store;
         bool thread_loads_input;
         int zfill;
         {
@@ -43,7 +43,7 @@ extern "C"
             auto x = block_x + idx.get<X>();
             auto c4 = block_c.fold<4>() + idx.get<C4>();
 
-            smem_store = SmemInput(smem_input_buf)[idx.get<X>()][idx.get<C4>()];
+            smem_input_store = SmemInput(smem_input_buf)[idx.get<X>()][idx.get<C4>()];
             input = Input(src)[block_n][block_p.unfold().cast<Y>()][x][c4];
 
             bool x_inbounds = (x >= 0 && x < Input::size<X>());
@@ -71,7 +71,7 @@ extern "C"
         Output::cursor_type output;
         bool thread_stores_output;
         {
-            auto idx = ConstSmemOutput::Index(threadIdx.x);
+            auto idx = ConstSmemOutput::index_type(threadIdx.x);
             auto q = block_q.unfold() + idx.get<Q>();
             auto c4 = block_c.fold<4>() + idx.get<C4>();
 
@@ -80,7 +80,7 @@ extern "C"
 
             thread_stores_output = q.cast<X>() < Input::size<X>() && 
                                   c4 < Block::c4 && 
-                                  threadIdx.x < ConstSmemOutput::Index::total_size;
+                                  threadIdx.x < ConstSmemOutput::size();
         }
 
         //
@@ -107,7 +107,7 @@ extern "C"
                 if (thread_loads_input)
                 {
                     __pipeline_memcpy_async(
-                        smem_input_store.ping_pong(ping_pong).get(),
+                        smem_input_store[PING_PONG(ping_pong)].get(),
                         input.get(),
                         sizeof(Input::data_type),
                         zfill);
@@ -120,7 +120,7 @@ extern "C"
             {
                 __pipeline_wait_prior(pipeline.active(LOAD_INPUT_STAGE) ? 1 : 0);
                 __syncthreads();
-                *smem_output_store = *smem_input_load.ping_pong(ping_pong);
+                *smem_output_store = *smem_input_load[PING_PONG(ping_pong)];
                 __syncthreads();
                 if (thread_stores_output)
                 {
