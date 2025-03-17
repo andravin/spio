@@ -83,11 +83,10 @@ def compute_full_strides(
     all_strides = {}
     stride = 1
     for name, value in reversed(dims.items()):
-        if isinstance(value, SubindexProtocol):
-            value = value.size
         if name in given_strides:
             stride = given_strides[name]
         all_strides[name] = stride
         # Compute the default stride of the next dimension.
         stride *= value
     return all_strides
+
