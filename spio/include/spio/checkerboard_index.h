@@ -2,6 +2,8 @@
 #define SPIO_CHECKERBOARD_IDX_H
 
 #include "spio/macros.h"
+#include "spio/dim.h"
+#include "spio/index_base.h"
 
 namespace spio
 {
@@ -54,37 +56,67 @@ namespace spio
     ///         +--------+--------+--------+--------+
     ///
     /// @tparam ranks the number of column-ranks in the checkerboard.
-    template <int ranks>
-    class CheckerboardIndex
+    /// @tparam PairDim the dimension type for the pair index
+    /// @tparam ColorDim the dimension type for the color index
+    template <int ranks, typename PairDim, typename ColorDim>
+    class CheckerboardIndex : public IndexBase
     {
     public:
-        DEVICE inline constexpr CheckerboardIndex(unsigned offset)
-            : _offset(offset) {}
+        using IndexBase::IndexBase;
 
-        DEVICE inline constexpr unsigned offset() const { return _offset; }
-
-        DEVICE inline constexpr int pair() const
-        {
-            return _offset >> 1;
+        /// @brief Construct index from pair and color dimensions
+        /// @param pair_dim The pair dimension value
+        /// @param color_dim The color dimension value
+        DEVICE inline constexpr CheckerboardIndex(PairDim pair_dim, ColorDim color_dim)
+            : IndexBase(compute_offset(pair_dim.get(), color_dim.get())) {}
+        
+        /// @brief Get dimension value by type
+        /// @tparam Dim The dimension type to retrieve
+        /// @return The dimension value with the proper type
+        template <typename Dim>
+        DEVICE constexpr auto get() const {
+            if constexpr (std::is_same_v<Dim, PairDim>) {
+                return PairDim(offset() >> 1);
+            } else if constexpr (std::is_same_v<Dim, ColorDim>) {
+                const unsigned row = offset() / ranks;
+                return ColorDim((offset() & 1) ^ (row & 1));
+            } else {
+                static_assert(
+                    std::is_same_v<Dim, PairDim> || 
+                    std::is_same_v<Dim, ColorDim>,
+                    "Invalid dimension type for CheckerboardIndex"
+                );
+                return Dim(0);
+            }
         }
 
-        DEVICE inline constexpr int color() const
-        {
-            const unsigned row = _offset / ranks;
-            return (_offset & 1) ^ (row & 1);
+        // Convenience methods for backward compatibility
+        DEVICE inline constexpr int pair() const {
+            return get<PairDim>().get();
         }
 
+        DEVICE inline constexpr int color() const {
+            return get<ColorDim>().get();
+        }
+
+        /// @brief Calculate offset from pair and color indices
         /// @param pair the index of a pair of grid elements.
         /// @param color the black (0) or white (1) grid element in the pair.
         /// @return Offset into the checkeboard grid.
-        DEVICE inline static constexpr int offset(unsigned pair, unsigned color)
+        DEVICE inline static constexpr int compute_offset(unsigned pair, unsigned color)
         {
             unsigned row = pair / (ranks / 2);
             return (pair << 1 | color) ^ (row & 1);
         }
-
-    private:
-        const unsigned _offset;
+        
+        /// @brief Calculate offset from typed pair and color dimensions
+        /// @param pair_dim The pair dimension
+        /// @param color_dim The color dimension
+        /// @return Offset into the checkerboard grid
+        DEVICE inline static constexpr int compute_offset(PairDim pair_dim, ColorDim color_dim)
+        {
+            return compute_offset(pair_dim.get(), color_dim.get());
+        }
     };
 }
 

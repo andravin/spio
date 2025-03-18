@@ -37,6 +37,7 @@ CPP_SOURCES = [
     "test_index_variadic.cpp",
     "test_fragment_index.cpp",
     "test_mathutil.cpp",
+    "test_checkerboard_index.cpp",
     # "test_strip_loader_params.cpp",
     "test_dim.cpp",
 ]
