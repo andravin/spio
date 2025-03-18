@@ -22,6 +22,9 @@ def generate(
     
     # Track all dimension names used as dim_name in fold specs
     folded_dim_names = {spec.dim_name for spec in gen_specs if isinstance(spec, Fold)}
+    
+    # Also track the fold_name values from explicit folds (e.g., "block_p")
+    fold_aliases = set(explicit_folds.keys())
 
     # 2. Find all dimension names used in any specs
     all_dim_names = set()
@@ -32,9 +35,12 @@ def generate(
     # 3. Extract base dimensions and implicit fold dimensions
     base_dims = set()
     implicit_folds = set()
-    fold_names = set(explicit_folds.keys())  # Track fold_name values
 
     for name in all_dim_names:
+        # Skip names that are fold_aliases (like "block_p") since they're not base dimensions
+        if name in fold_aliases:
+            continue
+            
         base_name, stride = _get_dim_name_and_stride(name)
         if stride is not None:
             # This is a fold dimension (e.g., "c4")
@@ -42,8 +48,7 @@ def generate(
                 # Only create implicit folds if not explicitly declared 
                 # and not used as dim_name in a fold spec
                 implicit_folds.add(Fold(name, base_name, stride))
-                fold_names.add(name)
-        # Always need the base dimension
+                fold_aliases.add(name)  # Add to fold_aliases to exclude from base dims        
         base_dims.add(Dim(base_name))
 
     # 4. Make sure all base dimensions for folds are created
