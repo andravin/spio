@@ -2,7 +2,8 @@
 #define SPIO_FRAGMENT_INDEX_H_
 
 #include "spio/macros.h"
-#include "spio/index.h"
+#include "spio/index_base.h"
+#include "spio/dim.h"
 
 namespace spio
 {
@@ -13,98 +14,203 @@ namespace spio
         using IndexBase::IndexBase;
 
         DEVICE inline constexpr int _x() const { return offset() >> 2; };
-
         DEVICE inline constexpr int _y2m4() const { return offset() & 3; };
     };
 
-    /// @brief Base class for matrix A and accumulator C that with 8x8 fragments.
-    class _MMA_AC_88_F16_F32_Index : public _MMA_88_Index
+    /// @brief Matrix A index for 8x8 fragments with float16 elements.
+    /// @tparam RowDim The dimension type for rows (i)
+    /// @tparam ColDim The dimension type for columns (k)
+    template <typename RowDim, typename ColDim>
+    class MMA_A_88_F16_Index : public _MMA_88_Index
     {
-    public:
-        // Return major-axis index divided by 8 for the given fragment index.
-        DEVICE inline constexpr int _x8(int idx = 0) const { return (idx & 1); }
-
-        // Return the minor-axis index divided by 8 for the given fragment index.
-        DEVICE inline constexpr int _y8(int idx = 0) const { return (idx >> 1); }
-
+    private:
         using Base = _MMA_88_Index;
+        
+        // Helper method to get row index at given fragment index
+        DEVICE inline constexpr int _i(int idx = 0) const { 
+            return Base::_x() + ((idx & 1) << 3); 
+        }
+        
+        // Helper method to get column index divided by 2
+        DEVICE inline constexpr int _k2(int idx = 0) const { 
+            return Base::_y2m4() + ((idx >> 1) << 2); 
+        }
+        
+        // Helper for column index divided by 8
+        DEVICE inline constexpr int _k8(int idx = 0) const { 
+            return (idx >> 1); 
+        }
 
+    public:
         using Base::Base;
-
-        // Return the major-axis index at the given fragment-index.
-        DEVICE inline constexpr int _x(int idx = 0) const { return Base::_x() + (_x8(idx) << 3); }
-
-        // Return the minor-axis index divided by 2 at the given fragment index.
-        DEVICE inline constexpr int _y2(int idx = 0) const { return Base::_y2m4() + (_y8(idx) << 2); }
+        
+        // Row dimension access - template specialization
+        template <typename Dim>
+        DEVICE constexpr auto get(int idx = 0) const {
+            if constexpr (std::is_same_v<Dim, RowDim>) {
+                return RowDim(_i(idx));
+            } else if constexpr (std::is_same_v<Dim, Fold<ColDim, 2>>) {
+                return Fold<ColDim, 2>(_k2(idx));
+            } else if constexpr (std::is_same_v<Dim, Fold<ColDim, 8>>) {
+                return Fold<ColDim, 8>(_k8(idx));
+            } else if constexpr (std::is_same_v<Dim, Module<ColDim, 4, 2>>) {
+                return Module<ColDim, 4, 2>(Base::_y2m4());
+            } else {
+                // Static assertion to provide better error message
+                static_assert(
+                    std::is_same_v<Dim, RowDim> || 
+                    std::is_same_v<Dim, Fold<ColDim, 2>> ||
+                    std::is_same_v<Dim, Fold<ColDim, 8>> ||
+                    std::is_same_v<Dim, Module<ColDim, 4, 2>>,
+                    "Invalid dimension type for MMA_A_88_F16_Index"
+                );
+                return Dim(0); // Unreachable but needed for compilation
+            }
+        }
+        
+        // Convenience methods for backward compatibility
+        DEVICE inline constexpr RowDim row(int idx = 0) const { 
+            return get<RowDim>(idx); 
+        }
+        
+        DEVICE inline constexpr Fold<ColDim, 2> col2(int idx = 0) const { 
+            return get<Fold<ColDim, 2>>(idx); 
+        }
+        
+        DEVICE inline constexpr Fold<ColDim, 8> col8(int idx = 0) const { 
+            return get<Fold<ColDim, 8>>(idx); 
+        }
+        
+        DEVICE inline constexpr Module<ColDim, 4, 2> col2_mod4() const { 
+            return get<Module<ColDim, 4, 2>>(); 
+        }
     };
 
-    /// @brief Matrix A index for 8x8 fragments with float16 elements.
-    class MMA_A_88_F16_Index : public _MMA_AC_88_F16_F32_Index
+    /// @brief Matrix B index for 8x8 fragments with float16 elements.
+    /// @tparam RowDim The dimension type for rows (k)
+    /// @tparam ColDim The dimension type for columns (j)
+    template <typename RowDim, typename ColDim>
+    class MMA_B_88_F16_Index : public _MMA_88_Index
     {
+    private:
+        using Base = _MMA_88_Index;
+        
+        // Helper for column index
+        DEVICE inline constexpr int _j(int idx = 0) const { 
+            return Base::_x() + ((idx >> 1) << 3); 
+        }
+        
+        // Helper for row index divided by 2
+        DEVICE inline constexpr int _k2(int idx = 0) const { 
+            return Base::_y2m4() + ((idx & 1) << 2); 
+        }
+        
+        // Helper for row index divided by 8
+        DEVICE inline constexpr int _k8(int idx = 0) const { 
+            return (idx & 1); 
+        }
+
     public:
-        using Base = _MMA_AC_88_F16_F32_Index;
-
         using Base::Base;
-
-        // Return the row number the given fragment index.
-        DEVICE inline constexpr int i(int idx = 0) const { return Base::_x(idx); }
-
-        // Return the column number divided by 2 at the given fragment index.
-        DEVICE inline constexpr int k2(int idx = 0) const { return Base::_y2(idx); }
-
-        // Return the column number divided by 8 at the given fragment index.
-        DEVICE inline constexpr int k8(int idx = 0) const { return _y8(idx); }
-
-        // Return the column number divided by 2 modulo 4 at the given fragment index.
-        DEVICE inline constexpr int k2m4() const { return Base::_y2m4(); }
+        
+        // Template-based dimension access
+        template <typename Dim>
+        DEVICE constexpr auto get(int idx = 0) const {
+            if constexpr (std::is_same_v<Dim, ColDim>) {
+                return ColDim(_j(idx));
+            } else if constexpr (std::is_same_v<Dim, Fold<RowDim, 2>>) {
+                return Fold<RowDim, 2>(_k2(idx));
+            } else if constexpr (std::is_same_v<Dim, Fold<RowDim, 8>>) {
+                return Fold<RowDim, 8>(_k8(idx));
+            } else if constexpr (std::is_same_v<Dim, Module<RowDim, 4, 2>>) {
+                return Module<RowDim, 4, 2>(Base::_y2m4());
+            } else {
+                static_assert(
+                    std::is_same_v<Dim, ColDim> || 
+                    std::is_same_v<Dim, Fold<RowDim, 2>> ||
+                    std::is_same_v<Dim, Fold<RowDim, 8>> ||
+                    std::is_same_v<Dim, Module<RowDim, 4, 2>>,
+                    "Invalid dimension type for MMA_B_88_F16_Index"
+                );
+                return Dim(0);
+            }
+        }
+        
+        // Convenience methods
+        DEVICE inline constexpr ColDim col(int idx = 0) const { 
+            return get<ColDim>(idx); 
+        }
+        
+        DEVICE inline constexpr Fold<RowDim, 2> row2(int idx = 0) const { 
+            return get<Fold<RowDim, 2>>(idx); 
+        }
+        
+        DEVICE inline constexpr Fold<RowDim, 8> row8(int idx = 0) const { 
+            return get<Fold<RowDim, 8>>(idx); 
+        }
+        
+        DEVICE inline constexpr Module<RowDim, 4, 2> row2_mod4() const { 
+            return get<Module<RowDim, 4, 2>>(); 
+        }
     };
 
     /// @brief Matrix C index for 8x8 fragments with float32 elements.
-    class MMA_C_88_F32_Index : _MMA_AC_88_F16_F32_Index
+    /// @tparam RowDim The dimension type for rows (i)
+    /// @tparam ColDim The dimension type for columns (j)
+    template <typename RowDim, typename ColDim>
+    class MMA_C_88_F32_Index : public _MMA_88_Index
     {
-    public:
-        using Base = _MMA_AC_88_F16_F32_Index;
-
-        using Base::Base;
-
-        // Return the row number the given fragment index.
-        DEVICE inline constexpr int i(int idx = 0) const { return Base::_x(idx); }
-
-        // Return the column number divided by 2 at the given fragment index.
-        DEVICE inline constexpr int j2(int idx = 0) const { return Base::_y2(idx); }
-
-        // Return the column number divided by 8 at the given fragment index.
-        DEVICE inline constexpr int j8(int idx = 0) const { return Base::_y8(idx); }
-
-        // Return the column number divided by 2 modulo 4 at the given fragment index.
-        DEVICE inline constexpr int j2m4() const { return Base::_y2m4(); }
-    };
-
-    /// @brief  Matrix B index for 8x8 fragments with float16 elements.
-    class MMA_B_88_F16_Index : public _MMA_88_Index
-    {
-        // Return the column number for the given fragment index.
-        DEVICE inline constexpr int _j8(int idx = 0) const { return (idx >> 1); }
-
-        // Return the row number divided by 8 for the given fragment index.
-        DEVICE inline constexpr int _k8(int idx = 0) const { return (idx & 1); }
-
-    public:
+    private:
         using Base = _MMA_88_Index;
+        
+        // Helpers ported from _MMA_AC_88_F16_F32_Index
+        DEVICE inline constexpr int _x8(int idx = 0) const { return (idx & 1); }
+        DEVICE inline constexpr int _y8(int idx = 0) const { return (idx >> 1); }
+        DEVICE inline constexpr int _x(int idx = 0) const { return Base::_x() + (_x8(idx) << 3); }
+        DEVICE inline constexpr int _y2(int idx = 0) const { return Base::_y2m4() + (_y8(idx) << 2); }
 
+    public:
         using Base::Base;
-
-        // Return the column number at the given fragment index.
-        DEVICE inline constexpr int j(int idx = 0) const { return Base::_x() + (_j8(idx) << 3); }
-
-        // Return the row number divided by 2 at the given fragment index.
-        DEVICE inline constexpr int k2(int idx = 0) const { return Base::_y2m4() + (_k8(idx) << 2); }
-
-        // Return the row number divided by 8 at the given fragment index.
-        DEVICE inline constexpr int k8(int idx = 0) const { return _k8(idx); }
-
-        // Return the row number divided by 2 modulo 4 at the given fragment index.
-        DEVICE inline constexpr int k2m4() const { return Base::_y2m4(); }
+        
+        // Template-based dimension access
+        template <typename Dim>
+        DEVICE constexpr auto get(int idx = 0) const {
+            if constexpr (std::is_same_v<Dim, RowDim>) {
+                return RowDim(_x(idx));
+            } else if constexpr (std::is_same_v<Dim, Fold<ColDim, 2>>) {
+                return Fold<ColDim, 2>(_y2(idx));
+            } else if constexpr (std::is_same_v<Dim, Fold<ColDim, 8>>) {
+                return Fold<ColDim, 8>(_y8(idx));
+            } else if constexpr (std::is_same_v<Dim, Module<ColDim, 4, 2>>) {
+                return Module<ColDim, 4, 2>(Base::_y2m4());
+            } else {
+                static_assert(
+                    std::is_same_v<Dim, RowDim> || 
+                    std::is_same_v<Dim, Fold<ColDim, 2>> ||
+                    std::is_same_v<Dim, Fold<ColDim, 8>> ||
+                    std::is_same_v<Dim, Module<ColDim, 4, 2>>,
+                    "Invalid dimension type for MMA_C_88_F32_Index"
+                );
+                return Dim(0);
+            }
+        }
+        
+        // Convenience methods
+        DEVICE inline constexpr RowDim row(int idx = 0) const { 
+            return get<RowDim>(idx); 
+        }
+        
+        DEVICE inline constexpr Fold<ColDim, 2> col2(int idx = 0) const { 
+            return get<Fold<ColDim, 2>>(idx); 
+        }
+        
+        DEVICE inline constexpr Fold<ColDim, 8> col8(int idx = 0) const { 
+            return get<Fold<ColDim, 8>>(idx); 
+        }
+        
+        DEVICE inline constexpr Module<ColDim, 4, 2> col2_mod4() const { 
+            return get<Module<ColDim, 4, 2>>(); 
+        }
     };
 }
 

@@ -35,8 +35,8 @@ CPP_SOURCES = [
     "test_main.cpp",
     "test_tensor_variadic.cpp",
     "test_index_variadic.cpp",
-    # "test_fragment_index.cpp",
-    # "test_mathutil.cpp",
+    "test_fragment_index.cpp",
+    "test_mathutil.cpp",
     # "test_strip_loader_params.cpp",
     "test_dim.cpp",
 ]

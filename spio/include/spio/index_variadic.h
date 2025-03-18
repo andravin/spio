@@ -2,6 +2,7 @@
 #define SPIO_INDEX_H_
 
 #include "spio/macros.h"
+#include "spio/index_base.h"
 #include "spio/dim.h"
 #include "spio/dim_info.h"
 
@@ -75,29 +76,21 @@ namespace spio
     /// (like a thread index) back to typed dimension coordinates
     /// @tparam DimInfos The dimension information types (same as in Tensor)
     template <typename... DimInfos>
-    class Index
+    class Index : public IndexBase
     {
-    private:
-        unsigned _offset;
-
     public:
         // Total number of elements (product of all dimension sizes)
         static constexpr unsigned total_size = index_traits::total_elements<DimInfos...>::value;
         
-        /// @brief Construct an index from a linear offset
-        /// @param offset The linear offset value (e.g., from threadIdx.x)
-        DEVICE constexpr Index(unsigned offset = 0) : _offset(offset) {}
-        
-        /// @brief Get the raw linear offset
-        DEVICE constexpr unsigned offset() const { return _offset; }
-        
+        using IndexBase::IndexBase;
+               
         /// @brief Get the typed coordinate for a specific dimension
         /// @tparam DimType The dimension type to extract
         /// @return A typed dimension value
         template <typename DimType>
         DEVICE constexpr DimType get() const {
             // Use the same dim_traits infrastructure as Tensor
-            return dim_traits::find_dim_info<DimType, DimInfos...>::info::from_offset(_OffsetDim(_offset));
+            return dim_traits::find_dim_info<DimType, DimInfos...>::info::from_offset(_OffsetDim(offset()));
         }
         
         /// @brief Create an index from individual typed coordinates
