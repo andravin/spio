@@ -8,6 +8,7 @@ from .dim import (
     dim_name_to_dim_or_fold_class_name,
     _format_fold_template_instance,
     _format_dim_class_name,
+    _get_dim_name_and_stride,
 )
 
 
@@ -31,8 +32,12 @@ class Fold(GenSpecs):
 
     @property
     def dim_names(self) -> Tuple[str]:
-        """Return the name of the folded dimension."""
-        return (self.dim_name,)
+        """Return the base dimension name, not the folded form.
+        
+        This ensures we don't create redundant dimension classes for already folded dimensions.
+        """
+        base_name, _ = _get_dim_name_and_stride(self.dim_name)
+        return (base_name,)
 
 
 def dim_header() -> str:

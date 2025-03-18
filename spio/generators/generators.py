@@ -14,22 +14,14 @@ def generate(
     gen_specs: List[GenSpecs],
     namespace: str = None,
 ) -> str:
-    """Generate CUDA code from generator specifications.
-
-    Automatically detects all dimensions used in the generator specifications
-    and generates the corresponding custom dimension classes and fold aliases.
-
-    Args:
-        gen_specs: List of generator specifications.
-        namespace: Optional namespace for the generated code.
-
-    Returns:
-        Generated CUDA code as a string.
-    """
+    """Generate CUDA code from generator specifications."""
     # 1. Find explicitly declared Fold specs
     explicit_folds = {
         spec.fold_name: spec for spec in gen_specs if isinstance(spec, Fold)
     }
+    
+    # Track all dimension names used as dim_name in fold specs
+    folded_dim_names = {spec.dim_name for spec in gen_specs if isinstance(spec, Fold)}
 
     # 2. Find all dimension names used in any specs
     all_dim_names = set()
@@ -40,28 +32,25 @@ def generate(
     # 3. Extract base dimensions and implicit fold dimensions
     base_dims = set()
     implicit_folds = set()
-    fold_names = set(
-        explicit_folds.keys()
-    )  # Track all fold names to exclude them from dims
+    fold_names = set(explicit_folds.keys())  # Track fold_name values
 
     for name in all_dim_names:
         base_name, stride = _get_dim_name_and_stride(name)
         if stride is not None:
             # This is a fold dimension (e.g., "c4")
-            if name not in explicit_folds:
-                # Only create implicit folds if not explicitly declared
+            if name not in folded_dim_names and name not in explicit_folds:
+                # Only create implicit folds if not explicitly declared 
+                # and not used as dim_name in a fold spec
                 implicit_folds.add(Fold(name, base_name, stride))
-                fold_names.add(name)  # Add to fold names to exclude from dims
-            # Always need the base dimension
-            base_dims.add(Dim(base_name))
-        else:
-            # This is a base dimension (only if not a fold name)
-            if name not in fold_names:
-                base_dims.add(Dim(name))
+                fold_names.add(name)
+        # Always need the base dimension
+        base_dims.add(Dim(base_name))
 
     # 4. Make sure all base dimensions for folds are created
     for fold in list(explicit_folds.values()) + list(implicit_folds):
-        base_dims.add(Dim(fold.dim_name))
+        # Extract the base dimension name from the fold's dim_name
+        base_name, _ = _get_dim_name_and_stride(fold.dim_name)
+        base_dims.add(Dim(base_name))
 
     # 5. Generate code in a structured way
     user_data_types = _get_user_defined_data_types(gen_specs)

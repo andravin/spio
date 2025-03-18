@@ -123,6 +123,13 @@ namespace spio
         // Alternative method form if you prefer function syntax
         DEVICE static constexpr unsigned size() { return total_size; }
 
+        // Get size for a specific dimension
+        template <typename DimType>
+        DEVICE static constexpr DimType size()
+        {
+            return dim_traits::dimension_size<DimType, DimInfos...>::value;
+        }
+
         template <typename TensorOrCursor>
         DEVICE constexpr auto apply_to(TensorOrCursor tensor) const {
             // Start the recursive application with the first dimension
