@@ -1,5 +1,5 @@
 #include "utest.h"
-// #include "spio/fragment_load_index.h"
+#include "spio/fragment_load_index.h"
 #include "spio/fragment_index.h"
 
 using namespace spio;
@@ -25,50 +25,55 @@ using J2 = Fold<J, 2>;
 using J8 = Fold<J, 8>;
 using J2M4 = Module<J, 4, 2>;
 
-// UTEST(MMA_A_M16_K8_F16_LoadIndex, indices)
-// {
-//     for (int lane = 0; lane < 32; ++lane)
-//     {
-//         EXPECT_EQ(spio::MMA_A_M16_K8_F16_LoadIndex(lane).i(), lane % 16);
-//         EXPECT_EQ(spio::MMA_A_M16_K8_F16_LoadIndex(lane).k8(), 0);
-//     }
-// }
+UTEST(MMA_A_M16_K8_F16_LoadIndex, indices)
+{
+    for (int lane = 0; lane < 32; ++lane)
+    {
+        MMA_A_M16_K8_F16_LoadIndex<I, K> idx(lane);
+        EXPECT_EQ(idx.get<I>().get(), lane % 16);
+        EXPECT_EQ(idx.get<K8>().get(), 0);
+    }
+}
 
-// UTEST(MMA_A_M16_K16_F16_LoadIndex, indices)
-// {
-//     for (int lane = 0; lane < 32; ++lane)
-//     {
-//         EXPECT_EQ(spio::MMA_A_M16_K16_F16_LoadIndex(lane).i(), lane % 16);
-//         EXPECT_EQ(spio::MMA_A_M16_K16_F16_LoadIndex(lane).k8(), lane / 16);
-//     }
-// }
+UTEST(MMA_A_M16_K16_F16_LoadIndex, indices)
+{
+    for (int lane = 0; lane < 32; ++lane)
+    {
+        MMA_A_M16_K16_F16_LoadIndex<I, K> idx(lane);
+        EXPECT_EQ(idx.get<I>().get(), lane % 16);
+        EXPECT_EQ(idx.get<K8>().get(), lane / 16);
+    }
+}
 
-// UTEST(MMA_B_N8_K8_F16_LoadIndex, indices)
-// {
-//     for (int lane = 0; lane < 32; ++lane)
-//     {
-//         EXPECT_EQ(spio::MMA_B_N8_K8_F16_LoadIndex(lane).j(), lane % 8);
-//         EXPECT_EQ(spio::MMA_B_N8_K8_F16_LoadIndex(lane).k8(), 0);
-//     }
-// }
+UTEST(MMA_B_N8_K8_F16_LoadIndex, indices)
+{
+    for (int lane = 0; lane < 32; ++lane)
+    {
+        MMA_B_N8_K8_F16_LoadIndex<K, J> idx(lane);
+        EXPECT_EQ(idx.get<J>().get(), lane % 8);
+        EXPECT_EQ(idx.get<K8>().get(), 0);
+    }
+}
 
-// UTEST(MMA_B_N8_K16_F16_LoadIndex, indices)
-// {
-//     for (int lane = 0; lane < 32; ++lane)
-//     {
-//         EXPECT_EQ(spio::MMA_B_N8_K16_F16_LoadIndex(lane).j(), lane % 8);
-//         EXPECT_EQ(spio::MMA_B_N8_K16_F16_LoadIndex(lane).k8(), (lane / 8) % 2);
-//     }
-// }
+UTEST(MMA_B_N8_K16_F16_LoadIndex, indices)
+{
+    for (int lane = 0; lane < 32; ++lane)
+    {
+        MMA_B_N8_K16_F16_LoadIndex<K, J> idx(lane);
+        EXPECT_EQ(idx.get<J>().get(), lane % 8);
+        EXPECT_EQ(idx.get<K8>().get(), (lane / 8) % 2);
+    }
+}
 
-// UTEST(MMA_B_N16_K16_F16_LoadIndex, indices)
-// {
-//     for (int lane = 0; lane < 32; ++lane)
-//     {
-//         EXPECT_EQ(spio::MMA_B_N16_K16_F16_LoadIndex(lane).j(), (lane % 8) + lane / 16 * 8);
-//         EXPECT_EQ(spio::MMA_B_N16_K16_F16_LoadIndex(lane).k8(), (lane / 8) % 2);
-//     }
-// }
+UTEST(MMA_B_N16_K16_F16_LoadIndex, indices)
+{
+    for (int lane = 0; lane < 32; ++lane)
+    {
+        MMA_B_N16_K16_F16_LoadIndex<K, J> idx(lane);
+        EXPECT_EQ(idx.get<J>().get(), (lane % 8) + lane / 16 * 8);
+        EXPECT_EQ(idx.get<K8>().get(), (lane / 8) % 2);
+    }
+}
 
 UTEST(MMA_A_88_F16_Index, indices)
 {
