@@ -27,7 +27,7 @@ TEST_MODULES = [
     gen.index,
     gen.tensor,
     # gen.checkerboard,
-    # gen.fragment_index,
+    gen.fragment_index,
     gen.dim,
 ]
 
@@ -471,11 +471,10 @@ UTEST(CheckerboardTensor, offset_from_tensor)
     return test_code
 
 
-# @_cpp_test
+@_cpp_test
 def _test_fragment_index():
 
     specs = [
-        gen.Dim("lane"),
         gen.FragmentIndex("A", gen.FragmentType.M16_K16_F16_A, "r", "s"),
         gen.FragmentIndex("B", gen.FragmentType.N16_K16_F16_B, "s", "t"),
         gen.FragmentIndex("C", gen.FragmentType.M16_N16_F32_C, "r", "s"),
@@ -488,27 +487,33 @@ def _test_fragment_index():
 UTEST(FragmentIndex, MMA_M16_K16_F16_A)
 {{
     using namespace FragmentIndex_GenCode;
-    constexpr LANE_Dim lanes = 32;
-    for (auto lane : lanes) {{
-        for (int idx = 0; idx < A::size(); ++idx) {{
-            EXPECT_TRUE(A(lane).r(idx) == R_Dim(spio::MMA_A_88_F16_Index(lane.get()).i(idx)));
-            EXPECT_TRUE(( A(lane).s2(idx) == spio::Fold<S_Dim, 2>(spio::MMA_A_88_F16_Index(lane.get()).k2(idx)) ));
-            EXPECT_TRUE(( A(lane).s8(idx) == spio::Fold<S_Dim, 8>(spio::MMA_A_88_F16_Index(lane.get()).k8(idx)) ));
-            EXPECT_TRUE(( A(lane).s2m4() == spio::Fold<S_Dim, 2>(spio::MMA_A_88_F16_Index(lane.get()).k2m4()) ));
+    using namespace spio;
+    constexpr int num_fragments = 4;
+    for (int lane = 0; lane < 32; ++lane) {{
+        auto expect = MMA_A_88_F16_Index<R, S>(lane);
+        auto a = A(lane);
+        for (int idx = 0; idx < num_fragments; ++idx) {{
+            EXPECT_TRUE(a.get<R>(idx).get() == expect.get<R>(idx).get());
+            EXPECT_TRUE((a.get<Fold<S, 2>>(idx).get()) == (expect.get<Fold<S, 2>>(idx).get()));
+            EXPECT_TRUE((a.get<Fold<S, 8>>(idx).get()) == (expect.get<Fold<S, 8>>(idx).get()));
+            EXPECT_TRUE((a.get<Module<S, 4, 2>>(idx).get()) == (expect.get<Module<S, 4, 2>>(idx).get()));
         }}
     }}
 }}
 
-UTEST(FragmentIndex, MMA_N16_K16_F16_B)
+UTEST(FragmentIndex, MMA_B_N16_K16_F16_Index)
 {{
     using namespace FragmentIndex_GenCode;
-    constexpr LANE_Dim lanes = 32;
-    for (auto lane : lanes) {{
-        for (int idx = 0; idx < B::size(); ++idx) {{
-            EXPECT_TRUE(B(lane).t(idx) == T_Dim(spio::MMA_B_88_F16_Index(lane.get()).j(idx)));
-            EXPECT_TRUE(( B(lane).s2(idx) == spio::Fold<S_Dim, 2>(spio::MMA_B_88_F16_Index(lane.get()).k2(idx)) ));
-            EXPECT_TRUE(( B(lane).s8(idx) == spio::Fold<S_Dim, 8>(spio::MMA_B_88_F16_Index(lane.get()).k8(idx)) ));
-            EXPECT_TRUE(( B(lane).s2m4() == spio::Fold<S_Dim, 2>(spio::MMA_B_88_F16_Index(lane.get()).k2m4()) ));
+    using namespace spio;
+    constexpr int num_fragments = 4;
+    for (int lane = 0; lane <32; ++lane) {{
+        auto expect = MMA_B_88_F16_Index<S, T>(lane);
+        auto b = B(lane);
+        for (int idx = 0; idx < num_fragments; ++idx) {{
+            EXPECT_TRUE((b.get<T>(idx).get()) == (expect.get<T>(idx).get()));
+            EXPECT_TRUE((b.get<Fold<S, 2>>(idx).get()) == (expect.get<Fold<S, 2>>(idx).get()));
+            EXPECT_TRUE((b.get<Fold<S, 8>>(idx).get()) == (expect.get<Fold<S, 8>>(idx).get()));
+            EXPECT_TRUE((b.get<Module<S, 4, 2>>(idx).get()) == (expect.get<Module<S, 4, 2>>(idx).get()));
         }}
     }}
 }}
@@ -516,27 +521,34 @@ UTEST(FragmentIndex, MMA_N16_K16_F16_B)
 UTEST(FragmentIndex, MMA_N8_K8_F16_B)
 {{
     using namespace FragmentIndex_GenCode;
-    constexpr LANE_Dim lanes = 32;
-    for (auto lane : lanes) {{
-        for (int idx = 0; idx < B2::size(); ++idx) {{
-            EXPECT_TRUE(B2(lane).t(idx) == T_Dim(spio::MMA_B_88_F16_Index(lane.get()).j(idx)));
-            EXPECT_TRUE(( B2(lane).s2(idx) == spio::Fold<S_Dim, 2>(spio::MMA_B_88_F16_Index(lane.get()).k2(idx)) ));
-            EXPECT_TRUE(( B2(lane).s8(idx) == spio::Fold<S_Dim, 8>(spio::MMA_B_88_F16_Index(lane.get()).k8(idx)) ));
-            EXPECT_TRUE(( B2(lane).s2m4() == spio::Fold<S_Dim, 2>(spio::MMA_B_88_F16_Index(lane.get()).k2m4()) ));
+    using namespace spio;
+    constexpr int num_fragments = 1;
+    for (int lane = 0; lane <32; ++lane) {{
+        auto expect = MMA_B_88_F16_Index<S, T>(lane);
+        auto b = B2(lane);
+        for (int idx = 0; idx < num_fragments; ++idx) {{
+            EXPECT_TRUE((b.get<T>(idx).get()) == (expect.get<T>(idx).get()));
+            EXPECT_TRUE((b.get<Fold<S, 2>>(idx).get()) == (expect.get<Fold<S, 2>>(idx).get()));
+            EXPECT_TRUE((b.get<Fold<S, 8>>(idx).get()) == (expect.get<Fold<S, 8>>(idx).get()));
+            EXPECT_TRUE((b.get<Module<S, 4, 2>>(idx).get()) == (expect.get<Module<S, 4, 2>>(idx).get()));
         }}
     }}
 }}
 
+
 UTEST(FragmentIndex, MMA_M16_N16_F32_C)
 {{
     using namespace FragmentIndex_GenCode;
-    constexpr LANE_Dim lanes = 32;
-    for (auto lane : lanes) {{
-        for (int idx = 0; idx < C::size(); ++idx) {{
-            EXPECT_TRUE(C(lane).r(idx) == R_Dim(spio::MMA_C_88_F32_Index(lane.get()).i(idx)));
-            EXPECT_TRUE(( C(lane).s2(idx) == spio::Fold<S_Dim, 2>(spio::MMA_C_88_F32_Index(lane.get()).j2(idx)) ));
-            EXPECT_TRUE(( C(lane).s8(idx) == spio::Fold<S_Dim, 8>(spio::MMA_C_88_F32_Index(lane.get()).j8(idx)) ));
-            EXPECT_TRUE(( C(lane).s2m4() == spio::Fold<S_Dim, 2>(spio::MMA_C_88_F32_Index(lane.get()).j2m4()) ));
+    using namespace spio;
+    constexpr int num_fragments = 4;
+    for (int lane = 0; lane <32; ++lane) {{
+        auto expect = MMA_C_88_F32_Index<R, S>(lane);
+        auto c = C(lane);
+        for (int idx = 0; idx < num_fragments; ++idx) {{
+            EXPECT_TRUE((c.get<R>(idx).get()) == (expect.get<R>(idx).get()));
+            EXPECT_TRUE((c.get<Fold<S, 2>>(idx).get()) == (expect.get<Fold<S, 2>>(idx).get()));
+            EXPECT_TRUE((c.get<Fold<S, 8>>(idx).get()) == (expect.get<Fold<S, 8>>(idx).get()));
+            EXPECT_TRUE((c.get<Module<S, 4, 2>>(idx).get()) == (expect.get<Module<S, 4, 2>>(idx).get()));
         }}
     }}
 }}
@@ -544,7 +556,7 @@ UTEST(FragmentIndex, MMA_M16_N16_F32_C)
     return test_code
 
 
-# @_cpp_test
+@_cpp_test
 def _test_fragment_load_index():
     specs = [
         gen.Dim("lane"),
@@ -558,17 +570,19 @@ def _test_fragment_load_index():
 UTEST(FragmentLoadIndex, MMA_M16_K16_F16_A)
 {{
     using namespace FragmentLoadIndex_GenCode;
-    constexpr LANE_Dim lanes = 32;
-    for (auto lane : lanes) {{
-        EXPECT_TRUE(Input(lane).x() == X_Dim( spio::MMA_A_M16_K16_F16_LoadIndex(lane.get()).i()) );
-        auto a = spio::Fold<C_Dim, 8>( spio::MMA_A_M16_K16_F16_LoadIndex(lane.get()).k8());
-        EXPECT_TRUE(Input(lane).c8() ==  a);
+    using namespace spio;
+    for (int lane = 0; lane < 32; ++lane) {{
+        auto input = Input(lane);
+        auto expect = MMA_A_M16_K16_F16_LoadIndex<X, C>(lane);
+        EXPECT_TRUE(input.get<X>() == expect.get<X>());
+        EXPECT_TRUE((input.get<Fold<C, 8>>() == expect.get<Fold<C, 8>>()));
     }}
 
-    for (auto lane : lanes) {{
-        auto b = spio::Fold<C_Dim, 8>( spio::MMA_B_N8_K16_F16_LoadIndex(lane.get()).k8());
-        EXPECT_TRUE(Weights(lane).c8() == b);
-        EXPECT_TRUE(Weights(lane).k() == K_Dim( spio::MMA_B_N8_K16_F16_LoadIndex(lane.get()).j()) );
+    for (int lane = 0; lane < 32; ++lane) {{
+        auto expect = MMA_B_N8_K16_F16_LoadIndex<C, K>(lane);
+        auto weights = Weights(lane);
+        EXPECT_TRUE((weights.get<Fold<C, 8>>() == expect.get<Fold<C, 8>>()));
+        EXPECT_TRUE(weights.get<K>() == expect.get<K>());
      }}
 }}
 """

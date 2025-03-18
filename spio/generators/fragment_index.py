@@ -67,9 +67,8 @@ FRAGMENT_DESCRIPTORS = {
 class FragmentIndex:
     """Fragment index code generator for matrix fragment with named dimensions.
 
-    This class generates a subclass of the given fragment index type that adds
-    methods for accessing the row and column index values using custom names
-    for the row and column dimensions.
+    This class generates a type alias for the fragment index template class
+    with the appropriate dimension types.
     """
 
     def __init__(
@@ -88,46 +87,17 @@ class FragmentIndex:
         self.row_name = row_name
         self.col_name = col_name
 
-    def _major_axis(self, col_major: bool) -> str:
-        """Return the name of the major axis."""
-        return self.col_name if col_major else self.row_name
-
-    def _minor_axis(self, col_major: bool) -> str:
-        """Return the name of the minor axis."""
-        return self.row_name if col_major else self.col_name
-
     def generate(self) -> str:
-        """Return the CUDA / C++ source code for the fragment index subclass."""
+        """Return the CUDA / C++ source code for the fragment index type alias."""
         desc = _get_fragment_descriptor(self.fragment_type)
-        base_major = desc.major_axis
-        base_minor = _decorate_dim_name(desc.minor_axis, INDEX_MINOR_AXIS_VECLEN)
-        base_minor_fragment = _decorate_dim_name(
-            desc.minor_axis, INDEX_MINOR_AXIS_FRAGMENT_SIZE
-        )
-        base_minor_mod = _decorate_dim_name(
-            desc.minor_axis, INDEX_MINOR_AXIS_VECLEN, MINOR_AXIS_VECS_PER_FRAGMENT
-        )
-        major = self._major_axis(desc.col_major)
-        minor_name = self._minor_axis(desc.col_major)
-        minor = _decorate_dim_name(minor_name, INDEX_MINOR_AXIS_VECLEN)
-        minor_fragment = _decorate_dim_name(minor_name, INDEX_MINOR_AXIS_FRAGMENT_SIZE)
-        minor_mod = _decorate_dim_name(
-            minor_name, INDEX_MINOR_AXIS_VECLEN, MINOR_AXIS_VECS_PER_FRAGMENT
-        )
-        major_dim_class = dim_name_to_dim_or_fold_class_name(major)
-        minor_dim_class = dim_name_to_dim_or_fold_class_name(minor)
-        minor_fragment_dim_class = dim_name_to_dim_or_fold_class_name(minor_fragment)
+
+        # Get the class names for the dimension types
+        row_dim_class = dim_name_to_dim_or_fold_class_name(self.row_name)
+        col_dim_class = dim_name_to_dim_or_fold_class_name(self.col_name)
+
+        # Generate the type alias
         return f"""
-class {self.class_name} : public spio::{desc.fragment_index} {{
-    public:
-        using Base = spio::{desc.fragment_index};
-        DEVICE constexpr {self.class_name}(LANE_Dim lane) : Base(lane.get()) {{}}
-        DEVICE constexpr {major_dim_class} {major}(int idx = 0) const {{ return Base::{base_major}(idx); }}
-        DEVICE constexpr {minor_dim_class} {minor}(int idx = 0) const {{ return Base::{base_minor}(idx); }}
-        DEVICE constexpr {minor_fragment_dim_class} {minor_fragment}(int idx = 0) const {{ return Base::{base_minor_fragment}(idx); }}
-        DEVICE constexpr {minor_dim_class} {minor_mod}() const {{ return Base::{base_minor_mod}(); }}
-        DEVICE static constexpr int size() {{ return {desc.num_fragments}; }}
-}};
+using {self.class_name} = spio::{desc.fragment_index}<{row_dim_class}, {col_dim_class}>;
 """
 
     @property
@@ -139,29 +109,24 @@ class {self.class_name} : public spio::{desc.fragment_index} {{
 class FragmentLoadIndex(FragmentIndex):
     """Fragment load index code generator for matrix fragment with named dimensions.
 
-    This class generates a subclass of the given fragment's load index that adds
-    methods for accessing the row and column index values using custom names for
-    the row and column dimensions.
+    This class generates a type alias for the fragment load index template class
+    with the appropriate dimension types.
     """
 
     def generate(self) -> str:
-        """Return the CUDA / C++ source code for the fragment index subclass."""
+        """Return the CUDA / C++ source code for the fragment load index type alias."""
         desc = _get_fragment_descriptor(self.fragment_type)
-        base_major = desc.major_axis
-        base_minor = _decorate_dim_name(desc.minor_axis, LOAD_INDEX_MINOR_AXIS_VECLEN)
-        major = self._major_axis(desc.col_major)
-        minor_name = self._minor_axis(desc.col_major)
-        minor = _decorate_dim_name(minor_name, LOAD_INDEX_MINOR_AXIS_VECLEN)
-        major_dim_class = dim_name_to_dim_or_fold_class_name(major)
-        minor_dim_class = dim_name_to_dim_or_fold_class_name(minor)
+
+        if desc.fragment_load_index is None:
+            return "// No load index available for this fragment type"
+
+        # Get the class names for the dimension types
+        row_dim_class = dim_name_to_dim_or_fold_class_name(self.row_name)
+        col_dim_class = dim_name_to_dim_or_fold_class_name(self.col_name)
+
+        # Generate the type alias
         return f"""
-class {self.class_name} : public spio::{desc.fragment_load_index} {{
-    public:
-        using Base = spio::{desc.fragment_load_index};
-        DEVICE constexpr {self.class_name}(LANE_Dim lane) : Base(lane.get()) {{}}
-        DEVICE constexpr {major_dim_class} {major}() const {{ return Base::{base_major}(); }}
-        DEVICE constexpr {minor_dim_class} {minor}() const {{ return Base::{base_minor}(); }}
-}};
+using {self.class_name} = spio::{desc.fragment_load_index}<{row_dim_class}, {col_dim_class}>;
 """
 
 
@@ -177,16 +142,6 @@ def _get_fragment_descriptor(fragment_type: FragmentType) -> _Desc:
     if desc is None:
         raise ValueError(f"Unsupported fragment type: {fragment_type}")
     return desc
-
-
-def _decorate_dim_name(name: str, veclen: int = None, mod: int = None) -> str:
-    """Return the decorated dimension name."""
-    code = name
-    if veclen is not None:
-        code += f"{veclen}"
-    if mod is not None:
-        code += f"m{mod}"
-    return code
 
 
 def header() -> str:
