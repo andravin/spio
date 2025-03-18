@@ -116,7 +116,6 @@ def _test_generate_fold():
         gen.Dim("c"),
         gen.Fold("block_i", "i", 64),
         gen.Fold("block_j", "j", 64),
-
         # Test a fold of a fold. Produces using BLOCK_C8 = Fold<Fold<C, 8>, 4>;
         gen.Fold("block_c8", "c8", 4),
     ]
@@ -213,8 +212,8 @@ UTEST(IndexSpec, checkerboard_fused_dim)
     return code
 
 
-# @_cpp_test
-def _test_generate_dense_tensor():
+@_cpp_test
+def _test_contiguous_tensor():
     """Return the C++ source code that tests a custom tensor class."""
     n = 7
     h = 16
@@ -222,7 +221,7 @@ def _test_generate_dense_tensor():
     c = 42
 
     tensor_spec = gen.Tensor(
-        "DenseTensor", gen.dtype.float, {"n": n, "h": h, "w": w, "c": c}
+        "ContiguousTensor", gen.dtype.float, gen.Dims(n=n, h=h, w=w, c=c)
     )
 
     size = n * h * w * c
@@ -234,22 +233,37 @@ def _test_generate_dense_tensor():
 
 {generated_code}
 
-UTEST(DenseTensor, offset_from_tensor)
+UTEST(ContiguousTensor, offset_from_tensor)
 {{
     using namespace DenseTensor_GenCode;
-    constexpr int N = {n};
-    constexpr int H = {h};
-    constexpr int W = {w};
-    constexpr int C = {c};
-    constexpr int size = N * H * W *C;
+    constexpr int N_Size = {n};
+    constexpr int H_Size = {h};
+    constexpr int W_Size = {w};
+    constexpr int C_Size = {c};
+    constexpr int size = N_Size * H_Size * W_Size * C_Size;
     constexpr size_t num_bytes = sizeof(float) * size;
 
-    float data[N * H * W * C];
-    for (int n = 0; n < N; ++n) {{
-        for (int h = 0; h < H; ++h) {{
-            for (int w = 0; w < W; ++w) {{
-                for (int c = 0; c < C; ++c) {{
-                    data[n*(H*W*C) + h*(W*C) + w*C +c] = n*(H*W*C) + h*(W*C) + w*C + c;
+    EXPECT_EQ(ContiguousTensor::size(), size);
+    EXPECT_EQ(ContiguousTensor::num_bytes(), num_bytes);
+
+    EXPECT_EQ(ContiguousTensor::size<N>().get(), N_Size);
+    EXPECT_EQ(ContiguousTensor::size<H>().get(), H_Size);
+    EXPECT_EQ(ContiguousTensor::size<W>().get(), W_Size);
+    EXPECT_EQ(ContiguousTensor::size<C>().get(), C_Size);
+    
+    // Initialize the tensor with data.
+    float data[ContiguousTensor::size()];
+    ContiguousTensor tensor(data);
+    for (int n = 0; n < N_Size; ++n) {{
+        for (int h = 0; h < H_Size; ++h) {{
+            for (int w = 0; w < W_Size; ++w) {{
+                for (int c = 0; c < C_Size; ++c) {{
+                    data[
+                        n*(H_Size*W_Size*C_Size) +
+                        h*(W_Size*C_Size) +
+                        w*C_Size +
+                        c
+                    ] = n*(H_Size*W_Size*C_Size) + h*(W_Size*C_Size) + w*C_Size + c;
                 }}
             }}
         }}
@@ -258,16 +272,15 @@ UTEST(DenseTensor, offset_from_tensor)
     // Test the use of named-index accessors and subscript operators with the tensor class.
     // Note all permutations of the subscript operators are equivalent. Because the operator
     // is overloaded for dimension type, the order of the subscript operator does not matter.
-    DenseTensor tensor(data);
-    for (auto n : tensor.N) {{
-        for (auto h : tensor.H) {{
-            for (auto w : tensor.W) {{
-                for (auto c : tensor.C) {{
-                    EXPECT_EQ(*tensor.n(n).h(h).w(w).c(c), n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
-                    EXPECT_EQ(*tensor[n][h][w][c], n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
-                    EXPECT_EQ(*tensor[h][n][c][w], n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
-                    EXPECT_EQ(*tensor[h][w][c][n], n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
-                    EXPECT_EQ(*tensor[w][c][n][h], n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
+    for (auto n : range(tensor.size<N>())) {{
+        for (auto h : range(tensor.size<H>())) {{
+            for (auto w : range(tensor.size<W>())) {{
+                for (auto c : range(tensor.size<C>())) {{
+                    float val = n.get()*(H_Size*W_Size*C_Size) + h.get()*(W_Size*C_Size) + w.get()*C_Size + c.get();
+                    EXPECT_EQ(*tensor[n][h][w][c], val);
+                    EXPECT_EQ(*tensor[h][n][c][w], val);
+                    EXPECT_EQ(*tensor[h][w][c][n], val);
+                    EXPECT_EQ(*tensor[w][c][n][h], val);
                 }}
             }}
         }}
@@ -280,63 +293,58 @@ UTEST(DenseTensor, offset_from_tensor)
 
     // Test the use of a generated index class with the tensor subscript operator.
     for (int offset = 0; offset < size; ++offset) {{
-        DenseTensor::Index idx(offset);
-        EXPECT_EQ(*idx.offset_tensor(tensor), data[offset]);
+        ContiguousTensor::index_type idx(offset);
+        EXPECT_EQ(*idx.apply_to(tensor), data[offset]);
         EXPECT_EQ(*tensor[idx], data[offset]);
     }}
 
-    
-    EXPECT_EQ(DenseTensor::size, size);
-    EXPECT_EQ(DenseTensor::num_bytes, static_cast<int>(num_bytes));
-
     int nn = 0;
-    for (auto n : DenseTensor::N) {{
+    for (auto n : range(tensor.size<N>())) {{
         EXPECT_EQ(n.get(), nn++);
     }}
-    EXPECT_EQ(nn, N);
+    EXPECT_EQ(nn, N_Size);
 }}
 """
     return test_code
 
 
-# @_cpp_test
-def _test_genrate_1d_dense_tensor():
+@_cpp_test
+def _test_genrate_1d_contiguous_tensor():
     """Return the C++ source code that tests a custom 1D tensor class"""
     n = 7
     specs = [
-        gen.Tensor("DenseTensor", gen.dtype.float, {"n": n}, constant=True),
+        gen.Tensor("ContiguousTensor", gen.dtype.float, gen.Dims(n=n), constant=True),
     ]
-    generated_code = gen.generate(specs, namespace="DenseTensor_1D_GenCode")
+    generated_code = gen.generate(specs, namespace="ContiguousTensor_1D_GenCode")
     test_code = f"""
 
 {generated_code}
 
 UTEST(DensTensor1D, offset_from_tensor)
 {{
-    using namespace DenseTensor_1D_GenCode;
-    constexpr int N = {n};
-    constexpr int size = N;
-    constexpr size_t num_bytes = sizeof(float) * size;
+    using namespace ContiguousTensor_1D_GenCode;
+    constexpr int N_Size = {n};
+    constexpr int size = N_Size;
+    constexpr int num_bytes = static_cast<int>(sizeof(float) * size);
 
-    float data[N];
-    for (int n = 0; n < N; ++n) {{
+    float data[N_Size];
+    for (int n = 0; n < N_Size; ++n) {{
         data[n] = n;
     }}
-    for (auto n : DenseTensor::N) {{
-        // Tensor named-index accessors.
-        EXPECT_EQ(*DenseTensor(data).n(n), data[n.get()]);
+    ContiguousTensor tensor(data);
+    EXPECT_EQ(tensor.size(), size);
+    EXPECT_EQ(tensor.num_bytes(), num_bytes);
 
+    for (auto n : range(ContiguousTensor::size<N>())) {{
         // Tensor subscript accessors.
-        EXPECT_EQ(*DenseTensor(data)[n], data[n.get()]);
+        EXPECT_EQ(*tensor[n], data[n.get()]);
     }}
-    EXPECT_EQ(DenseTensor::size, size);
-    EXPECT_EQ(DenseTensor::num_bytes, static_cast<int>(num_bytes));
 }}
 """
     return test_code
 
 
-# @_cpp_test
+@_cpp_test
 def _test_generate_tensor_with_strides():
     """Return the C++ source code that tests a custom tensor class."""
     n = 7
@@ -364,40 +372,46 @@ def _test_generate_tensor_with_strides():
 UTEST(StrideTensor, offset_from_tensor)
 {{
     using namespace StrideTensor_GenCode;
-    constexpr int N = {n};
-    constexpr int H = {h};
-    constexpr int W = {w};
-    constexpr int C = {c};
+    constexpr int N_Size = {n};
+    constexpr int H_Size = {h};
+    constexpr int W_Size = {w};
+    constexpr int C_Size = {c};
 
     constexpr int stride_w = {stride_w};
     constexpr int stride_h = {stride_h};
-    constexpr int stride_n = H * stride_h;
-    constexpr int size = N * stride_n;
-    constexpr size_t num_bytes = sizeof(float) * size;
+    constexpr int stride_n = H_Size * stride_h;
+    constexpr int size = N_Size * H_Size * W_Size * C_Size;
+    constexpr int storage_size = (N_Size - 1) * stride_n + (H_Size - 1) * stride_h + (W_Size - 1) * stride_w + (C_Size - 1) + 1;
+    constexpr size_t num_bytes = sizeof(float) * storage_size;
 
-    float data[N * stride_n];
-    for (int n = 0; n < N; ++n) {{
-        for (int h = 0; h < H; ++h) {{
-            for (int w = 0; w < W; ++w) {{
-                for (int c = 0; c < C; ++c) {{
-                    data[n*stride_n + h*stride_h + w*stride_w +c] = n*(H*W*C) + h*(W*C) + w*C + c;
+    EXPECT_EQ(StrideTensor::storage_size(), storage_size);
+    EXPECT_EQ(StrideTensor::size(), size); 
+    EXPECT_EQ(StrideTensor::num_bytes(), num_bytes);
+
+    float data[N_Size * stride_n];
+    for (int n = 0; n < N_Size; ++n) {{
+        for (int h = 0; h < H_Size; ++h) {{
+            for (int w = 0; w < W_Size; ++w) {{
+                for (int c = 0; c < C_Size; ++c) {{
+                    data[n*stride_n + h*stride_h + w*stride_w +c] = n*(H_Size*W_Size*C_Size) + h*(W_Size*C_Size) + w*C_Size + c;
                 }}
             }}
         }}
     }}
     StrideTensor tensor(data);
-    for (auto n : tensor.N) {{
-        for (auto h : tensor.H) {{
-            for (auto w : tensor.W) {{
-                for (auto c : tensor.C) {{
-                    EXPECT_EQ(*tensor.n(n).h(h).w(w).c(c), n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
-                    EXPECT_EQ(*tensor[n][h][w][c], n.get()*(H*W*C) + h.get()*(W*C) + w.get()*C + c.get());
+    for (auto n : range(tensor.size<N>())) {{
+        for (auto h : range(tensor.size<H>())) {{
+            for (auto w : range(tensor.size<W>())) {{
+                for (auto c : range(tensor.size<C>())) {{
+                auto val = n.get()*(H_Size*W_Size*C_Size) + h.get()*(W_Size*C_Size) + w.get()*C_Size + c.get();
+                    EXPECT_EQ(*tensor[n][h][w][c], val);
+                    EXPECT_EQ(*tensor[h][n][c][w], val);
+                    EXPECT_EQ(*tensor[h][w][c][n], val);
+                    EXPECT_EQ(*tensor[w][c][n][h], val);
                 }}
             }}
         }}
     }}
-    EXPECT_EQ(StrideTensor::size, size);
-    EXPECT_EQ(StrideTensor::num_bytes, static_cast<int>(num_bytes));
 }}
 """
     return test_code

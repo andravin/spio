@@ -93,8 +93,32 @@ namespace spio
         {
             using tensor_type = Tensor<DataType, DimInfos...>;
         };
-    }
 
+        // Helper to calculate maximum storage size needed with strides
+        template <typename... DimInfos>
+        struct calculate_storage_size;
+
+        // Base case
+        template <>
+        struct calculate_storage_size<>
+        {
+            static constexpr unsigned value = 1; // No dimensions, just one element
+        };
+
+        // Recursive case
+        template <typename FirstDim, typename... RestDims>
+        struct calculate_storage_size<FirstDim, RestDims...>
+        {
+            // Get size and stride for this dimension
+            static constexpr unsigned size = FirstDim::module_type::size.get();
+            static constexpr unsigned stride = FirstDim::module_type::stride.get();
+
+            // Calculate max offset for this dimension plus rest of dims
+            static constexpr unsigned value =
+                (size - 1) * stride + calculate_storage_size<RestDims...>::value;
+        };
+    }
+    
     /// @brief Cursor with folded dimensions.
     /// Cursor is a class that represents a position in a tensor. It provides a subscript
     /// operator to access elements at a specific index in a given dimension.
@@ -185,6 +209,18 @@ namespace spio
         // For compatibility with existing code
         DEVICE static constexpr unsigned size() { return total_size; }
 
+        // Calculate actual storage size (accounting for strides)
+        DEVICE static constexpr unsigned storage_size()
+        {
+            return detail::calculate_storage_size<DimInfos...>::value;
+        }
+
+        // Return actual bytes needed, accounting for strides
+        DEVICE static constexpr unsigned num_bytes()
+        {
+            return storage_size() * sizeof(data_type);
+        }
+
         // Get size for a specific dimension
         template <typename DimType>
         DEVICE static constexpr DimType size()
@@ -200,6 +236,14 @@ namespace spio
         {
             _OffsetDim offset = dim_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(d);
             return cursor_type(get() + offset.get());
+        }
+
+        /// @brief Get a cursor at a specific offset.
+        /// @param offset the offset to get the cursor at.
+        /// @return a cursor at the specified offset.
+        DEVICE constexpr cursor_type offset(int offset) const
+        {
+            return cursor_type(get() + offset);
         }
 
         /// @brief Subscript operator that takes an Index object and applies all dimensions
@@ -226,6 +270,7 @@ namespace spio
             return tensor_type((*this)[slice_start].get());
         }
     };
+
 }
 
 #endif
