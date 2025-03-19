@@ -101,42 +101,45 @@ namespace spio
 
     /// @brief  Template base class for 16-row fp16 matrix fragments for operand A.
     /// @tparam _NUM_FRAGMENTS_K Number of 8-column fragments (i.e. the K-dimension).
-    template <int _NUM_FRAGMENTS_K>
+    template <typename RowDim, typename ColDim, int _NUM_FRAGMENTS_K>
     class _MMA_M16_N8_F16_A : public _MMA_F16<2 * _NUM_FRAGMENTS_K>
     {
     public:
-        using Index = MMA_A_88_F16_Index;
+        using Index = MMA_A_88_F16_Index<RowDim, ColDim>;
     };
 
     /// @brief  Template base class for 8-column fp16 matrix fragments for operand B.
     /// @tparam _NUM_FRAGMENTS_K Number of 8-row matrix fragments (i.e. the K-dimension).
-    template <int _NUM_FRAGMENTS_K>
+    template <typename RowDim, typename ColDim, int _NUM_FRAGMENTS_K>
     class _MMA_M16_N8_F16_B : public _MMA_F16<_NUM_FRAGMENTS_K>
     {
     public:
-        using Index = MMA_B_88_F16_Index;
+        using Index = MMA_B_88_F16_Index<RowDim, ColDim>;
     };
 
     /// @brief  C or D matrix with float32 elements for M16_N8_K* matrix multiplication with float32 accumulation.
     /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
+    template <typename RowDim, typename ColDim>
     class MMA_M16_N8_F32_C : public _MMA_F32<2>
     {
     public:
-        using Index = MMA_C_88_F32_Index;
+        using Index = MMA_C_88_F32_Index<RowDim, ColDim>;
     };
 
+    template <typename RowDim, typename ColDim>
     class MMA_M16_N16_F32_C : public _MMA_F32<4>
     {
     public:
-        using Index = MMA_C_88_F32_Index;
+        using Index = MMA_C_88_F32_Index<RowDim, ColDim>;
     };
 
     /// @brief A matrix with float16 elements for M16_N8_K8 matrix multiplication.
-    class MMA_M16_K8_F16_A : public _MMA_M16_N8_F16_A<1>
+    template <typename RowDim, typename ColDim>
+    class MMA_M16_K8_F16_A : public _MMA_M16_N8_F16_A<RowDim, ColDim, 1>
     {
     public:
         using Vector = uint2;
-        using LoadIndex = MMA_A_M16_K8_F16_LoadIndex;
+        using LoadIndex = MMA_A_M16_K8_F16_LoadIndex<RowDim, ColDim>;
         MMA_M16_K8_F16_A() = default;
         __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
@@ -146,11 +149,12 @@ namespace spio
     };
 
     /// @brief A matrix with float16 elements for M16_N8_K16 matrix multiplication.
-    class MMA_M16_K16_F16_A : public _MMA_M16_N8_F16_A<2>
+    template <typename RowDim, typename ColDim>
+    class MMA_M16_K16_F16_A : public _MMA_M16_N8_F16_A<RowDim, ColDim, 2>
     {
     public:
         using Vector = uint4;
-        using LoadIndex = MMA_A_M16_K16_F16_LoadIndex;
+        using LoadIndex = MMA_A_M16_K16_F16_LoadIndex<RowDim, ColDim>;
         MMA_M16_K16_F16_A() = default;
         __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
@@ -159,11 +163,12 @@ namespace spio
         __device__ void load_trans(const void *p) { vector() = ldmatrix_x4_trans(p); }
     };
 
-    class MMA_N8_K8_F16_B : public _MMA_M16_N8_F16_B<1>
+    template <typename RowDim, typename ColDim>
+    class MMA_N8_K8_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 1>
     {
     public:
         using Vector = unsigned;
-        using LoadIndex = MMA_B_N8_K8_F16_LoadIndex;
+        using LoadIndex = MMA_B_N8_K8_F16_LoadIndex<RowDim, ColDim>;
         MMA_N8_K8_F16_B() = default;
         __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
@@ -174,23 +179,24 @@ namespace spio
 
     /// @brief B matrix with float16 elements for M16_N8_K16 matrix multiplication.
     /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
-    class MMA_N8_K16_F16_B : public _MMA_M16_N8_F16_B<2>
+    template <typename RowDim, typename ColDim>
+    class MMA_N8_K16_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 2>
     {
     public:
         using Vector = uint2;
-        using LoadIndex = MMA_B_N16_K16_F16_LoadIndex;
+        using LoadIndex = MMA_B_N16_K16_F16_LoadIndex<RowDim, ColDim>;
         __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
         __device__ void load(const void *p) { vector() = ldmatrix_x2(p); }
         __device__ void load_trans(const void *p) { vector() = ldmatrix_x2_trans(p); }
     };
 
-    class MMA_N16_K16_F16_B : public _MMA_F16<4>
+    template <typename RowDim, typename ColDim>
+    class MMA_N16_K16_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 4>
     {
     public:
         using Vector = uint4;
-        using Index = MMA_B_88_F16_Index;
-        using LoadIndex = MMA_B_N16_K16_F16_LoadIndex;
+        using LoadIndex = MMA_B_N16_K16_F16_LoadIndex<RowDim, ColDim>;
 
         MMA_N16_K16_F16_B() = default;
         __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
