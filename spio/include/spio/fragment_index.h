@@ -5,6 +5,32 @@
 #include "spio/index_base.h"
 #include "spio/dim.h"
 
+// Add basic type trait support if not available
+namespace spio_internal {
+    // Basic implementation of is_same type trait
+    template<typename T, typename U>
+    struct is_same {
+        static constexpr bool value = false;
+    };
+    
+    template<typename T>
+    struct is_same<T, T> {
+        static constexpr bool value = true;
+    };
+}
+
+// Define in std namespace to match standard usage
+namespace std {
+    // Use our implementation if std::is_same isn't available
+    #if __cplusplus < 201103L || defined(__CUDACC__)
+    template<typename T, typename U>
+    struct is_same : public spio_internal::is_same<T, U> {};
+    
+    template<typename T, typename U>
+    inline constexpr bool is_same_v = is_same<T, U>::value;
+    #endif
+}
+
 namespace spio
 {
     /// @brief Base class for all MMA indices that use 8x8 fragments.

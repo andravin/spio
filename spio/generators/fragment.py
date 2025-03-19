@@ -91,6 +91,7 @@ class {self.class_name} : public spio::{self.fragment_type.value} {{
 
 
 def header() -> str:
+    """Return the header file for the fragment classes."""
     return """
 #include "spio/fragment.cuh"
 #include "spio/fragment_index.h"
