@@ -24,9 +24,8 @@ class Fragment:
             # Get element coordinates for this thread.
             int lane = threadIdx.x % 32;
             Acc:Index acc_idx(lane);
-            auto lane_k2 = acc_idx.k2();
-            auto lane_qn_0 = acc_idx.qn(0);
-            auto lane_qn_8 = acc_idx.qn(0);
+            auto qn_val = acc_idx.get<QN>();
+            auto k2_val = acc_idx.get<K2>();
 
             # Define an accumulator and initialize it to zero.
             Acc acc;
@@ -47,7 +46,6 @@ class Fragment:
     def generate(self) -> str:
         """Generate the fragment class code."""
         index_class = self.generate_index()
-
         load_index_class = self.generate_load_index()
 
         if load_index_class:
@@ -62,8 +60,7 @@ class Fragment:
             {self.class_name} f;
             f.load_trans(p);
             return f;
-        }}
-"""
+        }}"""
         else:
             load_method = ""
 
@@ -71,12 +68,9 @@ class Fragment:
 class {self.class_name} : public spio::{self.fragment_type.value} {{
     public:
         {index_class}
-
         {load_index_class}
-
         {load_method}
-}};
-"""
+}};"""
 
     @property
     def dim_names(self) -> Tuple[str, str]:
@@ -96,7 +90,7 @@ class {self.class_name} : public spio::{self.fragment_type.value} {{
         ).generate()
 
 
-def _fragment_header() -> str:
+def header() -> str:
     return """
 #include "spio/fragment.cuh"
 #include "spio/fragment_index.h"
