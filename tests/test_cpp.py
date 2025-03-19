@@ -145,10 +145,7 @@ UTEST(I_Fold, methods)
 def _test_generate_index():
     """Return the C++ source code that tests a custom index class."""
 
-    specs = [
-        gen.Index("MyIndex", {"n": 4, "h": 32, "w": 64, "c": 128}),
-    ]
-
+    specs = [gen.Index("MyIndex", gen.Dims(n=4, h=32, w=64, c=128))]
     generated_code = gen.generate(specs, namespace="MyIndex_GenCode")
     size = 4 * 32 * 64 * 128
     test_code = f"""
