@@ -185,9 +185,7 @@ UTEST(MyIndex, dim_sizes)
 
 @_cpp_test
 def _test_generate_checkerboard_index():
-    specs = [
-        gen.Checkerboard("Checkers", "r", "c8", 8)
-    ]
+    specs = [gen.Checkerboard("Checkers", "r", "c8", 8)]
     generated_code = gen.generate(specs, namespace="IndexSpec_GenCode")
     code = f"""
 {generated_code}
@@ -413,59 +411,6 @@ UTEST(StrideTensor, offset_from_tensor)
     }}
 }}
 """
-    return test_code
-
-
-# @_cpp_test
-def _test_checkerboard_tensor():
-    c16 = 8
-    r = 16
-    c = 2
-
-    specs = [
-        gen.Tensor(
-            "CheckerboardTensor",
-            gen.dtype.float,
-            dict(c16=c16, checkers=gen.CheckerboardIndex(r=16, c=c)),
-            constant=True,
-        ),
-    ]
-    generated_code = gen.generate(specs, namespace="CheckerboardTensor_GenCode")
-
-    test_code = f"""
-
-{generated_code}
-
-UTEST(CheckerboardTensor, offset_from_tensor)
-{{
-    using namespace CheckerboardTensor_GenCode;
-    constexpr int C16 = {c16};
-    constexpr int R = {r};
-    constexpr int C = {c};
-    constexpr int size = C16 * R * C;
-    constexpr size_t num_bytes = sizeof(float) * size;
-
-    float data[C16 * R * C];
-    for (int c16 = 0; c16 < C16; ++c16) {{
-        for (int r = 0; r < R; ++r) {{
-            for (int c = 0; c < C; ++c) {{
-                data[c16 * R * C + r * C + c] = c16 * R * C + r * C + c;
-            }}
-        }}
-    }}
-
-    for (int c16 = 0; c16 < C16; ++c16) {{
-        for (int r = 0; r < R; ++r) {{
-            for (int c = 0; c < C; ++c) {{
-                EXPECT_EQ(
-                    *CheckerboardTensor(data).c16(c16).checkers(r, c),
-                    data[c16 * R * C + spio::CheckerboardIndex<8>::offset(r, c)]
-            );
-            }}
-        }}
-    }}
-}}
-    """
     return test_code
 
 

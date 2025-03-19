@@ -1,6 +1,6 @@
 """Generate CUDA code using generator specifications."""
 
-from typing import List, Set, Union
+from typing import List
 
 from .gen_specs import GenSpecs
 from .dim import Dim, _get_dim_name_and_stride
