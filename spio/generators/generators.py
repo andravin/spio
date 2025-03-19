@@ -19,10 +19,10 @@ def generate(
     explicit_folds = {
         spec.fold_name: spec for spec in gen_specs if isinstance(spec, Fold)
     }
-    
+
     # Track all dimension names used as dim_name in fold specs
     folded_dim_names = {spec.dim_name for spec in gen_specs if isinstance(spec, Fold)}
-    
+
     # Also track the fold_name values from explicit folds (e.g., "block_p")
     fold_aliases = set(explicit_folds.keys())
 
@@ -40,15 +40,15 @@ def generate(
         # Skip names that are fold_aliases (like "block_p") since they're not base dimensions
         if name in fold_aliases:
             continue
-            
+
         base_name, stride = _get_dim_name_and_stride(name)
         if stride is not None:
             # This is a fold dimension (e.g., "c4")
             if name not in folded_dim_names and name not in explicit_folds:
-                # Only create implicit folds if not explicitly declared 
+                # Only create implicit folds if not explicitly declared
                 # and not used as dim_name in a fold spec
                 implicit_folds.add(Fold(name, base_name, stride))
-                fold_aliases.add(name)  # Add to fold_aliases to exclude from base dims        
+                fold_aliases.add(name)  # Add to fold_aliases to exclude from base dims
         base_dims.add(Dim(base_name))
 
     # 4. Make sure all base dimensions for folds are created
@@ -72,7 +72,9 @@ def generate(
         code += "\n"
 
     # Group 2: Fold aliases
-    all_folds = sorted(list(explicit_folds.values()) + list(implicit_folds), key=lambda x: x.fold_name)
+    all_folds = sorted(
+        list(explicit_folds.values()) + list(implicit_folds), key=lambda x: x.fold_name
+    )
     if all_folds:
         code += "// Fold aliases\n"
         for fold in all_folds:
@@ -107,8 +109,10 @@ def generate(
         for index in indices:
             code += index.generate_with_context(user_data_types=user_data_types)
         code += "\n"
-        
+
     # Generate other specs
+    if others:
+        code += "// Other types\n"
     for spec in others:
         if hasattr(spec, "generate_with_context"):
             code += spec.generate_with_context(user_data_types=user_data_types)
@@ -144,13 +148,8 @@ def _include_files():
 
 
 def _start_namespace(namespace: str) -> str:
-    return f"""
-
-namespace {namespace} {{
-"""
+    return f"namespace {namespace} {{\n"
 
 
 def _end_namespace() -> str:
-    return """
-}
-"""
+    return "}\n"
