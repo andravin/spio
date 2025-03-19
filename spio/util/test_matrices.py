@@ -8,14 +8,18 @@ def make_test_matrices(
     n: int = 8,
     k: int = 8,
     ones: bool = False,
+    a_ones: bool = False,
+    b_ones: bool = False,
     output_dtype: torch.dtype = torch.float32,
 ):
     """Return three matrices of size m x k, k x n, and m x n."""
-    if ones:
+    if ones or a_ones:
         A = _make_ones_test_matrix(m=m, n=k)
-        B = _make_ones_test_matrix(m=k, n=n)
     else:
         A = _make_test_matrix(m=m, n=k, modulus=17)
+    if ones or b_ones:
+        B = _make_ones_test_matrix(m=k, n=n)
+    else:
         B = _make_test_matrix(m=k, n=n, modulus=19)
     C = _make_output_matrix(m=m, n=n, dtype=output_dtype)
     B_trans = torch.transpose(B, 0, 1).contiguous()
