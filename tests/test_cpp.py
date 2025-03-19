@@ -26,7 +26,7 @@ UTEST_HEADER = '#include "utest.h"'
 TEST_MODULES = [
     gen.index,
     gen.tensor,
-    # gen.checkerboard,
+    gen.checkerboard,
     gen.fragment_index,
     gen.dim,
 ]
@@ -183,12 +183,10 @@ UTEST(MyIndex, dim_sizes)
     return test_code
 
 
-# @_cpp_test
+@_cpp_test
 def _test_generate_checkerboard_index():
     specs = [
-        gen.Index(
-            "MyCheckerboard", dict(c16=8, checkers=gen.CheckerboardIndex(r=16, c=2))
-        ),
+        gen.Checkerboard("Checkers", "r", "c8", 8)
     ]
     generated_code = gen.generate(specs, namespace="IndexSpec_GenCode")
     code = f"""
@@ -197,16 +195,16 @@ def _test_generate_checkerboard_index():
 UTEST(IndexSpec, checkerboard_fused_dim)
 {{
     using namespace IndexSpec_GenCode;
-    EXPECT_EQ(MyCheckerboard::size, 8 * 16 * 2);
-    EXPECT_TRUE((MyCheckerboard::C16 == spio::Fold<C_Dim, 16>(8)));
-    EXPECT_EQ(MyCheckerboard::CHECKERS, 16 * 2);
-    for (int offset = 0; offset < MyCheckerboard::size; ++offset) {{
-        MyCheckerboard idx(offset);
-        EXPECT_EQ(idx.c16().get(), offset / (16 * 2));
-        int ckbd_offset = offset % 32;
-        int ckbd_row = ckbd_offset / 8;
-        EXPECT_TRUE(idx.checkers().r() == R_Dim(ckbd_offset / 2));
-        EXPECT_TRUE(idx.checkers().c() == C_Dim((ckbd_offset & 1) ^ (ckbd_row & 1)));
+    using namespace spio;
+    for (int offset = 0; offset < 128; ++offset) {{
+        Checkers idx(offset);
+        int row = offset / 8;
+        int pair = offset / 2;
+        int color = ((offset & 1) ^ (row & 1));
+        EXPECT_EQ((idx.get<R>().get()), pair);
+        EXPECT_EQ((idx.get<Fold<C, 8>>().get()),  color);
+        EXPECT_EQ(idx.pair(), pair);
+        EXPECT_EQ(idx.color(), color);
     }}
 }}
 """
