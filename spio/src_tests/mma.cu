@@ -18,10 +18,15 @@ extern "C"
         float2 *__restrict__ c_ptr,
         const __half2 *__restrict__ a_ptr,
         const __half2 *__restrict__ b_trans_ptr)
+
     {
-        using A = MMA_M16_K8_F16_A;
-        using B = MMA_N8_K8_F16_B;
-        using C = MMA_M16_N8_F32_C;
+        class I : public Dim<I> { using Dim::Dim; };
+        class J : public Dim<J> { using Dim::Dim; };
+        class K : public Dim<K> { using Dim::Dim; };
+
+        using A = MMA_M16_K8_F16_A<I, K>;
+        using B = MMA_N8_K8_F16_B<K, J>;
+        using C = MMA_M16_N8_F32_C<I, J>;
 
         int lane = threadIdx.x % 32;
 
@@ -29,12 +34,12 @@ extern "C"
         A::Index a_index(lane);
 
         for (int f = 0; f < a.size(); ++f) {
-            a(f) = a_ptr[a_index.i(f) * 4 + a_index.k2(f)];
+            a(f) = a_ptr[a_index.get<I>(f).get() * 4 + a_index.get<Fold<K, 2>>(f).get()];
         }
 
         B b;
         B::Index b_index(lane);
-        b() = b_trans_ptr[b_index.j() * 4 + b_index.k2()];
+        b() = b_trans_ptr[b_index.get<J>().get() * 4 + b_index.get<Fold<K, 2>>().get()];
 
         C c;
         c.zero();
@@ -42,8 +47,8 @@ extern "C"
         mma_trans(c, a, b, c);
 
         C::Index idx(lane);       
-        c_ptr[idx.i(0) * 4 + idx.j2(0)] = c.fragment(0);
-        c_ptr[idx.i(1) * 4 + idx.j2(1)] = c.fragment(1);
+        c_ptr[idx.get<I>(0).get() * 4 + idx.get<Fold<J, 2>>(0).get()] = c.fragment(0);
+        c_ptr[idx.get<I>(1).get() * 4 + idx.get<Fold<J, 2>>(1).get()] = c.fragment(1);
     }
 
     /// @brief  Test mma.m16n8k16 with float16 data.
@@ -55,22 +60,26 @@ extern "C"
         const __half2 *__restrict__ a_ptr,
         const __half2 *__restrict__ b_trans_ptr)
     {
-        using A = MMA_M16_K16_F16_A;
-        using B = MMA_N8_K16_F16_B;
-        using C = MMA_M16_N8_F32_C;
+        class I : public Dim<I> { using Dim::Dim; };
+        class J : public Dim<J> { using Dim::Dim; };
+        class K : public Dim<K> { using Dim::Dim; };
+
+        using A = MMA_M16_K16_F16_A<I, K>;
+        using B = MMA_N8_K16_F16_B<K, J>;
+        using C = MMA_M16_N8_F32_C<I, J>;
 
         int lane = threadIdx.x % 32;
 
         A a;
         A::Index a_index(lane);
-        for (int f = 0; f < 4; ++f) {
-            a(f) = a_ptr[a_index.i(f) * 8 + a_index.k2(f)];
+        for (int f = 0; f < a.size(); ++f) {
+            a(f) = a_ptr[a_index.get<I>(f).get() * 8 + a_index.get<Fold<K, 2>>(f).get()];
         }
 
         B b;
         B::Index b_index(lane);
-        for (int f = 0; f < 2; ++f) {
-            b(f) = b_trans_ptr[b_index.j() * 8 + b_index.k2(f)];
+        for (int f = 0; f < b.size(); ++f) {
+            b(f) = b_trans_ptr[b_index.get<J>(f).get() * 8 + b_index.get<Fold<K, 2>>(f).get()];
         }
 
         C c;
@@ -80,7 +89,7 @@ extern "C"
 
         C::Index idx(lane);
         for (int f = 0; f < c.size(); ++f) {
-            c_ptr[idx.i(f) * 4 + idx.j2(f)] = c.fragment(f);
+            c_ptr[idx.get<I>(f).get() * 4 + idx.get<Fold<J, 2>>(f).get()] = c.fragment(f);
         }
     }
 
@@ -89,22 +98,26 @@ extern "C"
         const __half2 *__restrict__ a_ptr,
         const __half2 *__restrict__ B_trans)
     {
-        using A = MMA_M16_K16_F16_A;
-        using B = MMA_N16_K16_F16_B;
-        using C = MMA_M16_N16_F32_C;
+        class I : public Dim<I> { using Dim::Dim; };
+        class J : public Dim<J> { using Dim::Dim; };
+        class K : public Dim<K> { using Dim::Dim; };
+
+        using A = MMA_M16_K16_F16_A<I, K>;
+        using B = MMA_N16_K16_F16_B<K, J>;
+        using C = MMA_M16_N16_F32_C<I, J>;
 
         int lane = threadIdx.x % 32;
 
         A a;
         A::Index a_index(lane);
         for (int f = 0; f < a.size(); ++f) {
-            a(f) = a_ptr[a_index.i(f) * 8 + a_index.k2(f)];
+            a(f) = a_ptr[a_index.get<I>(f).get() * 8 + a_index.get<Fold<K, 2>>(f).get()];
         }
 
         B b;
         B::Index b_index(lane);
         for (int f = 0; f < b.size(); ++f) {
-            b(f) = B_trans[b_index.j(f) * 8 + b_index.k2(f)];
+            b(f) = B_trans[b_index.get<J>(f).get() * 8 + b_index.get<Fold<K, 2>>(f).get()];
         }
 
         C c;
@@ -115,7 +128,7 @@ extern "C"
         C::Index idx(lane);
 
         for (int f = 0; f < c.size(); ++f) {
-            c_ptr[idx.i(f) * 8 + idx.j2(f)] = c.fragment(f);
+            c_ptr[idx.get<I>(f).get() * 8 + idx.get<Fold<J, 2>>(f).get()] = c.fragment(f);
         }
     }
 }
