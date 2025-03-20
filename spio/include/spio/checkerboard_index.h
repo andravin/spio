@@ -58,7 +58,7 @@ namespace spio
     /// @tparam ranks the number of column-ranks in the checkerboard.
     /// @tparam PairDim the dimension type for the pair index
     /// @tparam ColorDim the dimension type for the color index
-    template <int ranks, typename PairDim, typename ColorDim>
+    template <int ranks, typename PairDim, typename ColorDim, typename OffsetDim>
     class CheckerboardIndex : public IndexBase
     {
     public:
@@ -80,6 +80,8 @@ namespace spio
             } else if constexpr (std::is_same_v<Dim, ColorDim>) {
                 const unsigned row = offset() / ranks;
                 return ColorDim((offset() & 1) ^ (row & 1));
+            } else if constexpr (std::is_same_v<Dim, OffsetDim>) {
+                return OffsetDim(offset());
             } else {
                 static_assert(
                     std::is_same_v<Dim, PairDim> || 

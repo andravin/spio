@@ -182,7 +182,7 @@ UTEST(MyIndex, dim_sizes)
 
 @_cpp_test
 def _test_generate_checkerboard_index():
-    specs = [gen.Checkerboard("Checkers", "r", "c8", 8)]
+    specs = [gen.Checkerboard("Checkers", "r", "c8", "offset", 8)]
     generated_code = gen.generate(specs, namespace="IndexSpec_GenCode")
     code = f"""
 {generated_code}
@@ -198,6 +198,7 @@ UTEST(IndexSpec, checkerboard_fused_dim)
         int color = ((offset & 1) ^ (row & 1));
         EXPECT_EQ((idx.get<R>().get()), pair);
         EXPECT_EQ((idx.get<Fold<C, 8>>().get()),  color);
+        EXPECT_EQ((idx.get<OFFSET>().get()), offset);
         EXPECT_EQ(idx.pair(), pair);
         EXPECT_EQ(idx.color(), color);
     }}
