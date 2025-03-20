@@ -124,6 +124,9 @@ namespace spio
     {
     public:
         using Index = MMA_C_88_F32_Index<RowDim, ColDim>;
+        using Base = _MMA_F32<2>;
+        using Base::data;
+        using Base::fragment;
     };
 
     template <typename RowDim, typename ColDim>
@@ -131,6 +134,9 @@ namespace spio
     {
     public:
         using Index = MMA_C_88_F32_Index<RowDim, ColDim>;
+        using Base = _MMA_F32<4>;
+        using Base::data;
+        using Base::fragment;
     };
 
     /// @brief A matrix with float16 elements for M16_N8_K8 matrix multiplication.
@@ -140,6 +146,8 @@ namespace spio
     public:
         using Vector = uint2;
         using LoadIndex = MMA_A_M16_K8_F16_LoadIndex<RowDim, ColDim>;
+        using Base = _MMA_M16_N8_F16_A<RowDim, ColDim, 1>;
+        using Base::data;
         MMA_M16_K8_F16_A() = default;
         __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
@@ -155,6 +163,8 @@ namespace spio
     public:
         using Vector = uint4;
         using LoadIndex = MMA_A_M16_K16_F16_LoadIndex<RowDim, ColDim>;
+        using Base = _MMA_M16_N8_F16_A<RowDim, ColDim, 2>;
+        using Base::data;
         MMA_M16_K16_F16_A() = default;
         __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
@@ -169,6 +179,8 @@ namespace spio
     public:
         using Vector = unsigned;
         using LoadIndex = MMA_B_N8_K8_F16_LoadIndex<RowDim, ColDim>;
+        using Base = _MMA_M16_N8_F16_B<RowDim, ColDim, 1>;
+        using Base::data;
         MMA_N8_K8_F16_B() = default;
         __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
@@ -185,6 +197,8 @@ namespace spio
     public:
         using Vector = uint2;
         using LoadIndex = MMA_B_N16_K16_F16_LoadIndex<RowDim, ColDim>;
+        using Base = _MMA_M16_N8_F16_B<RowDim, ColDim, 2>;
+        using Base::data;
         __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
         __device__ void load(const void *p) { vector() = ldmatrix_x2(p); }
@@ -197,7 +211,8 @@ namespace spio
     public:
         using Vector = uint4;
         using LoadIndex = MMA_B_N16_K16_F16_LoadIndex<RowDim, ColDim>;
-
+        using Base = _MMA_M16_N8_F16_B<RowDim, ColDim, 4>;
+        using Base::data;
         MMA_N16_K16_F16_B() = default;
         __device__ Vector &vector() { return *reinterpret_cast<Vector *>(data()); }
         __device__ const Vector &vector() const { return *reinterpret_cast<const Vector *>(data()); }
