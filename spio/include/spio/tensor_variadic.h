@@ -5,7 +5,7 @@
 #include "spio/dim.h"
 #include "spio/dim_info.h"
 #include "spio/index_variadic.h"
-
+#include "spio/allocator.h"
 namespace spio
 {
 
@@ -205,6 +205,21 @@ namespace spio
         // It is not longer the storage size of the tensor. We need a
         // separate method to get the storage size.
         static constexpr unsigned total_size = detail::product_sizes<DimInfos...>::value;
+
+        // Allocate a tensor on the stack.
+        // The user would often initialize the StackAllocator object
+        // with a pointer to shared memory, so that a smem buffer
+        // is used as a stack for allocations and deallocations.
+        DEVICE static Tensor allocate(StackAllocator &allocator)
+        {
+            return Tensor(allocator.allocate<data_type>(storage_size()));
+        }
+
+        // Deallocate a tensor from the stack.
+        DEVICE void deallocate(StackAllocator &allocator)
+        {
+            allocator.deallocate<data_type>(get(), storage_size());
+        }
 
         // For compatibility with existing code
         DEVICE static constexpr unsigned size() { return total_size; }
