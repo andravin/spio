@@ -1,9 +1,8 @@
 #ifndef SPIO_ASYNC_STRIP_LOADER_H_
 #define SPIO_ASYNC_STRIP_LOADER_H_
 
-#include <cuda_pipeline_primitives.h>
-
 #include "spio/macros.h"
+#include "spio/memory.cuh"
 
 namespace spio
 {
@@ -11,9 +10,9 @@ namespace spio
     /// @tparam smem_stride The stride in shared memory.
     /// @tparam global_stride The stride in global memory.
     /// @tparam num_loads The number of loads to perform.
-    /// @tparam veclen The number of bytes per load in each thread.
     /// @details This class uses the CUDA async memcpy to load a 2D tile of
-    /// data from global memory tensor to a shared memory tensor.
+    /// data between global and shared memory. Each thread copies one vector
+    /// of data per load, moving to the next position using the specified strides.
     ///
     /// Use StripLoaderParams to calculate the num_loads template parameter.
     ///
@@ -47,31 +46,31 @@ namespace spio
     /// axis   0 | 4 | 5 | 6 | 7 |
     ///          +---+---+---+---+
     ///
-    template <int smem_stride, int global_stride, int num_loads, int veclen = 16>
+    template <int smem_stride, int global_stride, int num_loads>
     class AsyncStripLoader
     {
-        __device__ constexpr static int _compute_zfill(bool mask) { return mask ? 0 : veclen; }
-
     public:
         /// @brief Construct AynscStripLoader and optionally mask-to-zero the current thread.
         /// @param mask Zero-fill the destination and skip the copy for the current thread with zeros if true.
         __device__ AsyncStripLoader(bool mask = true)
-            : _zfill(_compute_zfill(mask))
+            : _mask(mask)
         {
         }
 
         /// @param smem_ptr Pointer to the shared memory destination for the current thread.
         /// @param global_ptr Pointer to the global memory source for the current thread.
-        __device__ void load(uint4 *smem_ptr, const uint4 *global_ptr)
+        /// @tparam data_type The type of the data to load.
+        template<typename data_type>
+        __device__ void load(data_type *smem_ptr, const data_type *global_ptr)
         {
             for (int i = 0; i < num_loads; ++i)
             {
-                __pipeline_memcpy_async(smem_ptr + i * smem_stride, global_ptr + i * global_stride, veclen, _zfill);
+                memcpy_async(smem_ptr + i * smem_stride, global_ptr + i * global_stride, _mask);
             }
         }
 
     private:
-        int _zfill;
+        bool _mask;
     };
 }
 
