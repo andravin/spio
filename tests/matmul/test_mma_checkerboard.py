@@ -68,8 +68,6 @@ def _get_specs(m: int, n: int, k: int):
     n8 = n // 8
 
     block_x16 = block_x // 16
-    block_x32 = block_x // 32
-    block_x64 = block_x // 64
 
     assert k16 % chunk_k16 == 0, "Kernel requires K to be a multiple of the chunk size."
 
@@ -87,9 +85,8 @@ def _get_specs(m: int, n: int, k: int):
         gen.Dims(
             ping_pong=2,
             k16=chunk_k16,
-            i32=block_x32,
-            i16=2,
-            checkers=gen.CheckerboardIndex(i=16, k8=2),
+            i16=block_x16,
+            checkers=32,
         ),
     )
     smem_tensor_b = gen.Tensor(
@@ -98,21 +95,20 @@ def _get_specs(m: int, n: int, k: int):
         gen.Dims(
             ping_pong=2,
             k16=chunk_k16,
-            j64=block_x64,
-            j16=4,
-            checkers=gen.CheckerboardIndex(j=16, k8=2),
+            j16=block_x16,
+            checkers=32,
         ),
     )
     smem_tensor_c_store = gen.Tensor(
         "SmemCStore",
         gen.dtype.half2,
-        gen.Dims(i32=4, j64=2, j16=4, j8=2, i16=2, i=16, j2=4),
+        gen.Dims(i32=4, j8=16, i16=2, i=16, j2=4),
         strides=gen.Strides(j8=(32 + 1) * 4),
     )
     smem_tensor_c_load = gen.Tensor(
         "SmemCLoad",
         gen.dtype.uint4,
-        gen.Dims(i32=4, j64=2, j8=8, i=32),
+        gen.Dims(i32=4, j8=16, i=32),
         gen.Strides(j8=32 + 1),
         constant=True,
     )
@@ -124,7 +120,7 @@ def _get_specs(m: int, n: int, k: int):
         tensor_a,
         tensor_b,
         tensor_c,
-        gen.Index("GlobalLoadIndex", gen.Dims(x=block_x, k8=2)),
+        gen.Index("GlobalLoadIndex", gen.Dims(x16=block_x16, x=16, k8=2)),
         gen.Index("ComputeIndex", gen.Dims(i32=4, j64=2, lane=32)),
         smem_tensor_a,
         smem_tensor_b,
@@ -153,6 +149,7 @@ def _get_specs(m: int, n: int, k: int):
         gen.Tensor("B_Fragments", "_B", gen.Dims(k16=chunk_k16, j16=warp_n16)),
         gen.Tensor("C_Fragments", "_C", gen.Dims(i16=warp_m16, j16=warp_n16)),
         gen.Index("SmemCLoadIndex", gen.Dims(i=32, j8=8)),
+        gen.Checkerboard("Smem_Checkers", "x", "k8", "checkers"),
         smem_tensor_c_store,
         smem_tensor_c_load,
     ]
