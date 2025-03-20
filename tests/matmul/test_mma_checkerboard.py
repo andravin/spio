@@ -150,6 +150,8 @@ def _get_specs(m: int, n: int, k: int):
         gen.Tensor("C_Fragments", "_C", gen.Dims(i16=warp_m16, j16=warp_n16)),
         gen.Index("SmemCLoadIndex", gen.Dims(i=32, j8=8)),
         gen.Checkerboard("Smem_Checkers", "x", "k8", "checkers"),
+        gen.Checkerboard("SmemA_Checkers", "i", "k8", "checkers"),
+        gen.Checkerboard("SmemB_Checkers", "j", "k8", "checkers"),
         smem_tensor_c_store,
         smem_tensor_c_load,
     ]

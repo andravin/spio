@@ -58,8 +58,10 @@ extern "C"
         // Define the mapping from the shared memory tile to the register tile.
         A_Fragments::data_type::LoadIndex a_load_idx(compute_idx.get<LANE>().get());
         B_Fragments::data_type::LoadIndex b_load_idx(compute_idx.get<LANE>().get());
-        auto smem_a_load = SmemA(smem_a)[compute_idx.get<I32>().fold<16>()][Smem_Checkers(a_load_idx.get<I>().cast<X>(), a_load_idx.get<K8>()).get<CHECKERS>()];
-        auto smem_b_load = SmemB(smem_b)[compute_idx.get<J64>().fold<16>()][Smem_Checkers(b_load_idx.get<J>().cast<X>(), b_load_idx.get<K8>()).get<CHECKERS>()];
+        auto smem_a_checkers = SmemA_Checkers(a_load_idx.get<I>(), a_load_idx.get<K8>()).get<CHECKERS>();
+        auto smem_b_checkers = SmemB_Checkers(b_load_idx.get<J>(), b_load_idx.get<K8>()).get<CHECKERS>();
+        auto smem_a_load = SmemA(smem_a)[compute_idx.get<I32>().fold<16>()][smem_a_checkers];
+        auto smem_b_load = SmemB(smem_b)[compute_idx.get<J64>().fold<16>()][smem_b_checkers];
 
         // Double-buffer the global memory loads.
         int ping_pong = 0;
