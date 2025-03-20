@@ -78,6 +78,6 @@ def _generate_index(
         dim_infos.append(f"spio::DimInfo<{dim_class}, {size_str}, {stride}>")
 
     # Generate the index type using statement
-    index_using = f"using {class_name} = spio::Index<{', '.join(dim_infos)}>;"
+    index_using = f"using {class_name} = spio::Index<{', '.join(dim_infos)}>;\n"
 
     return index_using
