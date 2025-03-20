@@ -82,6 +82,7 @@ def generate(
         code += "\n"
 
     # Group 3: Generate other types by category
+    fragments = []
     tensors = []
     indices = []
     others = []
@@ -89,12 +90,21 @@ def generate(
     for spec in gen_specs:
         if isinstance(spec, (Dim, Fold)):
             continue
-        if isinstance(spec, Tensor):
+        if isinstance(spec, Fragment):
+            fragments.append(spec)
+        elif isinstance(spec, Tensor):
             tensors.append(spec)
         elif isinstance(spec, Index):
             indices.append(spec)
         else:
             others.append(spec)
+
+    # Generate fragments
+    if fragments:
+        code += "// Fragment types\n"
+        for fragment in fragments:
+            code += fragment.generate()
+        code += "\n"
 
     # Generate tensors
     if tensors:
