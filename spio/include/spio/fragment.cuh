@@ -97,6 +97,15 @@ namespace spio
 
         __device__ float4 &vec4(int idx = 0) { return reinterpret_cast<float4 *>(data())[idx]; }
         __device__ float4 vec4(int idx = 0) const { return reinterpret_cast<const float4 *>(data())[idx]; }
+
+        __device__ void to_half2(_MMA_F16<NUM_FRAGMENTS> &dst) const
+        {
+            for (int i = 0; i < NUM_FRAGMENTS; ++i)
+            {
+                dst.fragment(i) = fragment(i);
+            }
+        }
+
     };
 
     /// @brief  Template base class for 16-row fp16 matrix fragments for operand A.
