@@ -106,6 +106,9 @@ namespace spio
     {
     public:
         using Index = MMA_A_88_F16_Index<RowDim, ColDim>;
+
+        using row_dim = RowDim;
+        using col_dim = ColDim;
     };
 
     /// @brief  Template base class for 8-column fp16 matrix fragments for operand B.
@@ -124,6 +127,8 @@ namespace spio
     {
     public:
         using Index = MMA_C_88_F32_Index<RowDim, ColDim>;
+        using row_dim = RowDim;
+        using col_dim = ColDim;
         using Base = _MMA_F32<2>;
         using Base::data;
         using Base::fragment;
@@ -134,6 +139,8 @@ namespace spio
     {
     public:
         using Index = MMA_C_88_F32_Index<RowDim, ColDim>;
+        using row_dim = RowDim;
+        using col_dim = ColDim;
         using Base = _MMA_F32<4>;
         using Base::data;
         using Base::fragment;

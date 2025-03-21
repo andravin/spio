@@ -120,6 +120,9 @@ namespace spio
     {
     private:
         using Base = _MMA_88_Index;
+        using row_dim = RowDim;
+        using col_dim = ColDim;
+
         
         // Helper for column index
         DEVICE inline constexpr int _j(int idx = 0) const { 
