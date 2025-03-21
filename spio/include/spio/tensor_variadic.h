@@ -317,21 +317,6 @@ namespace spio
             zero_impl<DimInfos...>(*this);
         }
 
-        template <typename TensorB, typename TensorC, typename TensorD>
-        DEVICE void matmul(TensorB b, TensorC c, TensorD d) const
-        {
-            // Call the dispatch method
-            b.template matmul_dispatch<DimInfos...>(*this, c, d);
-        }
-
-        // Dispatch method on Tensor B which receives A's dimensions and passes along B's dimensions
-        template <typename... ADimInfos, typename TensorA, typename TensorC, typename TensorD>
-        DEVICE void matmul_dispatch(TensorA a, TensorC c, TensorD d) const
-        {
-            // Start recursive implementation with A's dimensions, passing B's dimensions along
-            matmul_a_impl<ADimInfos...>(a, *this, c, d, DimInfos{}...);
-        }
-
     private:
         template <typename DstCursorType, typename SrcCursorType>
         DEVICE static void load_impl(DstCursorType dst, SrcCursorType src)
@@ -367,120 +352,7 @@ namespace spio
             }
         }
 
-        // Process A dimensions first
-        template <typename FirstADimInfo, typename... RestADimInfos,
-                  typename TensorA, typename TensorB, typename TensorC, typename TensorD,
-                  typename... BDimInfos>
-        DEVICE static void matmul_a_impl(TensorA a, TensorB b, TensorC c, TensorD d,
-                                         BDimInfos...)
-        {
-            using a_dim_type = typename FirstADimInfo::dim_type;
-            auto a_size = a_dim_type(FirstADimInfo::module_type::size.get());
-
-            constexpr bool in_b = TensorB::template has_dimension_v<a_dim_type>;
-
-            for (auto i : range(a_size))
-            {
-                if constexpr (in_b)
-                {
-                    // Shared dimension (reduction) - apply only to A and B
-                    if constexpr (sizeof...(RestADimInfos) > 0)
-                    {
-                        // More A dimensions to process
-                        matmul_a_impl<RestADimInfos...>(a[i], b[i], c, d, BDimInfos{}...);
-                    }
-                    else
-                    {
-                        // All A dimensions processed, start on B dimensions
-                        matmul_b_impl(a[i], b[i], c, d, BDimInfos{}...);
-                    }
-                }
-                else
-                {
-                    // A-only dimension - apply to A, C, and D
-                    if constexpr (sizeof...(RestADimInfos) > 0)
-                    {
-                        // More A dimensions to process
-                        matmul_a_impl<RestADimInfos...>(a[i], b, c[i], d[i], BDimInfos{}...);
-                    }
-                    else
-                    {
-                        // All A dimensions processed, start on B dimensions
-                        matmul_b_impl(a[i], b, c[i], d[i], BDimInfos{}...);
-                    }
-                }
-            }
-        }
-
-        // Base case for A dimensions
-        template <typename TensorA, typename TensorB, typename TensorC, typename TensorD,
-                  typename... BDimInfos>
-        DEVICE static void matmul_a_impl(TensorA a, TensorB b, TensorC c, TensorD d,
-                                         BDimInfos...)
-        {
-            // All A dimensions processed, start on B dimensions
-            matmul_b_impl(a, b, c, d, BDimInfos{}...);
-        }
-
-        // Process B dimensions - this needs to extract the first B dimension
-        template <typename TensorA, typename TensorB, typename TensorC, typename TensorD,
-                  typename FirstBDimInfo, typename... RestBDimInfos>
-        DEVICE static void matmul_b_impl(TensorA a, TensorB b, TensorC c, TensorD d,
-                                         FirstBDimInfo, RestBDimInfos...)
-        {
-            using b_dim_type = typename FirstBDimInfo::dim_type;
-            auto b_size = b_dim_type(FirstBDimInfo::module_type::size.get());
-
-            constexpr bool in_a = TensorA::template has_dimension_v<b_dim_type>;
-
-            if constexpr (!in_a)
-            {
-                // B-only dimension - apply to B, C, and D
-                for (auto i : range(b_size))
-                {
-                    if constexpr (sizeof...(RestBDimInfos) > 0)
-                    {
-                        // More B dimensions to process
-                        matmul_b_impl(a, b[i], c[i], d[i], RestBDimInfos{}...);
-                    }
-                    else
-                    {
-                        // All dimensions processed - perform multiply
-                        mma_trans(*d[i], *a, *b[i], *c[i]);
-                    }
-                }
-            }
-            else
-            {
-                // Dimension already processed in A - skip
-                if constexpr (sizeof...(RestBDimInfos) > 0)
-                {
-                    // More B dimensions to process
-                    matmul_b_impl(a, b, c, d, RestBDimInfos{}...);
-                }
-                else
-                {
-                    // All dimensions processed - perform multiply
-                    mma_trans(*d, *a, *b, *c);
-                }
-            }
-        }
-
-        // Base case - no more B dimensions
-        template <typename TensorA, typename TensorB, typename TensorC, typename TensorD>
-        DEVICE static void matmul_b_impl(TensorA a, TensorB b, TensorC c, TensorD d)
-        {
-            // All dimensions processed - perform multiply
-            mma_trans(*d, *a, *b, *c);
-        }
     };
-
-    template <typename TensorA, typename TensorB, typename TensorC, typename TensorD>
-    DEVICE void tensor_mma(TensorD &d, const TensorA &a, const TensorB &b, const TensorC &c)
-    {
-        a.matmul(b, c, d);
-    }
-
 }
 
 #endif

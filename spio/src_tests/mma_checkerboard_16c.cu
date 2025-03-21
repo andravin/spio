@@ -101,7 +101,7 @@ extern "C"
                 __syncthreads();
                 a_tile.load(smem_a_load[PING_PONG(ping_pong)]);
                 b_tile.load(smem_b_load[PING_PONG(ping_pong)]);
-                tensor_mma(c_tile, a_tile, b_tile, c_tile);
+                mma_gen(a_tile, b_tile, c_tile, c_tile);
                 __syncthreads();
             }
         }

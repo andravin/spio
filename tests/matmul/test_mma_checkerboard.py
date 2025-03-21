@@ -6,6 +6,7 @@ import spio.generators as gen
 from spio.compiler import compile_and_load_kernel
 from spio.util import divup, assert_all_close_with_acc_depth, SixteenChannelsLast
 
+
 def test_mma_checkerboard_16c_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with checkerboard layout for smem."""
 
@@ -112,6 +113,9 @@ def _get_specs(m: int, n: int, k: int):
         gen.Strides(j8=32 + 1),
         constant=True,
     )
+    a_tile = gen.Tensor("A_Tile", "_A", gen.Dims(k16=chunk_k16, i16=warp_m16))
+    b_tile = gen.Tensor("B_Tile", "_B", gen.Dims(k16=chunk_k16, j16=warp_n16))
+    c_tile = gen.Tensor("C_Tile", "_C", gen.Dims(i16=warp_m16, j16=warp_n16))
 
     specs = [
         gen.Fold("block_i", "i", block_x),
@@ -145,9 +149,10 @@ def _get_specs(m: int, n: int, k: int):
         gen.Fragment("_A", gen.FragmentType.M16_K16_F16_A, "i", "k"),
         gen.Fragment("_B", gen.FragmentType.N16_K16_F16_B, "k", "j"),
         gen.Fragment("_C", gen.FragmentType.M16_N16_F32_C, "i", "j"),
-        gen.Tensor("A_Tile", "_A", gen.Dims(k16=chunk_k16, i16=warp_m16)),
-        gen.Tensor("B_Tile", "_B", gen.Dims(k16=chunk_k16, j16=warp_n16)),
-        gen.Tensor("C_Tile", "_C", gen.Dims(i16=warp_m16, j16=warp_n16)),
+        a_tile,
+        b_tile,
+        c_tile,
+        gen.Matmul(a_tile, b_tile, c_tile, c_tile, function_name="mma_gen"),
         gen.Index("SmemCLoadIndex", gen.Dims(i=32, j8=8)),
         gen.Checkerboard("Smem_Checkers", "x", "k8", "checkers"),
         gen.Checkerboard("SmemA_Checkers", "i", "k8", "checkers"),
