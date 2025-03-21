@@ -123,20 +123,7 @@ extern "C"
                     }
                 }
 
-                for (auto k16 : range(a_tensor.size<K16>()))
-                {
-                    for (auto i16 : range(c_tensor.size<I16>()))
-                    {
-                        for (auto j16 : range(c_tensor.size<J16>()))
-                        {
-                            mma_trans(
-                                *c_tensor[i16][j16],
-                                *a_tensor[k16][i16],
-                                *b_tensor[k16][j16],
-                                *c_tensor[i16][j16]);
-                        }
-                    }
-                }
+                tensor_mma_trans_ijk<I16, J16, K16>(c_tensor, a_tensor, b_tensor, c_tensor);
 
                 __syncthreads();
             }
