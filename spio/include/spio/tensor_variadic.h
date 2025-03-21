@@ -377,7 +377,6 @@ namespace spio
             using a_dim_type = typename FirstADimInfo::dim_type;
             auto a_size = a_dim_type(FirstADimInfo::module_type::size.get());
 
-            // Check if dimension exists in B (would need a helper function without Tensor::has_dimension_v)
             constexpr bool in_b = TensorB::template has_dimension_v<a_dim_type>;
 
             for (auto i : range(a_size))
@@ -432,8 +431,6 @@ namespace spio
             using b_dim_type = typename FirstBDimInfo::dim_type;
             auto b_size = b_dim_type(FirstBDimInfo::module_type::size.get());
 
-            // We would need a helper to check if a dimension exists in A
-            // For now, assume a helper function exists
             constexpr bool in_a = TensorA::template has_dimension_v<b_dim_type>;
 
             if constexpr (!in_a)
