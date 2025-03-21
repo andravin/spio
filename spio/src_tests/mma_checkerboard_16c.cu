@@ -14,11 +14,11 @@ extern "C"
     /// loading the A and B matrices.
     ///
     /// The checkerboard is a 16x2 grid with a vector
-    /// of 8 half2 elements per cell. See checkerboard.h for details.
+    /// of 8 half2 elements per cell. See checkerboard_index.h for details.
     ///
     /// @param c_ptr result matrix with float16 precision.
-    /// @param a_ptr operand A matrix with float16 precision.
-    /// @param b_ptr operand B matrix with float16 precision.
+    /// @param a_ptr operand A matrix with float16 precision and format K16 x I X 16K
+    /// @param b_ptr operand B matrix with float16 precision and format K16 x J X 16K
     __global__ void
     mma_checkerboard_16c(
         uint4 *__restrict__ c_ptr,
@@ -38,7 +38,7 @@ extern "C"
         BLOCK_I block_i(blockIdx.x);
         BLOCK_J block_j(blockIdx.y);
 
-        // The lanes of a warp load 16x 2k [8k] [half2] from global memory.
+        // Map the thread index to the global memory load index.
         GlobalLoadIndex global_load_idx(threadIdx.x);
 
         // Position the global memory input tiles.
@@ -52,7 +52,7 @@ extern "C"
         auto smem_a_store = SmemA(smem_a)[global_x16.cast<I>()][smem_checkers];
         auto smem_b_store = SmemB(smem_b)[global_x16.cast<J>()][smem_checkers];
 
-        // Define the mapping from the thread index to the warps' i32 x j64 tiles and the lane index.
+        // Define the mapping from the thread index to the warp's i32 x j64 tiles and the lane index.
         ComputeIndex compute_idx(threadIdx.x);
 
         // Define the mapping from the shared memory tile to the register tile.
@@ -91,23 +91,17 @@ extern "C"
                 loader_a.load(smem_a_store[PING_PONG(ping_pong)].get(), a.get());
                 loader_b.load(smem_b_store[PING_PONG(ping_pong)].get(), b.get());
                 __pipeline_commit();
-
                 a.step(A_Tile::size<K16>());
                 b.step(B_Tile::size<K16>());
             }
-
             ping_pong ^= 1;
-
             if (iter > 0)
             {
                 __pipeline_wait_prior(iter < A::size<K16>() ? 1 : 0);
                 __syncthreads();
-
                 a_tile.load(smem_a_load[PING_PONG(ping_pong)]);
                 b_tile.load(smem_b_load[PING_PONG(ping_pong)]);
-
                 tensor_mma(c_tile, a_tile, b_tile, c_tile);
-
                 __syncthreads();
             }
         }
@@ -127,7 +121,7 @@ extern "C"
             {
                 for (int f = 0; f < C_Tile::data_type::size(); ++f)
                 {
-                    *smem_c_store[j16.fold<8>() + c_idx.get<J8>(f)][i16][c_idx.get<I>(f)] = c_tile[i16][j16]->to_half2(f);
+                    *smem_c_store[j16.fold<8>()][c_idx.get<J8>(f)][i16][c_idx.get<I>(f)] = c_tile[i16][j16]->to_half2(f);
                 }
             }
         }
