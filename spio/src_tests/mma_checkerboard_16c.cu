@@ -70,13 +70,7 @@ extern "C"
         C_Fragments::data_type c_data[C_Fragments::storage_size()];
         C_Fragments c_tensor(c_data);
 
-        for (auto i16 : range(c_tensor.size<I16>()))
-        {
-            for (auto j16 : range(c_tensor.size<J16>()))
-            {
-                c_tensor[i16][j16]->zero();
-            }
-        }
+        c_tensor.zero();
 
         auto global_load_i = block_i.unfold() + global_load_idx.get<X>().cast<I>();
         auto global_load_j = block_j.unfold() + global_load_idx.get<X>().cast<J>();
@@ -111,17 +105,8 @@ extern "C"
                 A_Fragments a_tensor(a_data);
                 B_Fragments b_tensor(b_data);
 
-                for (auto k16 : range(a_tensor.size<K16>()))
-                {
-                    for (auto i16 : range(c_tensor.size<I16>()))
-                    {
-                        a_tensor[k16][i16]->load(smem_a_load[PING_PONG(ping_pong)][k16][i16].get());
-                    }
-                    for (auto j16 : range(c_tensor.size<J16>()))
-                    {
-                        b_tensor[k16][j16]->load(smem_b_load[PING_PONG(ping_pong)][k16][j16].get());
-                    }
-                }
+                a_tensor.load(smem_a_load[PING_PONG(ping_pong)]);
+                b_tensor.load(smem_b_load[PING_PONG(ping_pong)]);
 
                 tensor_mma_trans_ijk<I16, J16, K16>(c_tensor, a_tensor, b_tensor, c_tensor);
 

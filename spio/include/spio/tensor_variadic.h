@@ -284,6 +284,53 @@ namespace spio
             using tensor_type = typename detail::tensor_type_from_dim_info_tuple<DataType, updated_infos>::tensor_type;
             return tensor_type((*this)[slice_start].get());
         }
+
+        template<typename SrcCursorType>
+        DEVICE void load(SrcCursorType src)
+        {
+            load_impl<DimInfos...>(*this, src);
+        }
+
+        DEVICE void zero()
+        {
+            zero_impl<DimInfos...>(*this);
+        }
+private:
+
+        template<typename DstCursorType, typename SrcCursorType>
+        DEVICE static void load_impl(DstCursorType dst, SrcCursorType src)
+        {
+            dst->load(src.get());
+        }
+
+        template<typename FirstDimInfo, typename... RestDimInfos, typename DstCursorType, typename SrcCursorType>
+        DEVICE static void load_impl(DstCursorType dst, SrcCursorType src)
+        {
+            using FirstDimType = typename FirstDimInfo::dim_type;
+            auto size = FirstDimType(FirstDimInfo::module_type::size.get());
+            for (auto i : range(size))
+            {
+                load_impl<RestDimInfos...>(dst[i], src[i]);
+            }
+        }
+
+
+        template<typename SrcCursorType>
+        DEVICE static void zero_impl(SrcCursorType obj)
+        {
+            obj->zero();
+        }
+
+        template<typename FirstDimInfo, typename... RestDimInfos, typename SrcCursorType>
+        DEVICE static void zero_impl(SrcCursorType obj)
+        {
+            using FirstDimType = typename FirstDimInfo::dim_type;
+            auto size = FirstDimType(FirstDimInfo::module_type::size.get());
+            for (auto i : range(size))
+            {
+                zero_impl<RestDimInfos...>(obj[i]);
+            }
+        }
     };
 
 }
