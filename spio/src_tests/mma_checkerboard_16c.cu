@@ -108,9 +108,7 @@ extern "C"
                 a_tensor.load(smem_a_load[PING_PONG(ping_pong)]);
                 b_tensor.load(smem_b_load[PING_PONG(ping_pong)]);
 
-                // tensor_mma_trans_ijk<I16, J16, K16>(c_tensor, a_tensor, b_tensor, c_tensor);
-                a_tensor.matmul(b_tensor, c_tensor, c_tensor);
-
+                tensor_mma(c_tensor, a_tensor, b_tensor, c_tensor);
                 __syncthreads();
             }
         }

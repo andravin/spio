@@ -42,48 +42,6 @@ namespace spio
         mma_m16_n8_k16(d.vec4(1), a.reg4(), b.reg2(1), c.vec4(1));
     }
 
-    template <typename I, typename J, typename K, typename D, typename A, typename B, typename C>
-    __device__ void tensor_mma_trans_ijk(D &d, const A &a, const B &b, const C &c)
-    {
-        for (auto k : range(a.template size<K>()))
-        {
-            for (auto i : range(c.template size<I>()))
-            {
-                for (auto j : range(c.template size<J>()))
-                {
-                    mma_trans(*d[i][j], *a[k][i], *b[k][j], *c[i][j]);
-                }
-            }
-        }
-    }
-
-    template <typename I, typename J, typename D, typename A, typename B, typename C>
-    __device__ void tensor_mma_trans_ij(D &d, const A &a, const B &b, const C &c)
-    {
-        for (auto i : range(c.template size<I>()))
-        {
-            for (auto j : range(c.template size<J>()))
-            {
-                mma_trans(*d[i][j], *a[i], *b[j], *c[i][j]);
-            }
-        }
-    }
-
-    template <typename I, typename D, typename A, typename B, typename C>
-    __device__ void tensor_mma_trans_i(D &d, const A &a, const B &b, const C &c)
-    {
-        for (auto i : range(c.template size<I>()))
-        {
-            mma_trans(*d[i], *a[i], *b, *c[i]);
-        }
-    }
-
-    template <typename D, typename A, typename B, typename C>
-    __device__ void tensor_mma_trans(D &d, const A &a, const B &b, const C &c)
-    {
-        mma_trans(*d, *a, *b, *c);
-    }
-
 }
 
 #endif // SPIO_FRAGMENT_MMA_CUH

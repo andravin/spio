@@ -478,6 +478,12 @@ namespace spio
         }
     };
 
+    template <typename TensorA, typename TensorB, typename TensorC, typename TensorD>
+    DEVICE void tensor_mma(TensorD &d, const TensorA &a, const TensorB &b, const TensorC &c)
+    {
+        a.matmul(b, c, d);
+    }
+
 }
 
 #endif
