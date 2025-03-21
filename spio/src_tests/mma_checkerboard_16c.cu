@@ -56,8 +56,8 @@ extern "C"
         ComputeIndex compute_idx(threadIdx.x);
 
         // Define the mapping from the shared memory tile to the register tile.
-        A_Fragments::data_type::LoadIndex a_load_idx(compute_idx.get<LANE>().get());
-        B_Fragments::data_type::LoadIndex b_load_idx(compute_idx.get<LANE>().get());
+        A_Tile::data_type::LoadIndex a_load_idx(compute_idx.get<LANE>().get());
+        B_Tile::data_type::LoadIndex b_load_idx(compute_idx.get<LANE>().get());
         auto smem_a_checkers = SmemA_Checkers(a_load_idx.get<I>(), a_load_idx.get<K8>()).get<CHECKERS>();
         auto smem_b_checkers = SmemB_Checkers(b_load_idx.get<J>(), b_load_idx.get<K8>()).get<CHECKERS>();
         auto smem_a_load = SmemA(smem_a)[compute_idx.get<I32>().fold<16>()][smem_a_checkers];
@@ -67,10 +67,9 @@ extern "C"
         int ping_pong = 0;
 
         // Initialize the accumulator.
-        C_Fragments::data_type c_data[C_Fragments::storage_size()];
-        C_Fragments c_tensor(c_data);
-
-        c_tensor.zero();
+        C_Tile::data_type c_data[C_Tile::storage_size()];
+        C_Tile c_tile(c_data);
+        c_tile.zero();
 
         auto global_load_i = block_i.unfold() + global_load_idx.get<X>().cast<I>();
         auto global_load_j = block_j.unfold() + global_load_idx.get<X>().cast<J>();
@@ -78,43 +77,43 @@ extern "C"
         A_Loader loader_a(global_load_i < A::size<I>());
         B_Loader loader_b(global_load_j < B::size<J>());
 
+        A_Tile::data_type a_data[A_Tile::storage_size()];
+        B_Tile::data_type b_data[B_Tile::storage_size()];
+
+        A_Tile a_tile(a_data);
+        B_Tile b_tile(b_data);
+
         // Iterate over chunks of the k-dimension.
-        for (auto iter : range_with_step<A_Fragments::size<K16>().get()>(A::size<K16>() + A_Fragments::size<K16>()))
+        for (auto iter : range_with_step<A_Tile::size<K16>().get()>(A::size<K16>() + A_Tile::size<K16>()))
         {
             if (iter < A::size<K16>())
             {
                 loader_a.load(smem_a_store[PING_PONG(ping_pong)].get(), a.get());
                 loader_b.load(smem_b_store[PING_PONG(ping_pong)].get(), b.get());
-
                 __pipeline_commit();
-                a = a[A_Fragments::size<K16>()];
-                b = b[B_Fragments::size<K16>()];
+
+                a.step(A_Tile::size<K16>());
+                b.step(B_Tile::size<K16>());
             }
 
             ping_pong ^= 1;
 
             if (iter > 0)
             {
-                __pipeline_wait_prior(iter < Params::k16 ? 1 : 0);
-
+                __pipeline_wait_prior(iter < A::size<K16>() ? 1 : 0);
                 __syncthreads();
 
-                A_Fragments::data_type a_data[A_Fragments::storage_size()];
-                B_Fragments::data_type b_data[B_Fragments::storage_size()];
+                a_tile.load(smem_a_load[PING_PONG(ping_pong)]);
+                b_tile.load(smem_b_load[PING_PONG(ping_pong)]);
 
-                A_Fragments a_tensor(a_data);
-                B_Fragments b_tensor(b_data);
+                tensor_mma(c_tile, a_tile, b_tile, c_tile);
 
-                a_tensor.load(smem_a_load[PING_PONG(ping_pong)]);
-                b_tensor.load(smem_b_load[PING_PONG(ping_pong)]);
-
-                tensor_mma(c_tensor, a_tensor, b_tensor, c_tensor);
                 __syncthreads();
             }
         }
 
         // Store outputs through shared memory.
-        C_Fragments::data_type::Index c_idx(compute_idx.get<LANE>().get());
+        C_Tile::data_type::Index c_idx(compute_idx.get<LANE>().get());
 
         smem_a.deallocate(smem_allocator);
         smem_b.deallocate(smem_allocator);
@@ -122,13 +121,13 @@ extern "C"
         auto smem_c = SmemCStore::allocate(smem_allocator);
         auto smem_c_store = smem_c[compute_idx.get<I32>()][compute_idx.get<J64>().fold<8>()][c_idx.get<J2M4>().cast<J2>()];
 
-        for (auto i16 : range(c_tensor.size<I16>()))
+        for (auto i16 : range(c_tile.size<I16>()))
         {
-            for (auto j16 : range(c_tensor.size<J16>()))
+            for (auto j16 : range(c_tile.size<J16>()))
             {
-                for (int f = 0; f < C_Fragments::data_type::size(); ++f)
+                for (int f = 0; f < C_Tile::data_type::size(); ++f)
                 {
-                    *smem_c_store[j16.fold<8>() + c_idx.get<J8>(f)][i16][c_idx.get<I>(f)] = c_tensor[i16][j16]->to_half2(f);
+                    *smem_c_store[j16.fold<8>() + c_idx.get<J8>(f)][i16][c_idx.get<I>(f)] = c_tile[i16][j16]->to_half2(f);
                 }
             }
         }
