@@ -118,13 +118,14 @@ extern "C"
         auto smem_c = SmemCStore::allocate(smem_allocator);
         auto smem_c_store = smem_c[compute_idx.get<I32>()][compute_idx.get<J64>().fold<8>()][c_idx.get<J2M4>().cast<J2>()];
 
-        for (auto i16 : range(c_tile.size<I16>()))
+        for (int f = 0; f < C_Tile::data_type::size(); ++f)
         {
-            for (auto j16 : range(c_tile.size<J16>()))
+            auto smem_c_cursor = smem_c_store[c_idx.get<J8>(f)][c_idx.get<I>(f)];
+            for (auto i16 : range(c_tile.size<I16>()))
             {
-                for (int f = 0; f < C_Tile::data_type::size(); ++f)
+                for (auto j16 : range(c_tile.size<J16>()))
                 {
-                    *smem_c_store[j16.fold<8>()][c_idx.get<J8>(f)][i16][c_idx.get<I>(f)] = c_tile[i16][j16]->to_half2(f);
+                    *smem_c_cursor[j16.fold<8>()][i16] = c_tile[i16][j16]->to_half2(f);
                 }
             }
         }
