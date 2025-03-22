@@ -33,55 +33,44 @@ extern "C"
         //
 
         // Input to smem.
-        Input::cursor_type input;
-        SmemInput::cursor_type smem_input_store;
         bool thread_loads_input;
         int zfill;
-        {
-            InputIdx idx(threadIdx.x);
-            auto block_x = block_q.unfold().cast<X>() - Block::padding;
-            auto x = block_x + idx.get<X>();
-            auto c4 = block_c.fold<4>() + idx.get<C4>();
+        InputIdx idx(threadIdx.x);
+        auto block_x = block_q.unfold().cast<X>() - Block::padding;
+        auto x = block_x + idx.get<X>();
+        auto c4 = block_c.fold<4>() + idx.get<C4>();
 
-            smem_input_store = SmemInput(smem_input_buf)[idx.get<X>()][idx.get<C4>()];
-            input = Input(src)[block_n][block_p.unfold().cast<Y>()][x][c4];
+        auto smem_input_store = SmemInput(smem_input_buf)[idx.get<X>()][idx.get<C4>()];
+        auto input = Input(src)[block_n][block_p.unfold().cast<Y>()][x][c4];
 
-            bool x_inbounds = (x >= 0 && x < Input::size<X>());
-            bool c4_inbounds = (c4 < Input::size<C4>());
-            bool thread_inbounds = (x_inbounds && c4_inbounds);
-            thread_loads_input = threadIdx.x < InputIdx::total_size;
-            zfill = thread_inbounds ? 0 : sizeof(Input::data_type);
-        }
+        bool x_inbounds = (x >= 0 && x < Input::size<X>());
+        bool c4_inbounds = (c4 < Input::size<C4>());
+        bool thread_inbounds = (x_inbounds && c4_inbounds);
+        thread_loads_input = threadIdx.x < InputIdx::total_size;
+        zfill = thread_inbounds ? 0 : sizeof(Input::data_type);
 
         // Input-smem to output-smem.
-        ConstSmemInput::cursor_type smem_input_load;
-        SmemOutput::cursor_type smem_output_store;
-        {
-            SmemInputLoadIdx idx(threadIdx.x);
-            auto q_dim = idx.get<Q>();
-            auto c4_dim = idx.get<C4>();
-            auto c2_dim = idx.get<C2>();
-            
-            smem_input_load = ConstSmemInput(reinterpret_cast<const float2 *>(smem_input_buf))[q_dim.cast<X>() + Block::padding][c4_dim][c2_dim];
-            smem_output_store = SmemOutput(reinterpret_cast<float2 *>(smem_output_buf))[q_dim][c4_dim][c2_dim];
-        }
+        SmemInputLoadIdx smem_input_idx(threadIdx.x);
+        auto q_dim = smem_input_idx.get<Q>();
+        auto c4_dim = smem_input_idx.get<C4>();
+        auto c2_dim = smem_input_idx.get<C2>();
+
+        auto smem_input_load = ConstSmemInput(reinterpret_cast<const float2 *>(smem_input_buf))[q_dim.cast<X>() + Block::padding][c4_dim][c2_dim];
+        auto smem_output_store = SmemOutput(reinterpret_cast<float2 *>(smem_output_buf))[q_dim][c4_dim][c2_dim];
 
         // Smem to output.
-        ConstSmemOutput::cursor_type smem_output_load;
-        Output::cursor_type output;
         bool thread_stores_output;
-        {
-            auto idx = ConstSmemOutput::index_type(threadIdx.x);
-            auto q = block_q.unfold() + idx.get<Q>();
-            auto c4 = block_c.fold<4>() + idx.get<C4>();
 
-            smem_output_load = ConstSmemOutput(smem_output_buf)[idx.get<Q>()][idx.get<C4>()];
-            output = Output(dst)[block_n][block_p.unfold()][q][c4];
+        auto smem_out_idx = ConstSmemOutput::index_type(threadIdx.x);
+        auto q = block_q.unfold() + smem_out_idx.get<Q>();
+        auto c4_out = block_c.fold<4>() + smem_out_idx.get<C4>();
 
-            thread_stores_output = q.cast<X>() < Input::size<X>() && 
-                                  c4 < Block::c4 && 
-                                  threadIdx.x < ConstSmemOutput::size();
-        }
+        auto smem_output_load = ConstSmemOutput(smem_output_buf)[smem_out_idx.get<Q>()][smem_out_idx.get<C4>()];
+        auto output = Output(dst)[block_n][block_p.unfold()][q][c4_out];
+
+        thread_stores_output = q.cast<X>() < Input::size<X>() &&
+                               c4_out < Block::c4 &&
+                               threadIdx.x < ConstSmemOutput::size();
 
         //
         //  Define pipeline stages.
@@ -98,7 +87,7 @@ extern "C"
 
         //
         // Run the pipeline.
-        //      
+        //
         for (int iter = 0; iter < num_iters; ++iter)
         {
             pipeline.step(iter < num_p.get());
