@@ -63,19 +63,6 @@ namespace spio
 
         /// @brief  How this dimension folds the tensor's linear offset dimension.
         using module_type = Module<_OffsetDim, Size, Stride>;
-
-        /// @brief Map from dimension to offset.
-        /// Convert a dimension index to a folded offset dimension and unfold it.
-        /// @param d the dimension
-        DEVICE constexpr static _OffsetDim to_offset(DimType d)
-        {
-            return module_type(d.get()).unfold();
-        }
-
-        DEVICE constexpr static DimType from_offset(const _OffsetDim offset)
-        {
-            return DimType(module_type(offset).get());
-        }
     };
 
     namespace detail
@@ -155,6 +142,12 @@ namespace spio
         struct dimension_size
         {
             static constexpr DimType value = find_dim_info<DimType, DimInfos...>::info::module_type::size.get();
+        };
+
+        template <typename DimType, typename... DimInfos>
+        struct dimension_stride
+        {
+            static constexpr DimType value = find_dim_info<DimType, DimInfos...>::info::module_type::stride.get();
         };
     }
 }

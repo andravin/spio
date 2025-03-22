@@ -157,10 +157,7 @@ namespace spio
         template <typename DimType>
         DEVICE constexpr Cursor operator[](DimType d) const
         {
-            // Get the offset for this dimension
-            constexpr int stride = dim_traits::find_dim_info<DimType, DimInfos...>::info::module_type::stride.get();
-
-            // Return new cursor at the offset position
+            constexpr int stride = dim_traits::dimension_stride<DimType, DimInfos...>::value.get();
             return Cursor(Base::get(), _offset + d.get() * stride);
         }
 

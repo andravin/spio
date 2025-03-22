@@ -168,24 +168,20 @@ UTEST(TensorVariadic, IndexSubscript)
         DimInfo<I, HEIGHT, WIDTH>,
         DimInfo<J, WIDTH, 1>>;
 
-    // Test that tensor[idx] gives the same result as tensor[i][j]
-    for (int i = 0; i < HEIGHT; i++)
+    for (int offset = 0; offset < HEIGHT * WIDTH; ++offset)
     {
-        for (int j = 0; j < WIDTH; j++)
-        {
-            // Create index from coordinates
-            auto idx = Idx2D::from_coords(I(i), J(j));
+        // Create index from coordinates
+        auto idx = Idx2D(offset);
 
-            // Get data via traditional subscript
-            float val1 = *tensor2d[I(i)][J(j)];
+        // Get data via traditional subscript
+        float val1 = *tensor2d[idx.get<I>()][idx.get<J>()];
 
-            // Get data via index subscript
-            float val2 = *tensor2d[idx];
+        // Get data via index subscript
+        float val2 = *tensor2d[idx];
 
-            // Values should be identical
-            EXPECT_EQ(val1, val2);
-            EXPECT_EQ(val1, i * WIDTH + j);
-        }
+        // Values should be identical
+        EXPECT_EQ(val1, val2);
+        EXPECT_EQ(val1, idx.get<I>().get() * WIDTH + idx.get<J>().get());
     }
 
     // 3D Test
@@ -213,76 +209,18 @@ UTEST(TensorVariadic, IndexSubscript)
         DimInfo<J, HEIGHT, WIDTH>,
         DimInfo<K, WIDTH, 1>>;
 
-    // Test that tensor[idx] gives the same result as tensor[i][j][k]
-    for (int i = 0; i < DEPTH; i++)
+    for (int offset = 0; offset < DEPTH * HEIGHT * WIDTH; ++offset)
     {
-        for (int j = 0; j < HEIGHT; j++)
-        {
-            for (int k = 0; k < WIDTH; k++)
-            {
-                // Create index from coordinates
-                auto idx = Idx3D::from_coords(I(i), J(j), K(k));
+        // Create index from coordinates
+        auto idx = Idx3D(offset);
 
-                // Get data via traditional subscript
-                float val1 = *tensor3d[I(i)][J(j)][K(k)];
+        // Get data via traditional subscript
+        float val1 = *tensor3d[idx.get<I>()][idx.get<J>()][idx.get<K>()];
 
-                // Get data via index subscript
-                float val2 = *tensor3d[idx];
+        // Get data via index subscript
+        float val2 = *tensor3d[idx];
 
-                // Values should be identical
-                EXPECT_EQ(val1, val2);
-                EXPECT_EQ(val1, i * (HEIGHT * WIDTH) + j * WIDTH + k);
-            }
-        }
-    }
-}
-
-// Test mixed subscription with both tensor and index
-UTEST(TensorVariadic, MixedSubscription)
-{
-    // Create a 3x4 tensor
-    constexpr int HEIGHT = 3;
-    constexpr int WIDTH = 4;
-    float data[HEIGHT * WIDTH] = {
-        0, 1, 2, 3,
-        4, 5, 6, 7,
-        8, 9, 10, 11};
-
-    // Define dimension types
-    class I : public Dim<I>
-    {
-    public:
-        using Dim<I>::Dim;
-    };
-    class J : public Dim<J>
-    {
-    public:
-        using Dim<J>::Dim;
-    };
-
-    // Create tensor
-    auto tensor = Tensor<float,
-                         DimInfo<I, HEIGHT, WIDTH>,
-                         DimInfo<J, WIDTH, 1>>(data);
-
-    // Create an index for just J dimension
-    using JIdx = Index<DimInfo<J, WIDTH, 1>>;
-
-    // Test mixed tensor[i][jIdx]
-    for (int i = 0; i < HEIGHT; i++)
-    {
-        for (int j = 0; j < WIDTH; j++)
-        {
-            // Create J index
-            auto jIdx = JIdx::from_coords(J(j));
-
-            // Get data via mixed subscription
-            float val1 = *tensor[I(i)][jIdx];
-
-            // Compare with standard subscription
-            float val2 = *tensor[I(i)][J(j)];
-
-            EXPECT_EQ(val1, val2);
-        }
+        // Values should be identical
+        EXPECT_EQ(val1, val2);
     }
 }

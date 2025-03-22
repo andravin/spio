@@ -89,30 +89,11 @@ namespace spio
         /// @return A typed dimension value
         template <typename DimType>
         DEVICE constexpr DimType get() const {
-            // Use the same dim_traits infrastructure as Tensor
-            return dim_traits::find_dim_info<DimType, DimInfos...>::info::from_offset(_OffsetDim(offset()));
+            constexpr unsigned size = dim_traits::dimension_size<DimType, DimInfos...>::value.get();
+            constexpr unsigned stride = dim_traits::dimension_stride<DimType, DimInfos...>::value.get();
+            return DimType((offset() / stride) % size);
         }
         
-        /// @brief Create an index from individual typed coordinates
-        /// @tparam Coords Types of the dimension coordinates
-        /// @param coords The typed dimension coordinates
-        /// @return An Index representing the combined coordinates
-        template <typename... Coords>
-        DEVICE static constexpr Index from_coords(Coords... coords) {
-            int offset = 0;
-            
-            // Simpler implementation without initializer_list
-            // Using fold expression pattern in C++11 via comma operator
-            int dummy[] = {0, ((
-                offset += dim_traits::find_dim_info<
-                    detail::decay_t<decltype(coords)>, 
-                    DimInfos...>::info::to_offset(coords).get()
-            ), 0)...};
-            (void)dummy; // Suppress unused variable warning
-            
-            return Index(offset);
-        }        
-
         // Alternative method form if you prefer function syntax
         DEVICE static constexpr int size() { return total_size; }
 
