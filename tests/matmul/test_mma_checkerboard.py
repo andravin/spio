@@ -10,7 +10,7 @@ from spio.util import divup, assert_all_close_with_acc_depth, SixteenChannelsLas
 def test_mma_checkerboard_16c_kernel():
     """Compile and run a GPU kernel that tests tensor core mma with checkerboard layout for smem."""
 
-    m, n, k = (347, 248, 128)
+    m, n, k = (8192, 1024, 1024)
 
     specs, grid, block = _get_specs(m, n, k)
 
@@ -26,6 +26,7 @@ def test_mma_checkerboard_16c_kernel():
         source_file_name="mma_checkerboard_16c.cu",
         header_dict={"parameters.h": gen.generate(specs)},
         src_module="spio.src_tests",
+        lineinfo=True,
     )
     mma_kernel_16c.launch(grid, block, (C, A_16c, B_16c))
 
