@@ -152,20 +152,23 @@ namespace spio
         DEVICE constexpr Cursor operator[](DimType d) const
         {
             // Get the offset for this dimension
-            _OffsetDim offset = dim_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(d);
+            constexpr int stride = dim_traits::find_dim_info<DimType, DimInfos...>::info::module_type::stride.get();
 
             // Return new cursor at the offset position
-            return Cursor(Base::get(), _offset + offset.get());
+            return Cursor(Base::get(), _offset + d.get() * stride);
         }
 
         /// @brief  Increment the cursor in a specific dimension type.
         /// @tparam Dim the dimension type in which the increment is applied.
         /// @param d The amount to increment by.
         /// @return a reference to the updated cursor.
-        template <typename Dim>
-        DEVICE Cursor &step(Dim d = 1)
+        template <typename DimType>
+        DEVICE Cursor &step(DimType d = 1)
         {
-            *this = (*this)[d];
+            // Keep current offset and reset base pointer.
+            // We do this because the offset is const but the pointer is not.
+            constexpr int stride = dim_traits::find_dim_info<DimType, DimInfos...>::info::module_type::stride.get();
+            Base::reset(Base::get() + d.get() * stride);
             return *this;
         }
 
@@ -185,7 +188,7 @@ namespace spio
         DEVICE constexpr data_type *operator->() const { return this->get(); }
 
     private:
-        int _offset;
+        const int _offset;
     };
 
     /// @brief Tensor class.

@@ -162,7 +162,7 @@ namespace spio
         }
 
         template <class NewDimType>
-        DEVICE constexpr auto cast() const -> Fold<NewDimType, Stride> { return Fold<NewDimType, Stride>(get()); }
+        DEVICE constexpr auto cast() const -> Fold<NewDimType, Stride> { return Fold<NewDimType, Stride>(get()); }        
     };
 
     template <class DimType, int Size, int Stride>
@@ -174,7 +174,9 @@ namespace spio
         constexpr static dim_type size = Size;
 
         using Base = Dim<Module<DimType, Size, Stride>>;
-        using Base::Dim;
+        
+        DEVICE constexpr Module(int i) : Base (static_cast<unsigned>(i) % static_cast<unsigned>(Size)) {}
+
         using Base::get;
 
         explicit DEVICE constexpr Module(const DimType dim)
@@ -186,8 +188,7 @@ namespace spio
 
         DEVICE constexpr DimType unfold() const
         {
-            const int m = static_cast<unsigned>(get()) % static_cast<unsigned>(Size);
-            return DimType(m * Stride);
+            return DimType(get() * Stride);
         }
     };
 
