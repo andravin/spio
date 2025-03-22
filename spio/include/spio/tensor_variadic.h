@@ -128,9 +128,11 @@ namespace spio
     class Cursor : public Data<DataType>
     {
     public:
+        using Base = Data<DataType>;
         using data_type = DataType;
-        using Data<data_type>::Data;
-        using Data<data_type>::get;
+
+        DEVICE constexpr Cursor(DataType *data = nullptr, int offset = 0)
+            : Base(data), _offset(offset) {}
 
         template <typename DimType>
         struct has_dimension
@@ -153,7 +155,7 @@ namespace spio
             _OffsetDim offset = dim_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(d);
 
             // Return new cursor at the offset position
-            return Cursor(get() + offset.get());
+            return Cursor(Base::get(), _offset + offset.get());
         }
 
         /// @brief  Increment the cursor in a specific dimension type.
@@ -177,6 +179,13 @@ namespace spio
             // Let the Index apply itself to this cursor, just like with Tensor
             return idx.apply_to(*this);
         }
+
+        DEVICE constexpr data_type *get() const { return Base::get() + _offset; }
+        DEVICE constexpr data_type &operator*() const { return *this->get(); }
+        DEVICE constexpr data_type *operator->() const { return this->get(); }
+
+    private:
+        int _offset;
     };
 
     /// @brief Tensor class.
@@ -270,8 +279,7 @@ namespace spio
         template <typename DimType>
         DEVICE constexpr cursor_type operator[](DimType d) const
         {
-            _OffsetDim offset = dim_traits::find_dim_info<DimType, DimInfos...>::info::to_offset(d);
-            return cursor_type(get() + offset.get());
+            return cursor_type(get())[d];
         }
 
         /// @brief Get a cursor at a specific offset.
@@ -279,7 +287,7 @@ namespace spio
         /// @return a cursor at the specified offset.
         DEVICE constexpr cursor_type offset(int offset) const
         {
-            return cursor_type(get() + offset);
+            return cursor_type(get(), offset);
         }
 
         /// @brief Subscript operator that takes an Index object and applies all dimensions
@@ -351,7 +359,6 @@ namespace spio
                 zero_impl<RestDimInfos...>(obj[i]);
             }
         }
-
     };
 }
 
