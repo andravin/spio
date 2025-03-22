@@ -86,24 +86,31 @@ extern "C"
         constexpr auto size = A::size<K16>();
         constexpr auto step_size = A_Tile::size<K16>();
 
+        auto a_cursor = a.rebase();
+        auto b_cursor = b.rebase();
+        auto smem_a_store_cursor = smem_a_store.rebase();
+        auto smem_b_store_cursor = smem_b_store.rebase();
+        auto smem_a_load_cursor = smem_a_load.rebase();
+        auto smem_b_load_cursor = smem_b_load.rebase();
+
         // Compute.
         for (auto iter : range_with_step<step_size.get()>(size + step_size))
         {
             if (iter < size)
             {
-                loader_a.load(smem_a_store[PING_PONG(ping_pong)].get(), a.get());
-                loader_b.load(smem_b_store[PING_PONG(ping_pong)].get(), b.get());
+                loader_a.load(smem_a_store_cursor[PING_PONG(ping_pong)].get(), a_cursor.get());
+                loader_b.load(smem_b_store_cursor[PING_PONG(ping_pong)].get(), b_cursor.get());
                 __pipeline_commit();
-                a.step(step_size);
-                b.step(step_size);
+                a_cursor.step(step_size);
+                b_cursor.step(step_size);
             }
             ping_pong ^= 1;
             if (iter > 0)
             {
                 __pipeline_wait_prior(iter < size ? 1 : 0);
                 __syncthreads();
-                a_tile.load(smem_a_load[PING_PONG(ping_pong)]);
-                b_tile.load(smem_b_load[PING_PONG(ping_pong)]);
+                a_tile.load(smem_a_load_cursor[PING_PONG(ping_pong)]);
+                b_tile.load(smem_b_load_cursor[PING_PONG(ping_pong)]);
                 mma_gen(a_tile, b_tile, c_tile, c_tile);
                 __syncthreads();
             }

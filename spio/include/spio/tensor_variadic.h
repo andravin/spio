@@ -134,6 +134,12 @@ namespace spio
         DEVICE constexpr Cursor(DataType *data = nullptr, int offset = 0)
             : Base(data), _offset(offset) {}
 
+        DEVICE constexpr data_type *get() const { return Base::get() + _offset; }
+
+        /// @brief Create a new cursor with the offset folded into the base pointer.
+        /// @return a new cursor object
+        DEVICE constexpr Cursor rebase() const { return Cursor(get()); }
+
         template <typename DimType>
         struct has_dimension
         {
@@ -183,7 +189,6 @@ namespace spio
             return idx.apply_to(*this);
         }
 
-        DEVICE constexpr data_type *get() const { return Base::get() + _offset; }
         DEVICE constexpr data_type &operator*() const { return *this->get(); }
         DEVICE constexpr data_type *operator->() const { return this->get(); }
 
