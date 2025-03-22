@@ -53,13 +53,13 @@ namespace spio
         template<typename T, typename... Ts>
         struct product_sizes<T, Ts...>
         {
-            static constexpr unsigned value = T::module_type::size.get() * product_sizes<Ts...>::value;
+            static constexpr int value = T::module_type::size.get() * product_sizes<Ts...>::value;
         };
         
         template<typename T>
         struct product_sizes<T>
         {
-            static constexpr unsigned value = T::module_type::size.get();
+            static constexpr int value = T::module_type::size.get();
         };
     }
 
@@ -67,7 +67,7 @@ namespace spio
     namespace index_traits {
         template<typename... DimInfos>
         struct total_elements {
-            static constexpr unsigned value = detail::product_sizes<DimInfos...>::value;
+            static constexpr int value = detail::product_sizes<DimInfos...>::value;
         };
     }
 
@@ -80,7 +80,7 @@ namespace spio
     {
     public:
         // Total number of elements (product of all dimension sizes)
-        static constexpr unsigned total_size = index_traits::total_elements<DimInfos...>::value;
+        static constexpr int total_size = index_traits::total_elements<DimInfos...>::value;
         
         using IndexBase::IndexBase;
                
@@ -99,7 +99,7 @@ namespace spio
         /// @return An Index representing the combined coordinates
         template <typename... Coords>
         DEVICE static constexpr Index from_coords(Coords... coords) {
-            unsigned offset = 0;
+            int offset = 0;
             
             // Simpler implementation without initializer_list
             // Using fold expression pattern in C++11 via comma operator
@@ -114,7 +114,7 @@ namespace spio
         }        
 
         // Alternative method form if you prefer function syntax
-        DEVICE static constexpr unsigned size() { return total_size; }
+        DEVICE static constexpr int size() { return total_size; }
 
         // Get size for a specific dimension
         template <typename DimType>

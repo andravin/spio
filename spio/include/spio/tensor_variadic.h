@@ -102,7 +102,7 @@ namespace spio
         template <>
         struct calculate_storage_size<>
         {
-            static constexpr unsigned value = 1; // No dimensions, just one element
+            static constexpr int value = 1; // No dimensions, just one element
         };
 
         // Recursive case
@@ -110,11 +110,11 @@ namespace spio
         struct calculate_storage_size<FirstDim, RestDims...>
         {
             // Get size and stride for this dimension
-            static constexpr unsigned size = FirstDim::module_type::size.get();
-            static constexpr unsigned stride = FirstDim::module_type::stride.get();
+            static constexpr int size = FirstDim::module_type::size.get();
+            static constexpr int stride = FirstDim::module_type::stride.get();
 
             // Calculate max offset for this dimension plus rest of dims
-            static constexpr unsigned value =
+            static constexpr int value =
                 (size - 1) * stride + calculate_storage_size<RestDims...>::value;
         };
     }
@@ -214,7 +214,7 @@ namespace spio
         // the previous implementation. Now it is just the number of elements.
         // It is not longer the storage size of the tensor. We need a
         // separate method to get the storage size.
-        static constexpr unsigned total_size = detail::product_sizes<DimInfos...>::value;
+        static constexpr int total_size = detail::product_sizes<DimInfos...>::value;
 
         // Helper to check if this tensor has a specific dimension type
         template <typename DimType>
@@ -243,16 +243,16 @@ namespace spio
         }
 
         // For compatibility with existing code
-        DEVICE static constexpr unsigned size() { return total_size; }
+        DEVICE static constexpr int size() { return total_size; }
 
         // Calculate actual storage size (accounting for strides)
-        DEVICE static constexpr unsigned storage_size()
+        DEVICE static constexpr int storage_size()
         {
             return detail::calculate_storage_size<DimInfos...>::value;
         }
 
         // Return actual bytes needed, accounting for strides
-        DEVICE static constexpr unsigned num_bytes()
+        DEVICE static constexpr int num_bytes()
         {
             return storage_size() * sizeof(data_type);
         }

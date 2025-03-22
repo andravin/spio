@@ -78,7 +78,7 @@ namespace spio
             if constexpr (std::is_same_v<Dim, PairDim>) {
                 return PairDim(offset() >> 1);
             } else if constexpr (std::is_same_v<Dim, ColorDim>) {
-                const unsigned row = offset() / ranks;
+                const int row = static_cast<unsigned>(offset()) / static_cast<unsigned>(ranks);
                 return ColorDim((offset() & 1) ^ (row & 1));
             } else if constexpr (std::is_same_v<Dim, OffsetDim>) {
                 return OffsetDim(offset());
@@ -105,9 +105,9 @@ namespace spio
         /// @param pair the index of a pair of grid elements.
         /// @param color the black (0) or white (1) grid element in the pair.
         /// @return Offset into the checkeboard grid.
-        DEVICE inline static constexpr int compute_offset(unsigned pair, unsigned color)
+        DEVICE inline static constexpr int compute_offset(int pair, int color)
         {
-            unsigned row = pair / (ranks / 2);
+            int row = static_cast<unsigned>(pair) / (static_cast<unsigned>(ranks) >> 1);
             return (pair << 1 | color) ^ (row & 1);
         }
         

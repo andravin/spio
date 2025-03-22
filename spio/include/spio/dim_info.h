@@ -56,7 +56,7 @@ namespace spio
     /// @tparam DimType the dimension type
     /// @tparam Size the size of the dimension
     /// @tparam Stride the stride of the dimension
-    template <typename DimType, int Size, unsigned Stride>
+    template <typename DimType, int Size, int Stride>
     struct DimInfo
     {
         using dim_type = DimType;

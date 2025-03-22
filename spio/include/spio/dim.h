@@ -6,7 +6,7 @@
 
 namespace spio
 {
-    template <class DimType, unsigned Stride>
+    template <class DimType, int Stride>
     class Fold;
 
     /// @brief A base class for tensor dimensions using CRTP.
@@ -27,7 +27,7 @@ namespace spio
         /// @brief Fold the dimension by a given stride.
         /// @tparam Stride the stride to fold by.
         /// @return a Fold object that is the result of folding the current dimension by the given stride.
-        template <unsigned Stride>
+        template <int Stride>
         DEVICE constexpr Fold<Derived, Stride> fold() const
         {
             return Fold<Derived, Stride>(static_cast<const Derived &>(*this));
@@ -130,7 +130,7 @@ namespace spio
     ///
     /// @tparam DimType the type that represents the dimension to fold
     /// @tparam Stride the size of the fold.
-    template <class DimType, unsigned Stride>
+    template <class DimType, int Stride>
     class Fold : public Dim<Fold<DimType, Stride>>
     {
     public:
@@ -142,18 +142,30 @@ namespace spio
         using Base::Dim;
         using Base::get;
 
-        explicit DEVICE constexpr Fold(const DimType dim) : Base(dim.get() / Stride) {}
+        explicit DEVICE constexpr Fold(const DimType dim)
+            : Base(static_cast<unsigned>(dim.get()) / static_cast<unsigned>(Stride)) {}
 
         DEVICE constexpr DimType unfold() const { return DimType(get() * Stride); }
 
-        template <unsigned NewStride>
-        DEVICE constexpr Fold<DimType, NewStride> fold() const { return Fold<DimType, NewStride>(get() * Stride / NewStride); }
+        template <int NewStride>
+        DEVICE constexpr Fold<DimType, NewStride> fold() const
+        {
+            if constexpr (Stride > NewStride)
+            {
+                constexpr int relative_stride = Stride / NewStride;
+                return Fold<DimType, NewStride>(get() * relative_stride);
+            }
+            else
+            {
+                return Fold<DimType, NewStride>(unfold());
+            }
+        }
 
         template <class NewDimType>
         DEVICE constexpr auto cast() const -> Fold<NewDimType, Stride> { return Fold<NewDimType, Stride>(get()); }
     };
 
-    template <class DimType, unsigned Size, unsigned Stride>
+    template <class DimType, int Size, int Stride>
     class Module : public Dim<Module<DimType, Size, Stride>>
     {
     public:
@@ -165,9 +177,18 @@ namespace spio
         using Base::Dim;
         using Base::get;
 
-        explicit DEVICE constexpr Module(const DimType dim) : Base((dim.get() / Stride) % Size) {}
+        explicit DEVICE constexpr Module(const DimType dim)
+            : Base((static_cast<unsigned>(dim.get()) /
+                    static_cast<unsigned>(Stride)) %
+                   static_cast<unsigned>(Size))
+        {
+        }
 
-        DEVICE constexpr DimType unfold() const { return DimType((get() % Size) * Stride); }
+        DEVICE constexpr DimType unfold() const
+        {
+            const int m = static_cast<unsigned>(get()) % static_cast<unsigned>(Size);
+            return DimType(m * Stride);
+        }
     };
 
     /// @brief A template class that implements a range of indexes in a dimension.
