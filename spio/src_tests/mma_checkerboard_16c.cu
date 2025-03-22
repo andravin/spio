@@ -63,9 +63,6 @@ extern "C"
         auto smem_a_load = SmemA(smem_a)[compute_idx.get<I32>().fold<16>()][smem_a_checkers];
         auto smem_b_load = SmemB(smem_b)[compute_idx.get<J64>().fold<16>()][smem_b_checkers];
 
-        // Double-buffer the global memory loads.
-        int ping_pong = 0;
-
         // Initialize the accumulator.
         C_Tile::data_type c_data[C_Tile::storage_size()];
         C_Tile c_tile(c_data);
@@ -98,19 +95,20 @@ extern "C"
         {
             if (iter < size)
             {
-                loader_a.load(smem_a_store_cursor[PING_PONG(ping_pong)].get(), a_cursor.get());
-                loader_b.load(smem_b_store_cursor[PING_PONG(ping_pong)].get(), b_cursor.get());
+                PING_PONG ping_pong((iter.get() / step_size.get()));
+                loader_a.load(smem_a_store_cursor[ping_pong].get(), a_cursor.get());
+                loader_b.load(smem_b_store_cursor[ping_pong].get(), b_cursor.get());
                 __pipeline_commit();
                 a_cursor.step(step_size);
                 b_cursor.step(step_size);
             }
-            ping_pong ^= 1;
             if (iter > 0)
             {
+                PING_PONG ping_pong((iter.get() / step_size.get() + 1));
                 __pipeline_wait_prior(iter < size ? 1 : 0);
                 __syncthreads();
-                a_tile.load(smem_a_load_cursor[PING_PONG(ping_pong)]);
-                b_tile.load(smem_b_load_cursor[PING_PONG(ping_pong)]);
+                a_tile.load(smem_a_load_cursor[ping_pong]);
+                b_tile.load(smem_b_load_cursor[ping_pong]);
                 mma_gen(a_tile, b_tile, c_tile, c_tile);
                 __syncthreads();
             }
@@ -127,7 +125,7 @@ extern "C"
 
         for (int f = 0; f < C_Tile::data_type::size(); ++f)
         {
-            auto smem_c_cursor = smem_c_store[c_idx.get<J8>(f)][c_idx.get<I>(f)];
+            auto smem_c_cursor = smem_c_store[c_idx.get<J8>(f)][c_idx.get<I>(f)].rebase();
             for (auto i16 : range(c_tile.size<I16>()))
             {
                 for (auto j16 : range(c_tile.size<J16>()))
