@@ -83,21 +83,24 @@ extern "C"
         A_Tile a_tile(a_data);
         B_Tile b_tile(b_data);
 
-        // Iterate over chunks of the k-dimension.
-        for (auto iter : range_with_step<A_Tile::size<K16>().get()>(A::size<K16>() + A_Tile::size<K16>()))
+        constexpr auto size = A::size<K16>();
+        constexpr auto step_size = A_Tile::size<K16>();
+
+        // Compute.
+        for (auto iter : range_with_step<step_size.get()>(size + step_size))
         {
-            if (iter < A::size<K16>())
+            if (iter < size)
             {
                 loader_a.load(smem_a_store[PING_PONG(ping_pong)].get(), a.get());
                 loader_b.load(smem_b_store[PING_PONG(ping_pong)].get(), b.get());
                 __pipeline_commit();
-                a.step(A_Tile::size<K16>());
-                b.step(B_Tile::size<K16>());
+                a.step(step_size);
+                b.step(step_size);
             }
             ping_pong ^= 1;
             if (iter > 0)
             {
-                __pipeline_wait_prior(iter < A::size<K16>() ? 1 : 0);
+                __pipeline_wait_prior(iter < size ? 1 : 0);
                 __syncthreads();
                 a_tile.load(smem_a_load[PING_PONG(ping_pong)]);
                 b_tile.load(smem_b_load[PING_PONG(ping_pong)]);
