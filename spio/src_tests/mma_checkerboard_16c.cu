@@ -90,14 +90,14 @@ extern "C"
         {
             if (iter < size)
             {
-                auto smem_a_store_pong = smem_a_store;
-                auto smem_b_store_pong = smem_b_store;
+                auto smem_a_store_iter = smem_a_store;
+                auto smem_b_store_iter = smem_b_store;
                 if (pong) {
-                    smem_a_store_pong.step(PING(pong));
-                    smem_b_store_pong.step(PING(pong));
+                    smem_a_store_iter.step(PING(pong));
+                    smem_b_store_iter.step(PING(pong));
                 }
-                loader_a.load(smem_a_store_pong.get(), a.get());
-                loader_b.load(smem_b_store_pong.get(), b.get());
+                loader_a.load(smem_a_store_iter.get(), a.get());
+                loader_b.load(smem_b_store_iter.get(), b.get());
                 __pipeline_commit();
                 a.step(step_size);
                 b.step(step_size);
@@ -107,14 +107,14 @@ extern "C"
             {
                 __pipeline_wait_prior(iter < size ? 1 : 0);
                 __syncthreads();
-                auto smem_a_load_pong = smem_a_load;
-                auto smem_b_load_pong = smem_b_load;
+                auto smem_a_load_iter = smem_a_load;
+                auto smem_b_load_iter = smem_b_load;
                 if (pong) {
-                    smem_a_load_pong.step(PING(pong));
-                    smem_b_load_pong.step(PING(pong));
+                    smem_a_load_iter.step(PING(pong));
+                    smem_b_load_iter.step(PING(pong));
                 }
-                a_tile.load(smem_a_load_pong);
-                b_tile.load(smem_b_load_pong);
+                a_tile.load(smem_a_load_iter);
+                b_tile.load(smem_b_load_iter);
                 mma_gen(a_tile, b_tile, c_tile, c_tile);
                 __syncthreads();
             }
