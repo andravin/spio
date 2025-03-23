@@ -157,9 +157,8 @@ namespace spio
         template <typename DimType>
         DEVICE constexpr Cursor operator[](DimType d) const
         {
-            constexpr unsigned size = dim_traits::dimension_size<DimType, DimInfos...>::value.get();
             constexpr int stride = dim_traits::dimension_stride<DimType, DimInfos...>::value.get();
-            return Cursor(Base::get(), _offset + static_cast<int>(d.get() % size) * stride);
+            return Cursor(Base::get(), _offset + d.get() * stride);
         }
 
         /// @brief  Increment the cursor in a specific dimension type.
@@ -171,9 +170,8 @@ namespace spio
         {
             // Keep current offset and reset base pointer.
             // We do this because the offset is const but the pointer is not.
-            constexpr unsigned size = dim_traits::dimension_size<DimType, DimInfos...>::value.get();
             constexpr int stride = dim_traits::find_dim_info<DimType, DimInfos...>::info::module_type::stride.get();
-            Base::reset(Base::get() + static_cast<int>(d.get() % size) * stride);
+            Base::reset(Base::get() + d.get() * stride);
             return *this;
         }
 
