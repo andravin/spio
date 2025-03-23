@@ -24,6 +24,7 @@ def compile_cuda(
     device_debug: bool = False,
     lineinfo: bool = False,
     header_dict: Dict[str, str] = None,
+    max_registers: int = None,
 ) -> bytes:
     """Compile CUDA source code and return the resulting cubin.
 
@@ -34,6 +35,7 @@ def compile_cuda(
         device_debug: Whether to include debugging information.
         lineinfo: Whether to include line information.
         header_dict: A dictionary of header file names and contents.
+        max_registers: Maximum number of registers to use for the kernel.
     """
     arch = sm_from_arch(arch)
     if includes is None:
@@ -46,6 +48,8 @@ def compile_cuda(
         options.append("-G")
     if lineinfo:
         options.append("-lineinfo")
+    if max_registers is not None:
+        options.append(f"-maxrregcount={max_registers}")
     options += [f"-I{path}" for path in includes]
 
     if header_dict is not None:
