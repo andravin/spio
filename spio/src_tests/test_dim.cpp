@@ -152,3 +152,15 @@ UTEST(range, start_1_step_2)
     }
     EXPECT_EQ(count, expect.size());
 }
+
+UTEST(reverse_range, step_1)
+{
+    using I16 = spio::Fold<IDim, 16>;
+    std::array<int, 8> expect = {7, 6, 5, 4, 3, 2, 1, 0};
+    size_t count = 0;
+    for (auto i16 : spio::reverse_range(I16(8)))
+    {
+        EXPECT_EQ(i16.get(), expect[count++]);
+    }
+    EXPECT_EQ(count, expect.size());
+}

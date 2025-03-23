@@ -229,11 +229,44 @@ namespace spio
         int _end;
     };
 
+    /// @brief A template class that implements a reverse range of indexes in a dimension.
+    /// This class is used internally by the reverse_range functions below.
+    /// @tparam dim_type The type of the dimension.
+    template <typename dim_type>
+    class _ReverseRange
+    {
+    public:
+        class ReverseIterator
+        {
+        public:
+            DEVICE constexpr ReverseIterator(int i) : _i(i) {}
+            DEVICE dim_type operator*() const { return dim_type(_i); }
+            DEVICE constexpr ReverseIterator &operator++()
+            {
+                --_i;
+                return *this;
+            }
+            DEVICE constexpr bool operator!=(const ReverseIterator other) const { return _i != other._i; }
+
+        private:
+            int _i;
+        };
+
+        // Create range from 0 to end (reverse)
+        DEVICE constexpr _ReverseRange(dim_type end) : _start(end.get() - 1), _end(-1) {}
+
+        // Create range from start to end (reverse)
+        DEVICE constexpr _ReverseRange(dim_type start, dim_type end) : _start(end.get() - 1), _end(start.get() - 1) {}
+
+        DEVICE constexpr ReverseIterator begin() const { return ReverseIterator(_start); }
+        DEVICE constexpr ReverseIterator end() const { return ReverseIterator(_end); }
+
+    private:
+        int _start;  // Highest value (starting point)
+        int _end;    // Just below lowest value (ending point)
+    };
+
     /// @brief Returns a range of integers from 0 to end, incrementing by increment.
-    /// Adjusts the end-of-range to ensure it is a multiple of the increment.
-    /// @param increment The increment value.
-    /// @param end The end value.
-    /// @return A range of integers.
     template <int increment, typename dim_type>
     DEVICE constexpr auto range_with_step(dim_type end)
     {
@@ -259,6 +292,20 @@ namespace spio
     DEVICE constexpr auto range(dim_type start, dim_type end)
     {
         return _Range<dim_type>(start, end);
+    }
+
+    /// @brief Returns a range of integers from end-1 down to 0, decrementing by 1.
+    template <typename dim_type>
+    DEVICE constexpr auto reverse_range(dim_type end)
+    {
+        return _ReverseRange<dim_type>(end);
+    }
+
+    /// @brief Returns a range of integers from end-1 down to start, decrementing by 1.
+    template <typename dim_type>
+    DEVICE constexpr auto reverse_range(dim_type start, dim_type end)
+    {
+        return _ReverseRange<dim_type>(start, end);
     }
 }
 
