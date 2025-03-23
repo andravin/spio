@@ -44,13 +44,13 @@ extern "C"
         // Position the global memory input tiles.
         auto global_x16 = global_load_idx.get<X16>();
         auto global_x = global_x16.unfold() + global_load_idx.get<X>();
-        auto a = A(a_ptr)[block_i.unfold() + global_x.cast<I>()][global_load_idx.get<K8>()];
-        auto b = B(b_ptr)[block_j.unfold() + global_x.cast<J>()][global_load_idx.get<K8>()];
+        auto a = A(a_ptr)[block_i.unfold() + global_x.cast<I>()][global_load_idx.get<K8>()].rebase();
+        auto b = B(b_ptr)[block_j.unfold() + global_x.cast<J>()][global_load_idx.get<K8>()].rebase();
 
         // Define the mapping from the global memory tile to the shared memory tile.
         auto smem_checkers = Smem_Checkers(global_load_idx.get<X>(), global_load_idx.get<K8>()).get<CHECKERS>();
-        auto smem_a_store = SmemA(smem_a)[global_x16.cast<I>()][smem_checkers];
-        auto smem_b_store = SmemB(smem_b)[global_x16.cast<J>()][smem_checkers];
+        auto smem_a_store = SmemA(smem_a)[global_x16.cast<I>()][smem_checkers].rebase();
+        auto smem_b_store = SmemB(smem_b)[global_x16.cast<J>()][smem_checkers].rebase();
 
         // Define the mapping from the thread index to the warp's i32 x j64 tiles and the lane index.
         ComputeIndex compute_idx(threadIdx.x);
@@ -60,8 +60,8 @@ extern "C"
         B_Tile::data_type::LoadIndex b_load_idx(compute_idx.get<LANE>().get());
         auto smem_a_checkers = SmemA_Checkers(a_load_idx.get<I>(), a_load_idx.get<K8>()).get<CHECKERS>();
         auto smem_b_checkers = SmemB_Checkers(b_load_idx.get<J>(), b_load_idx.get<K8>()).get<CHECKERS>();
-        auto smem_a_load = SmemA(smem_a)[compute_idx.get<I32>().fold<16>()][smem_a_checkers];
-        auto smem_b_load = SmemB(smem_b)[compute_idx.get<J64>().fold<16>()][smem_b_checkers];
+        auto smem_a_load = SmemA(smem_a)[compute_idx.get<I32>().fold<16>()][smem_a_checkers].rebase();
+        auto smem_b_load = SmemB(smem_b)[compute_idx.get<J64>().fold<16>()][smem_b_checkers].rebase();
 
         // Initialize the accumulator.
         C_Tile::data_type c_data[C_Tile::storage_size()];
@@ -83,13 +83,6 @@ extern "C"
         constexpr auto size = A::size<K16>();
         constexpr auto step_size = A_Tile::size<K16>();
 
-        auto a_cursor = a.rebase();
-        auto b_cursor = b.rebase();
-        auto smem_a_store_cursor = smem_a_store.rebase();
-        auto smem_b_store_cursor = smem_b_store.rebase();
-        auto smem_a_load_cursor = smem_a_load.rebase();
-        auto smem_b_load_cursor = smem_b_load.rebase();
-
         bool pong = false;
 
         // Compute.
@@ -97,25 +90,25 @@ extern "C"
         {
             if (iter < size)
             {
-                auto smem_a_store_pong = smem_a_store_cursor;
-                auto smem_b_store_pong = smem_b_store_cursor;
+                auto smem_a_store_pong = smem_a_store;
+                auto smem_b_store_pong = smem_b_store;
                 if (pong) {
                     smem_a_store_pong.step(PING(pong));
                     smem_b_store_pong.step(PING(pong));
                 }
-                loader_a.load(smem_a_store_pong.get(), a_cursor.get());
-                loader_b.load(smem_b_store_pong.get(), b_cursor.get());
+                loader_a.load(smem_a_store_pong.get(), a.get());
+                loader_b.load(smem_b_store_pong.get(), b.get());
                 __pipeline_commit();
-                a_cursor.step(step_size);
-                b_cursor.step(step_size);
+                a.step(step_size);
+                b.step(step_size);
             }
             pong = !pong;
             if (iter > 0)
             {
                 __pipeline_wait_prior(iter < size ? 1 : 0);
                 __syncthreads();
-                auto smem_a_load_pong = smem_a_load_cursor;
-                auto smem_b_load_pong = smem_b_load_cursor;
+                auto smem_a_load_pong = smem_a_load;
+                auto smem_b_load_pong = smem_b_load;
                 if (pong) {
                     smem_a_load_pong.step(PING(pong));
                     smem_b_load_pong.step(PING(pong));
