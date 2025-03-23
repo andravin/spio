@@ -90,25 +90,38 @@ extern "C"
         auto smem_a_load_cursor = smem_a_load.rebase();
         auto smem_b_load_cursor = smem_b_load.rebase();
 
+        bool pong = false;
+
         // Compute.
         for (auto iter : range_with_step<step_size.get()>(size + step_size))
         {
             if (iter < size)
             {
-                PING_PONG ping_pong((iter.get() / step_size.get()));
-                loader_a.load(smem_a_store_cursor[ping_pong].get(), a_cursor.get());
-                loader_b.load(smem_b_store_cursor[ping_pong].get(), b_cursor.get());
+                auto smem_a_store_pong = smem_a_store_cursor;
+                auto smem_b_store_pong = smem_b_store_cursor;
+                if (pong) {
+                    smem_a_store_pong.step(PING(pong));
+                    smem_b_store_pong.step(PING(pong));
+                }
+                loader_a.load(smem_a_store_pong.get(), a_cursor.get());
+                loader_b.load(smem_b_store_pong.get(), b_cursor.get());
                 __pipeline_commit();
                 a_cursor.step(step_size);
                 b_cursor.step(step_size);
             }
+            pong = !pong;
             if (iter > 0)
             {
-                PING_PONG ping_pong((iter.get() / step_size.get() + 1));
                 __pipeline_wait_prior(iter < size ? 1 : 0);
                 __syncthreads();
-                a_tile.load(smem_a_load_cursor[ping_pong]);
-                b_tile.load(smem_b_load_cursor[ping_pong]);
+                auto smem_a_load_pong = smem_a_load_cursor;
+                auto smem_b_load_pong = smem_b_load_cursor;
+                if (pong) {
+                    smem_a_load_pong.step(PING(pong));
+                    smem_b_load_pong.step(PING(pong));
+                }
+                a_tile.load(smem_a_load_pong);
+                b_tile.load(smem_b_load_pong);
                 mma_gen(a_tile, b_tile, c_tile, c_tile);
                 __syncthreads();
             }

@@ -85,7 +85,7 @@ def _get_specs(m: int, n: int, k: int):
         "SmemA",
         gen.dtype.uint4,
         gen.Dims(
-            ping_pong=2,
+            ping=2,
             k16=chunk_k16,
             i16=block_x16,
             checkers=32,
@@ -95,7 +95,7 @@ def _get_specs(m: int, n: int, k: int):
         "SmemB",
         gen.dtype.uint4,
         gen.Dims(
-            ping_pong=2,
+            ping=2,
             k16=chunk_k16,
             j16=block_x16,
             checkers=32,
