@@ -142,8 +142,7 @@ namespace spio
         using Base::Dim;
         using Base::get;
 
-        explicit DEVICE constexpr Fold(const DimType dim)
-            : Base(static_cast<unsigned>(dim.get()) / static_cast<unsigned>(Stride)) {}
+        explicit DEVICE constexpr Fold(const DimType dim) : Base(dim.get() / Stride) {}
 
         DEVICE constexpr DimType unfold() const { return DimType(get() * Stride); }
 
@@ -162,7 +161,7 @@ namespace spio
         }
 
         template <class NewDimType>
-        DEVICE constexpr auto cast() const -> Fold<NewDimType, Stride> { return Fold<NewDimType, Stride>(get()); }        
+        DEVICE constexpr auto cast() const -> Fold<NewDimType, Stride> { return Fold<NewDimType, Stride>(get()); }
     };
 
     template <class DimType, int Size, int Stride>
@@ -174,15 +173,13 @@ namespace spio
         constexpr static dim_type size = Size;
 
         using Base = Dim<Module<DimType, Size, Stride>>;
-        
-        DEVICE constexpr Module(int i) : Base (static_cast<unsigned>(i) % static_cast<unsigned>(Size)) {}
+
+        DEVICE constexpr Module(int i) : Base(i % Size) {}
 
         using Base::get;
 
         explicit DEVICE constexpr Module(const DimType dim)
-            : Base((static_cast<unsigned>(dim.get()) /
-                    static_cast<unsigned>(Stride)) %
-                   static_cast<unsigned>(Size))
+            : Base((dim.get() / Stride) % Size)
         {
         }
 
@@ -262,8 +259,8 @@ namespace spio
         DEVICE constexpr ReverseIterator end() const { return ReverseIterator(_end); }
 
     private:
-        int _start;  // Highest value (starting point)
-        int _end;    // Just below lowest value (ending point)
+        int _start; // Highest value (starting point)
+        int _end;   // Just below lowest value (ending point)
     };
 
     /// @brief Returns a range of integers from 0 to end, incrementing by increment.
