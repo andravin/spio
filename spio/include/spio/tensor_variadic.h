@@ -119,6 +119,8 @@ namespace spio
         };
     }
 
+    template <typename DataType, typename... DimInfos> class BaseCursor;
+
     /// @brief Cursor with folded dimensions.
     /// Cursor is a class that represents a position in a tensor. It provides a subscript
     /// operator to access elements at a specific index in a given dimension.
@@ -130,6 +132,7 @@ namespace spio
     public:
         using Base = Data<DataType>;
         using data_type = DataType;
+        using base_cursor_type = BaseCursor<DataType, DimInfos...>;
 
         DEVICE constexpr Cursor(DataType *data = nullptr, int offset = 0)
             : Base(data), _offset(offset) {}
@@ -138,7 +141,7 @@ namespace spio
 
         /// @brief Create a new cursor with the offset folded into the base pointer.
         /// @return a new cursor object
-        DEVICE constexpr Cursor rebase() const { return Cursor(get()); }
+        DEVICE constexpr base_cursor_type rebase() const { return base_cursor_type(get()); }
 
         template <typename DimType>
         struct has_dimension
@@ -192,6 +195,62 @@ namespace spio
     private:
         const int _offset;
     };
+
+    template <typename DataType, typename... DimInfos>
+    class BaseCursor : public Data<DataType>
+    {
+    public:
+        using Base = Data<DataType>;
+        using data_type = DataType;
+        using Base::Base;
+        using Base::get;
+        using cursor_type = Cursor<DataType, DimInfos...>;
+
+        template <typename DimType>
+        struct has_dimension
+        {
+            static constexpr bool value = dim_traits::has_dimension<DimType, DimInfos...>::value;
+        };
+
+        // Helper variable template for cleaner usage
+        template <typename DimType>
+        static constexpr bool has_dimension_v = has_dimension<DimType>::value;
+
+        /// @brief Subscript operator that returns a new Cursor at the specified dimension index.
+        /// @tparam DimType the dimension to apply the subscript index to.
+        /// @param d the subscript index.
+        /// @return a new Cursor that points to the element at the specified dimension index.
+        template <typename DimType>
+        DEVICE constexpr cursor_type operator[](DimType d) const
+        {
+            return cursor_type(Base::get())[d];
+        }
+
+        /// @brief  Increment the cursor in a specific dimension type.
+        /// @tparam Dim the dimension type in which the increment is applied.
+        /// @param d The amount to increment by.
+        /// @return a reference to the updated cursor.
+        template <typename DimType>
+        DEVICE BaseCursor &step(DimType d = 1)
+        {
+            // Keep current offset and reset base pointer.
+            // We do this because the offset is const but the pointer is not.
+            constexpr int stride = dim_traits::find_dim_info<DimType, DimInfos...>::info::module_type::stride.get();
+            Base::reset(Base::get() + d.get() * stride);
+            return *this;
+        }
+
+        /// @brief Subscript operator that takes an Index object and applies all dimensions
+        /// @tparam IndexDimInfos The dimension infos in the Index
+        /// @param idx The index containing coordinates for multiple dimensions
+        /// @return A cursor pointing to the element at the specified position
+        template <typename... IndexDimInfos>
+        DEVICE constexpr cursor_type operator[](Index<IndexDimInfos...> idx) const
+        {
+            // Let the Index apply itself to this cursor, just like with Tensor
+            return cursor_type(Base::get())[idx];
+        }
+    };    
 
     /// @brief Tensor class.
     /// Tensor is a class that represents a multi-dimensional array. It provides
