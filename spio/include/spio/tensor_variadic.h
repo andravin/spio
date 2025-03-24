@@ -16,11 +16,13 @@ namespace spio
     public:
         using data_type = _data_type;
         static constexpr int element_size = sizeof(_data_type);
-        DEVICE constexpr Data(_data_type * data = nullptr) : _data(data) {}
-        DEVICE constexpr _data_type *get() const { return _data; }
-        DEVICE void reset(_data_type * data) { _data = data; }
-        DEVICE constexpr _data_type &operator*() const { return *_data; }
-        DEVICE constexpr _data_type *operator->() const { return _data; }
+
+        DEVICE Data(_data_type *data = nullptr) : _data(data) {}
+
+        DEVICE _data_type *get() const { return _data; }
+        DEVICE void reset(_data_type *data) { _data = data; }
+        DEVICE _data_type &operator*() const { return *_data; }
+        DEVICE _data_type *operator->() const { return _data; }
 
     private:
         _data_type *_data;
@@ -119,7 +121,8 @@ namespace spio
         };
     }
 
-    template <typename DataType, typename... DimInfos> class BaseCursor;
+    template <typename DataType, typename... DimInfos>
+    class BaseCursor;
 
     /// @brief Cursor with folded dimensions.
     /// Cursor is a class that represents a position in a tensor. It provides a subscript
@@ -134,7 +137,7 @@ namespace spio
         using data_type = DataType;
         using base_cursor_type = BaseCursor<DataType, DimInfos...>;
 
-        DEVICE constexpr Cursor(DataType * data = nullptr, int offset = 0)
+        DEVICE constexpr Cursor(DataType *data = nullptr, int offset = 0)
             : Base(data), _offset(offset) {}
 
         DEVICE constexpr data_type *get() const { return Base::get() + _offset; }
@@ -250,7 +253,7 @@ namespace spio
             // Let the Index apply itself to this cursor, just like with Tensor
             return cursor_type(Base::get())[idx];
         }
-    };    
+    };
 
     /// @brief Tensor class.
     /// Tensor is a class that represents a multi-dimensional array. It provides
