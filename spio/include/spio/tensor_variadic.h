@@ -16,9 +16,9 @@ namespace spio
     public:
         using data_type = _data_type;
         static constexpr int element_size = sizeof(_data_type);
-        DEVICE constexpr Data(_data_type *data = nullptr) : _data(data) {}
+        DEVICE constexpr Data(_data_type * __restrict__ data = nullptr) : _data(data) {}
         DEVICE constexpr _data_type *get() const { return _data; }
-        DEVICE void reset(_data_type *data) { _data = data; }
+        DEVICE void reset(_data_type * __restrict__ data) { _data = data; }
         DEVICE constexpr _data_type &operator*() const { return *_data; }
         DEVICE constexpr _data_type *operator->() const { return _data; }
 
@@ -134,7 +134,7 @@ namespace spio
         using data_type = DataType;
         using base_cursor_type = BaseCursor<DataType, DimInfos...>;
 
-        DEVICE constexpr Cursor(DataType *data = nullptr, int offset = 0)
+        DEVICE constexpr Cursor(DataType * __restrict__ data = nullptr, int offset = 0)
             : Base(data), _offset(offset) {}
 
         DEVICE constexpr data_type *get() const { return Base::get() + _offset; }
