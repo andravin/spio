@@ -22,3 +22,12 @@ UTEST(mathutil, divup)
     EXPECT_EQ(spio::divup(8, 2), 4);
     EXPECT_EQ(spio::divup(9, 2), 5);
 }
+
+UTEST(mathutil, swap)
+{
+    int a = 1;
+    int b = 2;
+    spio::swap(a, b);
+    EXPECT_EQ(a, 2);
+    EXPECT_EQ(b, 1);
+}
