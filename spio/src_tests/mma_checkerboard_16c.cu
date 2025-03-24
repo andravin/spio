@@ -1,8 +1,7 @@
 #include "spio.cuh"
 
-#include "spio/allocator.h"
-
 #include "parameters.h"
+
 
 extern "C"
 {
@@ -83,38 +82,37 @@ extern "C"
         constexpr auto size = A::size<K16>();
         constexpr auto step_size = A_Tile::size<K16>();
 
-        bool pong = false;
+        constexpr int max_iter = (size + step_size).get();
+        constexpr int max_load = size.get();
+        constexpr int step_iter = step_size.get();
+
+        auto smem_a_store_pong = smem_a_store[PING(1)].rebase();
+        auto smem_b_store_pong = smem_b_store[PING(1)].rebase();
+
+        auto smem_a_load_pong = smem_a_load[PING(1)].rebase();
+        auto smem_b_load_pong = smem_b_load[PING(1)].rebase();
 
         // Compute.
-        for (auto iter : range_with_step<step_size.get()>(size + step_size))
+        for (int iter = 0; iter < max_iter; iter += step_iter)
         {
-            if (iter < size)
+            if (iter < max_load)
             {
-                auto smem_a_store_iter = smem_a_store;
-                auto smem_b_store_iter = smem_b_store;
-                if (pong) {
-                    smem_a_store_iter.step(PING(pong));
-                    smem_b_store_iter.step(PING(pong));
-                }
-                loader_a.load(smem_a_store_iter.get(), a.get());
-                loader_b.load(smem_b_store_iter.get(), b.get());
+                loader_a.load(smem_a_store.get(), a.get());
+                loader_b.load(smem_b_store.get(), b.get());
                 __pipeline_commit();
                 a.step(step_size);
                 b.step(step_size);
+                swap(smem_a_store_pong, smem_a_store);
+                swap(smem_b_store_pong, smem_b_store);
             }
-            pong = !pong;
             if (iter > 0)
             {
-                __pipeline_wait_prior(iter < size ? 1 : 0);
+                __pipeline_wait_prior(iter < max_load ? 1 : 0);
                 __syncthreads();
-                auto smem_a_load_iter = smem_a_load;
-                auto smem_b_load_iter = smem_b_load;
-                if (pong) {
-                    smem_a_load_iter.step(PING(pong));
-                    smem_b_load_iter.step(PING(pong));
-                }
-                a_tile.load(smem_a_load_iter);
-                b_tile.load(smem_b_load_iter);
+                a_tile.load(smem_a_load);
+                b_tile.load(smem_b_load);
+                swap(smem_a_load_pong, smem_a_load);
+                swap(smem_b_load_pong, smem_b_load);
                 mma_gen(a_tile, b_tile, c_tile, c_tile);
                 __syncthreads();
             }
