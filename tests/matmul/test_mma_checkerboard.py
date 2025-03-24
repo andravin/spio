@@ -53,7 +53,7 @@ def _get_specs(m: int, n: int, k: int):
     blocks_m = divup(m, block_x)
     blocks_n = divup(n, block_x)
 
-    grid = (blocks_m, blocks_n, 1)
+    grid = (blocks_n, blocks_m, 1)
 
     block = (threads, 1, 1)
 

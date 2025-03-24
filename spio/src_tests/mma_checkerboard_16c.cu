@@ -2,7 +2,6 @@
 
 #include "parameters.h"
 
-
 extern "C"
 {
     using namespace spio;
@@ -34,8 +33,8 @@ extern "C"
         auto smem_a = SmemA::allocate(smem_allocator);
         auto smem_b = SmemB::allocate(smem_allocator);
 
-        BLOCK_I block_i(blockIdx.x);
-        BLOCK_J block_j(blockIdx.y);
+        BLOCK_I block_i(blockIdx.y);
+        BLOCK_J block_j(blockIdx.x);
 
         // Map the thread index to the global memory load index.
         GlobalLoadIndex global_load_idx(threadIdx.x);
@@ -79,23 +78,19 @@ extern "C"
         A_Tile a_tile(a_data);
         B_Tile b_tile(b_data);
 
-        constexpr auto size = A::size<K16>();
-        constexpr auto step_size = A_Tile::size<K16>();
-
-        constexpr int max_iter = (size + step_size).get();
-        constexpr int max_load = size.get();
-        constexpr int step_iter = step_size.get();
-
         auto smem_a_store_pong = smem_a_store[PING(1)].rebase();
         auto smem_b_store_pong = smem_b_store[PING(1)].rebase();
 
         auto smem_a_load_pong = smem_a_load[PING(1)].rebase();
         auto smem_b_load_pong = smem_b_load[PING(1)].rebase();
 
+        constexpr auto size = A::size<K16>();
+        constexpr auto step_size = A_Tile::size<K16>();
+
         // Compute.
-        for (int iter = 0; iter < max_iter; iter += step_iter)
+        for (auto iter : range_with_step<step_size.get()>(size + step_size))
         {
-            if (iter < max_load)
+            if (iter < size)
             {
                 loader_a.load(smem_a_store.get(), a.get());
                 loader_b.load(smem_b_store.get(), b.get());
@@ -107,7 +102,7 @@ extern "C"
             }
             if (iter > 0)
             {
-                __pipeline_wait_prior(iter < max_load ? 1 : 0);
+                __pipeline_wait_prior(iter < size ? 1 : 0);
                 __syncthreads();
                 a_tile.load(smem_a_load);
                 b_tile.load(smem_b_load);
@@ -125,7 +120,9 @@ extern "C"
         smem_b.deallocate(smem_allocator);
 
         auto smem_c = SmemCStore::allocate(smem_allocator);
-        auto smem_c_store = smem_c[compute_idx.get<I32>()][compute_idx.get<J64>().fold<8>()][c_idx.get<J2M4>().cast<J2>()];
+        auto smem_c_store = smem_c[compute_idx.get<I32>()]
+                                  [compute_idx.get<J64>().fold<8>()]
+                                  [c_idx.get<J2M4>().cast<J2>()];
 
         for (int f = 0; f < C_Tile::data_type::size(); ++f)
         {
