@@ -9,11 +9,11 @@ namespace spio
     class IndexBase
     {
     public:
-        DEVICE constexpr IndexBase(unsigned offset = 0) : _offset(offset) {}
-        DEVICE constexpr unsigned offset() const { return _offset; }
+        DEVICE constexpr IndexBase(int offset = 0) : _offset(offset) {}
+        DEVICE constexpr int offset() const { return _offset; }
 
     private:
-        const unsigned _offset;
+        const int _offset;
     };
 }
 
