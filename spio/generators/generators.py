@@ -151,8 +151,8 @@ def _get_user_defined_data_types(gen_specs: List[GenSpecs]) -> List[str]:
 def _include_files():
     return """
 #include "spio/allocator.h"
-#include "spio/index_variadic.h"
-#include "spio/tensor_variadic.h"
+#include "spio/index.h"
+#include "spio/tensor.h"
 #include "spio/dim.h"
 """
 

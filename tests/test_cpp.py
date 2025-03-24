@@ -33,8 +33,8 @@ TEST_MODULES = [
 
 CPP_SOURCES = [
     "test_main.cpp",
-    "test_tensor_variadic.cpp",
-    "test_index_variadic.cpp",
+    "test_tensor.cpp",
+    "test_index.cpp",
     "test_fragment_index.cpp",
     "test_mathutil.cpp",
     "test_checkerboard_index.cpp",

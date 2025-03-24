@@ -111,7 +111,7 @@ def header():
     custom tensor classes inherit. You must include this header before
     using the code returned by the generate_tensor() function.
     """
-    return '#include "spio/tensor_variadic.h"'
+    return '#include "spio/tensor.h"'
 
 
 def _get_data_type_name(

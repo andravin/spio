@@ -1,11 +1,11 @@
-#include <spio/index_variadic.h>
-#include <spio/tensor_variadic.h>
+#include <spio/index.h>
+#include <spio/tensor.h>
 
 using namespace spio;
 
 extern "C"
 {
-    __global__ void index_variadic(float *outputs, float *inputs)
+    __global__ void index(float *outputs, float *inputs)
     {
         class I : public Dim<I>
         {

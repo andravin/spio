@@ -1,658 +1,493 @@
-#error This file is deprecated. Use tensor_variadic.h instead.
-
-#ifndef SPIO_TENSOR_H_
-#define SPIO_TENSOR_H_
+#ifndef SPIO_TENSOR_VARIADIC_H_
+#define SPIO_TENSOR_VARIADIC_H_
 
 #include "spio/macros.h"
-
+#include "spio/dim.h"
+#include "spio/dim_info.h"
+#include "spio/index.h"
+#include "spio/allocator.h"
 namespace spio
 {
-    /// A base class for all Tensor* classes.
+
+    /// @brief Base class for tensor data.
     template <typename _data_type>
-    class TensorBase
+    class Data
     {
     public:
         using data_type = _data_type;
         static constexpr int element_size = sizeof(_data_type);
-        DEVICE constexpr TensorBase(_data_type *data = nullptr) : _data(data) {}
-        DEVICE constexpr _data_type *get() const { return _data; }
+
+        DEVICE Data(_data_type *data = nullptr) : _data(data) {}
+
+        DEVICE _data_type *get() const { return _data; }
         DEVICE void reset(_data_type *data) { _data = data; }
-        DEVICE constexpr _data_type &operator*() const { return *_data; }
-        DEVICE constexpr _data_type *operator->() const { return _data; }
+        DEVICE _data_type &operator*() const { return *_data; }
+        DEVICE _data_type *operator->() const { return _data; }
 
     private:
         _data_type *_data;
     };
 
-    template <typename _data_type, class _dim_0, int _stride_0>
-    class Cursor1D : public TensorBase<_data_type>
+    // Forward declaration of Tensor class
+    template <typename DataType, typename... DimInfos>
+    class Tensor;
+
+    // Implementation details
+    namespace detail
     {
-    public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
-        using dim_0 = _dim_0;
-        static constexpr int stride_0 = _stride_0;
+        // Helper function to concatenate tuples
+        template <typename T1, typename T2>
+        struct tuple_cat_impl;
 
-        DEVICE constexpr Cursor1D operator[](dim_0 d0) const { return Cursor1D(get() + d0.get() * stride_0); }
-    };
-
-    template <typename _data_type, class _dim_0, class _dim_1, int _stride_1, int _stride_0>
-    class Cursor2D : public TensorBase<_data_type>
-    {
-    public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
-
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-
-        DEVICE constexpr Cursor2D operator[](dim_0 d0) const { return Cursor2D(get() + d0.get() * stride_0); }
-        DEVICE constexpr Cursor2D operator[](dim_1 d1) const { return Cursor2D(get() + d1.get() * stride_1); }
-    };
-
-    template <typename _data_type, class _dim_0, class _dim_1, class _dim_2, int _stride_2, int _stride_1, int _stride_0>
-    class Cursor3D : public TensorBase<_data_type>
-    {
-    public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
-        using dim_2 = _dim_2;
-
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-        static constexpr int stride_2 = _stride_2;
-
-        DEVICE constexpr Cursor3D operator[](dim_0 d0) const { return Cursor3D(get() + d0.get() * stride_0); }
-        DEVICE constexpr Cursor3D operator[](dim_1 d1) const { return Cursor3D(get() + d1.get() * stride_1); }
-        DEVICE constexpr Cursor3D operator[](dim_2 d2) const { return Cursor3D(get() + d2.get() * stride_2); }
-    };
-
-    template <typename _data_type, class _dim_0, class _dim_1, class _dim_2, class _dim_3, int _stride_3, int _stride_2, int _stride_1, int _stride_0>
-    class Cursor4D : public TensorBase<_data_type>
-    {
-    public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
-        using dim_2 = _dim_2;
-        using dim_3 = _dim_3;
-
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-        static constexpr int stride_2 = _stride_2;
-        static constexpr int stride_3 = _stride_3;
-
-        DEVICE constexpr Cursor4D operator[](dim_0 d0) const { return Cursor4D(get() + d0.get() * stride_0); }
-        DEVICE constexpr Cursor4D operator[](dim_1 d1) const { return Cursor4D(get() + d1.get() * stride_1); }
-        DEVICE constexpr Cursor4D operator[](dim_2 d2) const { return Cursor4D(get() + d2.get() * stride_2); }
-        DEVICE constexpr Cursor4D operator[](dim_3 d3) const { return Cursor4D(get() + d3.get() * stride_3); }
-    };
-
-    template <typename _data_type, class _dim_0, class _dim_1, class _dim_2, class _dim_3, class _dim_4, int _stride_4, int _stride_3, int _stride_2, int _stride_1, int _stride_0>
-    class Cursor5D : public TensorBase<_data_type>
-    {
-    public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
-        using dim_2 = _dim_2;
-        using dim_3 = _dim_3;
-        using dim_4 = _dim_4;
-
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-        static constexpr int stride_2 = _stride_2;
-        static constexpr int stride_3 = _stride_3;
-        static constexpr int stride_4 = _stride_4;
-
-        DEVICE constexpr Cursor5D operator[](dim_0 d0) const { return Cursor5D(get() + d0.get() * stride_0); }
-        DEVICE constexpr Cursor5D operator[](dim_1 d1) const { return Cursor5D(get() + d1.get() * stride_1); }
-        DEVICE constexpr Cursor5D operator[](dim_2 d2) const { return Cursor5D(get() + d2.get() * stride_2); }
-        DEVICE constexpr Cursor5D operator[](dim_3 d3) const { return Cursor5D(get() + d3.get() * stride_3); }
-        DEVICE constexpr Cursor5D operator[](dim_4 d4) const { return Cursor5D(get() + d4.get() * stride_4); }
-    };
-
-    template <typename _data_type, class _dim_0, class _dim_1, class _dim_2, class _dim_3, class _dim_4, class _dim_5, int _stride_5, int _stride_4, int _stride_3, int _stride_2, int _stride_1, int _stride_0>
-    class Cursor6D : public TensorBase<_data_type>
-    {
-    public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
-        using dim_2 = _dim_2;
-        using dim_3 = _dim_3;
-        using dim_4 = _dim_4;
-        using dim_5 = _dim_5;
-
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-        static constexpr int stride_2 = _stride_2;
-        static constexpr int stride_3 = _stride_3;
-        static constexpr int stride_4 = _stride_4;
-        static constexpr int stride_5 = _stride_5;
-
-        DEVICE constexpr Cursor6D operator[](dim_0 d0) const { return Cursor6D(get() + d0.get() * stride_0); }
-        DEVICE constexpr Cursor6D operator[](dim_1 d1) const { return Cursor6D(get() + d1.get() * stride_1); }
-        DEVICE constexpr Cursor6D operator[](dim_2 d2) const { return Cursor6D(get() + d2.get() * stride_2); }
-        DEVICE constexpr Cursor6D operator[](dim_3 d3) const { return Cursor6D(get() + d3.get() * stride_3); }
-        DEVICE constexpr Cursor6D operator[](dim_4 d4) const { return Cursor6D(get() + d4.get() * stride_4); }
-        DEVICE constexpr Cursor6D operator[](dim_5 d5) const { return Cursor6D(get() + d5.get() * stride_5); }
-    };
-
-    template <typename _data_type, class _dim_0, class _dim_1, class _dim_2, class _dim_3, class _dim_4, class _dim_5, class _dim_6, int _stride_6, int _stride_5, int _stride_4, int _stride_3, int _stride_2, int _stride_1, int _stride_0>
-    class Cursor7D : public TensorBase<_data_type>
-    {
-    public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
-        using dim_2 = _dim_2;
-        using dim_3 = _dim_3;
-        using dim_4 = _dim_4;
-        using dim_5 = _dim_5;
-        using dim_6 = _dim_6;
-
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-        static constexpr int stride_2 = _stride_2;
-        static constexpr int stride_3 = _stride_3;
-        static constexpr int stride_4 = _stride_4;
-        static constexpr int stride_5 = _stride_5;
-        static constexpr int stride_6 = _stride_6;
-
-        DEVICE constexpr Cursor7D operator[](dim_0 d0) const { return Cursor7D(get() + d0.get() * stride_0); }
-        DEVICE constexpr Cursor7D operator[](dim_1 d1) const { return Cursor7D(get() + d1.get() * stride_1); }
-        DEVICE constexpr Cursor7D operator[](dim_2 d2) const { return Cursor7D(get() + d2.get() * stride_2); }
-        DEVICE constexpr Cursor7D operator[](dim_3 d3) const { return Cursor7D(get() + d3.get() * stride_3); }
-        DEVICE constexpr Cursor7D operator[](dim_4 d4) const { return Cursor7D(get() + d4.get() * stride_4); }
-        DEVICE constexpr Cursor7D operator[](dim_5 d5) const { return Cursor7D(get() + d5.get() * stride_5); }
-        DEVICE constexpr Cursor7D operator[](dim_6 d6) const { return Cursor7D(get() + d6.get() * stride_6); }
-    };
-
-    template <typename _data_type, class _dim_0, int _size_0, int _stride_0 = 1>
-    class Tensor1D : public TensorBase<_data_type>
-    {
-    public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
-
-        using dim_0 = _dim_0;
-
-        using cursor_type = Cursor1D<data_type, _dim_0, _stride_0>;
-
-        static constexpr dim_0 size_0 = _size_0;
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int size = size_0.get();
-
-        DEVICE constexpr cursor_type operator[](dim_0 d0) const { return cursor_type(get())[d0]; }
-
-        template <int _size>
-        DEVICE constexpr auto slice(dim_0 slice_start)
+        // Specialization for empty first tuple
+        template <typename... Ts>
+        struct tuple_cat_impl<spio::detail::tuple<>, spio::detail::tuple<Ts...>>
         {
-            return Tensor1D<data_type, dim_0, _size, stride_0>((*this)[slice_start].get());
-        }
-    };
+            using type = spio::detail::tuple<Ts...>;
+        };
 
-    /// A base class for a 2-dimensional index.
-    template <
-        typename _data_type,
-        class _dim_0,
-        class _dim_1,
-        int _size_0,
-        int _size_1,
-        int _stride_1 = 1,
-        int _stride_0 = _size_1 * _stride_1>
-    class Tensor2D : public TensorBase<_data_type>
+        // Specialization for non-empty first tuple
+        template <typename T, typename... Ts, typename... Us>
+        struct tuple_cat_impl<spio::detail::tuple<T, Ts...>, spio::detail::tuple<Us...>>
+        {
+            using type = spio::detail::tuple<T, Us...>;
+        };
+
+        // Helper function to concatenate two tuples
+        template <typename T1, typename T2>
+        using tuple_cat_t = typename tuple_cat_impl<T1, T2>::type;
+
+        /// @brief Update dimension info by replacing a given dimension with a new size.
+        /// @tparam DimType the dimension type to update
+        /// @tparam SliceSize the new size of the dimension
+        /// @tparam DimInfos the dimension infos
+        template <typename DimType, int SliceSize, typename... DimInfos>
+        struct update_dim_info;
+
+        template <typename DimType, int SliceSize, typename FirstInfo, typename... RestInfos>
+        struct update_dim_info<DimType, SliceSize, FirstInfo, RestInfos...>
+        {
+            static constexpr bool is_match = detail::is_same<DimType, typename FirstInfo::dim_type>::value;
+            using current = detail::conditional_t<
+                is_match,
+                DimInfo<typename FirstInfo::dim_type, SliceSize, FirstInfo::module_type::stride.get()>,
+                FirstInfo>;
+            using next = typename update_dim_info<DimType, SliceSize, RestInfos...>::dim_type;
+            using dim_type = tuple_cat_t<
+                spio::detail::tuple<current>,
+                next>;
+        };
+
+        template <typename DimType, int SliceSize>
+        struct update_dim_info<DimType, SliceSize>
+        {
+            using dim_type = spio::detail::tuple<>;
+        };
+
+        template <typename, typename>
+        struct tensor_type_from_dim_info_tuple;
+
+        /// @brief Create a tensor type from a tuple of dimension infos.
+        /// @tparam DataType the data type of the tensor
+        /// @tparam DimInfos the dimension infos
+        template <typename DataType, typename... DimInfos>
+        struct tensor_type_from_dim_info_tuple<DataType, spio::detail::tuple<DimInfos...>>
+        {
+            using tensor_type = Tensor<DataType, DimInfos...>;
+        };
+
+        // Helper to calculate maximum storage size needed with strides
+        template <typename... DimInfos>
+        struct calculate_storage_size;
+
+        // Base case
+        template <>
+        struct calculate_storage_size<>
+        {
+            static constexpr int value = 1; // No dimensions, just one element
+        };
+
+        // Recursive case
+        template <typename FirstDim, typename... RestDims>
+        struct calculate_storage_size<FirstDim, RestDims...>
+        {
+            // Get size and stride for this dimension
+            static constexpr int size = FirstDim::module_type::size.get();
+            static constexpr int stride = FirstDim::module_type::stride.get();
+
+            // Calculate max offset for this dimension plus rest of dims
+            static constexpr int value =
+                (size - 1) * stride + calculate_storage_size<RestDims...>::value;
+        };
+    }
+
+    template <typename DataType, typename... DimInfos>
+    class BaseCursor;
+
+    /// @brief Cursor with folded dimensions.
+    /// Cursor is a class that represents a position in a tensor. It provides a subscript
+    /// operator to access elements at a specific index in a given dimension.
+    /// @tparam DataType the data type of the tensor
+    /// @tparam DimInfos the dimension infos
+    template <typename DataType, typename... DimInfos>
+    class Cursor : public Data<DataType>
     {
     public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
+        using Base = Data<DataType>;
+        using data_type = DataType;
+        using base_cursor_type = BaseCursor<DataType, DimInfos...>;
 
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
+        DEVICE constexpr Cursor(DataType *data = nullptr, int offset = 0)
+            : Base(data), _offset(offset) {}
 
-        using cursor_type = Cursor2D<data_type, _dim_0, _dim_1, _stride_1, _stride_0>;
+        DEVICE constexpr data_type *get() const { return Base::get() + _offset; }
 
-        static constexpr dim_0 size_0 = _size_0;
-        static constexpr dim_1 size_1 = _size_1;
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-        static constexpr int size = size_0.get() * size_1.get();
+        /// @brief Create a base cursor with the offset folded into the base pointer.
+        /// @return a new BaseCursor object
+        DEVICE constexpr base_cursor_type rebase() const { return base_cursor_type(get()); }
 
-        DEVICE constexpr cursor_type operator[](dim_0 d0) const { return cursor_type(get())[d0]; }
-        DEVICE constexpr cursor_type operator[](dim_1 d1) const { return cursor_type(get())[d1]; }
-
-        template <int _size>
-        DEVICE constexpr auto slice(dim_0 slice_start)
+        template <typename DimType>
+        struct has_dimension
         {
-            return Tensor2D<data_type, dim_0, dim_1, _size, size_1.get(), stride_1, stride_0>((*this)[slice_start].get());
+            static constexpr bool value = dim_traits::has_dimension<DimType, DimInfos...>::value;
+        };
+
+        // Helper variable template for cleaner usage
+        template <typename DimType>
+        static constexpr bool has_dimension_v = has_dimension<DimType>::value;
+
+        /// @brief Subscript operator that returns a new Cursor at the specified dimension index.
+        /// @tparam DimType the dimension to apply the subscript index to.
+        /// @param d the subscript index.
+        /// @return a new Cursor that points to the element at the specified dimension index.
+        template <typename DimType>
+        DEVICE constexpr Cursor operator[](DimType d) const
+        {
+            constexpr int stride = dim_traits::dimension_stride<DimType, DimInfos...>::value.get();
+            return Cursor(Base::get(), _offset + d.get() * stride);
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_1 slice_start)
+        /// @brief  Increment this cursor in a specific dimension type.
+        /// @tparam Dim the dimension type in which the increment is applied.
+        /// @param d The amount to increment by.
+        /// @return a reference to the updated cursor.
+        template <typename DimType>
+        DEVICE Cursor &step(DimType d = 1)
         {
-            return Tensor2D<data_type, dim_0, dim_1, size_0.get(), _size, stride_1, stride_0>((*this)[slice_start].get());
+            // Keep current offset and reset base pointer.
+            // We do this because the offset is const but the pointer is not.
+            constexpr int stride = dim_traits::find_dim_info<DimType, DimInfos...>::info::module_type::stride.get();
+            Base::reset(Base::get() + d.get() * stride);
+            return *this;
         }
+
+        /// @brief Subscript operator that takes an Index object and applies all dimensions
+        /// @tparam IndexDimInfos The dimension infos in the Index
+        /// @param idx The index containing coordinates for multiple dimensions
+        /// @return A cursor pointing to the element at the specified position
+        template <typename... IndexDimInfos>
+        DEVICE constexpr Cursor operator[](Index<IndexDimInfos...> idx) const
+        {
+            return idx.apply_to(*this);
+        }
+
+        DEVICE constexpr data_type &operator*() const { return *this->get(); }
+        DEVICE constexpr data_type *operator->() const { return this->get(); }
+
+    private:
+        const int _offset;
     };
 
-    template <
-        typename _data_type,
-        class _dim_0,
-        class _dim_1,
-        class _dim_2,
-        int _size_0,
-        int _size_1,
-        int _size_2,
-        int _stride_2 = 1,
-        int _stride_1 = _size_2 * _stride_2,
-        int _stride_0 = _size_1 * _stride_1>
-    class Tensor3D : public TensorBase<_data_type>
+    /// @brief A class that implements a cursor with no offset.
+    /// @tparam DataType the data type of the tensor
+    /// @tparam DimInfos the dimension infos
+    template <typename DataType, typename... DimInfos>
+    class BaseCursor : public Data<DataType>
     {
     public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
+        using Base = Data<DataType>;
+        using data_type = DataType;
+        using Base::Base;
+        using Base::get;
+        using cursor_type = Cursor<DataType, DimInfos...>;
 
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
-        using dim_2 = _dim_2;
-
-        using cursor_type = Cursor3D<data_type, _dim_0, _dim_1, _dim_2, _stride_2, _stride_1, _stride_0>;
-
-        static constexpr dim_0 size_0 = _size_0;
-        static constexpr dim_1 size_1 = _size_1;
-        static constexpr dim_2 size_2 = _size_2;
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-        static constexpr int stride_2 = _stride_2;
-        static constexpr int size = size_0.get() * size_1.get() * size_2.get();
-
-        DEVICE constexpr cursor_type operator[](dim_0 d0) const { return cursor_type(get())[d0]; }
-        DEVICE constexpr cursor_type operator[](dim_1 d1) const { return cursor_type(get())[d1]; }
-        DEVICE constexpr cursor_type operator[](dim_2 d2) const { return cursor_type(get())[d2]; }
-
-        template <int _size>
-        DEVICE constexpr auto slice(dim_0 slice_start)
+        template <typename DimType>
+        struct has_dimension
         {
-            return Tensor3D<data_type, dim_0, dim_1, dim_2, _size, size_1.get(), size_2.get(), stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            static constexpr bool value = dim_traits::has_dimension<DimType, DimInfos...>::value;
+        };
+
+        // Helper variable template for cleaner usage
+        template <typename DimType>
+        static constexpr bool has_dimension_v = has_dimension<DimType>::value;
+
+        /// @brief Subscript operator that returns a new Cursor at the specified dimension index.
+        /// @tparam DimType the dimension to apply the subscript index to.
+        /// @param d the subscript index.
+        /// @return a new Cursor that points to the element at the specified dimension index.
+        template <typename DimType>
+        DEVICE constexpr cursor_type operator[](DimType d) const
+        {
+            return cursor_type(Base::get())[d];
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_1 slice_start)
+        /// @brief  Increment the cursor in a specific dimension type.
+        /// @tparam Dim the dimension type in which the increment is applied.
+        /// @param d The amount to increment by.
+        /// @return a reference to the updated cursor.
+        template <typename DimType>
+        DEVICE BaseCursor &step(DimType d = 1)
         {
-            return Tensor3D<data_type, dim_0, dim_1, dim_2, size_0.get(), _size, size_2.get(), stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            // Keep current offset and reset base pointer.
+            // We do this because the offset is const but the pointer is not.
+            constexpr int stride = dim_traits::find_dim_info<DimType, DimInfos...>::info::module_type::stride.get();
+            Base::reset(Base::get() + d.get() * stride);
+            return *this;
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_2 slice_start)
+        /// @brief Subscript operator that takes an Index object and applies all dimensions
+        /// @tparam IndexDimInfos The dimension infos in the Index
+        /// @param idx The index containing coordinates for multiple dimensions
+        /// @return A cursor pointing to the element at the specified position
+        template <typename... IndexDimInfos>
+        DEVICE constexpr cursor_type operator[](Index<IndexDimInfos...> idx) const
         {
-            return Tensor3D<data_type, dim_0, dim_1, dim_2, size_0.get(), size_1.get(), _size, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            return cursor_type(Base::get())[idx];
         }
     };
 
-    template <
-        typename _data_type,
-        class _dim_0,
-        class _dim_1,
-        class _dim_2,
-        class _dim_3,
-        int _size_0,
-        int _size_1,
-        int _size_2,
-        int _size_3,
-        int _stride_3 = 1,
-        int _stride_2 = _size_3 * _stride_3,
-        int _stride_1 = _size_2 * _stride_2,
-        int _stride_0 = _size_1 * _stride_1>
-    class Tensor4D : public TensorBase<_data_type>
+    /// @brief Tensor class.
+    /// Tensor is a class that represents a multi-dimensional array. It provides
+    /// a subscript operator to access elements at a specific position. It also
+    /// provides methods to get the size of a specific dimension and to slice the
+    /// tensor along a specific dimension.
+    ///
+    /// Tensor uses "typed dimensions" to provide compile-time checks for dimension
+    /// sizes and strides. Each dimension is a unique subclass of Dim. The subscript
+    /// and slice methods are overloaded to by dimension type, so any attempt to
+    /// use it is not possible to accidentally use a dimension index with the wrong dimension.
+    ///
+    /// Dim encapsulates an integer index and Dim subclasses implement arithmetic and comparison
+    /// operators, so it is possible to add dimensions and compare them. But any attempt to
+    /// use add or compare different dimension types will result in a compile-time error.
+
+    /// @tparam DataType the data type of the tensor
+    /// @tparam DimInfos the dimension infos
+    template <typename DataType, typename... DimInfos>
+    class Tensor : public Data<DataType>
     {
     public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
+        using data_type = DataType;
+        using Data<data_type>::Data;
+        using Data<data_type>::get;
 
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
-        using dim_2 = _dim_2;
-        using dim_3 = _dim_3;
+        using cursor_type = Cursor<DataType, DimInfos...>;
 
-        using cursor_type = Cursor4D<data_type, _dim_0, _dim_1, _dim_2, _dim_3, _stride_3, _stride_2, _stride_1, _stride_0>;
+        // Index type that uses tensor's size and strides.
+        using index_type = spio::Index<DimInfos...>;
 
-        static constexpr dim_0 size_0 = _size_0;
-        static constexpr dim_1 size_1 = _size_1;
-        static constexpr dim_2 size_2 = _size_2;
-        static constexpr dim_3 size_3 = _size_3;
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-        static constexpr int stride_2 = _stride_2;
-        static constexpr int stride_3 = _stride_3;
-        static constexpr int size = size_0.get() * size_1.get() * size_2.get() * size_3.get();
+        // Total number of elements (product of all dimension sizes)
+        // NOTE: this changes the meaning of the "size" method from
+        // the previous implementation. Now it is just the number of elements.
+        // It is not longer the storage size of the tensor. We need a
+        // separate method to get the storage size.
+        static constexpr int total_size = detail::product_sizes<DimInfos...>::value;
 
-        DEVICE constexpr cursor_type operator[](dim_0 d0) const { return cursor_type(get())[d0]; }
-        DEVICE constexpr cursor_type operator[](dim_1 d1) const { return cursor_type(get())[d1]; }
-        DEVICE constexpr cursor_type operator[](dim_2 d2) const { return cursor_type(get())[d2]; }
-        DEVICE constexpr cursor_type operator[](dim_3 d3) const { return cursor_type(get())[d3]; }
-
-        template <int _size>
-        DEVICE constexpr auto slice(dim_0 slice_start)
+        // Helper to check if this tensor has a specific dimension type
+        template <typename DimType>
+        struct has_dimension
         {
-            return Tensor4D<data_type, dim_0, dim_1, dim_2, dim_3, _size, size_1.get(), size_2.get(), size_3.get(), stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            static constexpr bool value = dim_traits::has_dimension<DimType, DimInfos...>::value;
+        };
+
+        // Helper variable template for cleaner usage
+        template <typename DimType>
+        static constexpr bool has_dimension_v = has_dimension<DimType>::value;
+
+        // Allocate a tensor on the stack.
+        // The user would often initialize the StackAllocator object
+        // with a pointer to shared memory, so that a smem buffer
+        // is used as a stack for allocations and deallocations.
+        DEVICE static Tensor allocate(StackAllocator &allocator)
+        {
+            return Tensor(allocator.allocate<data_type>(storage_size()));
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_1 slice_start)
+        // Deallocate a tensor from the stack.
+        DEVICE void deallocate(StackAllocator &allocator)
         {
-            return Tensor4D<data_type, dim_0, dim_1, dim_2, dim_3, size_0.get(), _size, size_2.get(), size_3.get(), stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
-        }
-        template <int _size>
-        DEVICE constexpr auto slice(dim_2 slice_start)
-        {
-            return Tensor4D<data_type, dim_0, dim_1, dim_2, dim_3, size_0.get(), size_1.get(), _size, size_3.get(), stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            allocator.deallocate<data_type>(get(), storage_size());
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_3 slice_start)
+        // For compatibility with existing code
+        DEVICE static constexpr int size() { return total_size; }
+
+        // Calculate actual storage size (accounting for strides)
+        DEVICE static constexpr int storage_size()
         {
-            return Tensor4D<data_type, dim_0, dim_1, dim_2, dim_3, size_0.get(), size_1.get(), size_2.get(), _size, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
-        }
-    };
-
-    template <
-        typename _data_type,
-        class _dim_0,
-        class _dim_1,
-        class _dim_2,
-        class _dim_3,
-        class _dim_4,
-        int _size_0,
-        int _size_1,
-        int _size_2,
-        int _size_3,
-        int _size_4,
-        int _stride_4 = 1,
-        int _stride_3 = _size_4 * _stride_4,
-        int _stride_2 = _size_3 * _stride_3,
-        int _stride_1 = _size_2 * _stride_2,
-        int _stride_0 = _size_1 * _stride_1>
-    class Tensor5D : public TensorBase<_data_type>
-    {
-    public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
-
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
-        using dim_2 = _dim_2;
-        using dim_3 = _dim_3;
-        using dim_4 = _dim_4;
-
-        using cursor_type = Cursor5D<data_type, _dim_0, _dim_1, _dim_2, _dim_3, _dim_4, _stride_4, _stride_3, _stride_2, _stride_1, _stride_0>;
-
-        static constexpr dim_0 size_0 = _size_0;
-        static constexpr dim_1 size_1 = _size_1;
-        static constexpr dim_2 size_2 = _size_2;
-        static constexpr dim_3 size_3 = _size_3;
-        static constexpr dim_4 size_4 = _size_4;
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-        static constexpr int stride_2 = _stride_2;
-        static constexpr int stride_3 = _stride_3;
-        static constexpr int stride_4 = _stride_4;
-        static constexpr int size = size_0.get() * size_1.get() * size_2.get() * size_3.get() * size_4.get();
-
-        DEVICE constexpr cursor_type operator[](dim_0 d0) const { return cursor_type(get())[d0]; }
-        DEVICE constexpr cursor_type operator[](dim_1 d1) const { return cursor_type(get())[d1]; }
-        DEVICE constexpr cursor_type operator[](dim_2 d2) const { return cursor_type(get())[d2]; }
-        DEVICE constexpr cursor_type operator[](dim_3 d3) const { return cursor_type(get())[d3]; }
-        DEVICE constexpr cursor_type operator[](dim_4 d4) const { return cursor_type(get())[d4]; }
-
-        template <int _size>
-        DEVICE constexpr auto slice(dim_0 slice_start)
-        {
-            return Tensor5D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, _size, size_1.get(), size_2.get(), size_3.get(), size_4.get(), stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            return detail::calculate_storage_size<DimInfos...>::value;
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_1 slice_start)
+        // Return actual bytes needed, accounting for strides
+        DEVICE static constexpr int num_bytes()
         {
-            return Tensor5D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, size_0.get(), _size, size_2.get(), size_3.get(), size_4.get(), stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            return storage_size() * sizeof(data_type);
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_2 slice_start)
+        // Get size for a specific dimension
+        template <typename DimType>
+        DEVICE static constexpr DimType size()
         {
-            return Tensor5D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, size_0.get(), size_1.get(), _size, size_3.get(), size_4.get(), stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            return dim_traits::dimension_size<DimType, DimInfos...>::value;
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_3 slice_start)
+        /// @brief Subscript operator with any dimension type.
+        /// @tparam DimType the dimension to apply the subscript index to.
+        /// @return a Cursor that points to the element at the specified position.
+        template <typename DimType>
+        DEVICE constexpr cursor_type operator[](DimType d) const
         {
-            return Tensor5D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, size_0.get(), size_1.get(), size_2.get(), _size, size_4.get(), stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            return cursor_type(get())[d];
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_4 slice_start)
+        /// @brief Get a cursor at a specific offset.
+        /// @param offset the offset to get the cursor at.
+        /// @return a cursor at the specified offset.
+        DEVICE constexpr cursor_type offset(int offset) const
         {
-            return Tensor5D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, size_0.get(), size_1.get(), size_2.get(), size_3.get(), _size, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
-        }
-    };
-
-    template <
-        typename _data_type,
-        class _dim_0,
-        class _dim_1,
-        class _dim_2,
-        class _dim_3,
-        class _dim_4,
-        class _dim_5,
-        int _size_0,
-        int _size_1,
-        int _size_2,
-        int _size_3,
-        int _size_4,
-        int _size_5,
-        int _stride_5 = 1,
-        int _stride_4 = _size_5 * _stride_5,
-        int _stride_3 = _size_4 * _stride_4,
-        int _stride_2 = _size_3 * _stride_3,
-        int _stride_1 = _size_2 * _stride_2,
-        int _stride_0 = _size_1 * _stride_1>
-    class Tensor6D : public TensorBase<_data_type>
-    {
-    public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
-
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
-        using dim_2 = _dim_2;
-        using dim_3 = _dim_3;
-        using dim_4 = _dim_4;
-        using dim_5 = _dim_5;
-
-        using cursor_type = Cursor6D<data_type, _dim_0, _dim_1, _dim_2, _dim_3, _dim_4, _dim_5, _stride_5, _stride_4, _stride_3, _stride_2, _stride_1, _stride_0>;
-
-        static constexpr dim_0 size_0 = _size_0;
-        static constexpr dim_1 size_1 = _size_1;
-        static constexpr dim_2 size_2 = _size_2;
-        static constexpr dim_3 size_3 = _size_3;
-        static constexpr dim_4 size_4 = _size_4;
-        static constexpr dim_5 size_5 = _size_5;
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-        static constexpr int stride_2 = _stride_2;
-        static constexpr int stride_3 = _stride_3;
-        static constexpr int stride_4 = _stride_4;
-        static constexpr int stride_5 = _stride_5;
-        static constexpr int size = size_0.get() * size_1.get() * size_2.get() * size_3.get() * size_4.get() * size_5.get();
-
-        DEVICE constexpr cursor_type operator[](dim_0 d0) const { return cursor_type(get())[d0]; }
-        DEVICE constexpr cursor_type operator[](dim_1 d1) const { return cursor_type(get())[d1]; }
-        DEVICE constexpr cursor_type operator[](dim_2 d2) const { return cursor_type(get())[d2]; }
-        DEVICE constexpr cursor_type operator[](dim_3 d3) const { return cursor_type(get())[d3]; }
-        DEVICE constexpr cursor_type operator[](dim_4 d4) const { return cursor_type(get())[d4]; }
-        DEVICE constexpr cursor_type operator[](dim_5 d5) const { return cursor_type(get())[d5]; }
-
-        template <int _size>
-        DEVICE constexpr auto slice(dim_0 slice_start)
-        {
-            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, _size, size_1.get(), size_2.get(), size_3.get(), size_4.get(), size_5.get(), stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            return cursor_type(get(), offset);
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_1 slice_start)
+        /// @brief Subscript operator that takes an Index object and applies all dimensions
+        /// @tparam IndexDimInfos The dimension infos in the Index
+        /// @param idx The index containing coordinates for multiple dimensions
+        /// @return A cursor pointing to the element at the specified position
+        template <typename... IndexDimInfos>
+        DEVICE constexpr cursor_type operator[](Index<IndexDimInfos...> idx) const
         {
-            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, size_0.get(), _size, size_2.get(), size_3.get(), size_4.get(), size_5.get(), stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            return cursor_type(get())[idx];
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_2 slice_start)
+        /// @brief Slice method to create a view with a different offset and size in one dimension.
+        /// @tparam SliceSize the new size of the dimension
+        /// @tparam SliceDimType the dimension to slice. SliceDimType is inferred from the type of the slice_start argument.
+        /// @param slice_start the start index of the slice.
+        /// @return a new Tensor that is a view of the original tensor with the specified dimension's size updated.
+        template <int SliceSize, typename SliceDimType>
+        DEVICE constexpr auto slice(SliceDimType slice_start)
         {
-            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, size_0.get(), size_1.get(), _size, size_3.get(), size_4.get(), size_5.get(), stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            using updated_infos = typename detail::update_dim_info<SliceDimType, SliceSize, DimInfos...>::dim_type;
+            using tensor_type = typename detail::tensor_type_from_dim_info_tuple<DataType, updated_infos>::tensor_type;
+            return tensor_type((*this)[slice_start].get());
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_3 slice_start)
+        /// @brief Load data from a source cursor that points to a shared memory buffer.
+        /// @tparam SrcCursorType the type of the source cursor.
+        /// @param src the source cursor.
+        template <typename SrcCursorType>
+        DEVICE void load(SrcCursorType src)
         {
-            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, size_0.get(), size_1.get(), size_2.get(), _size, size_4.get(), size_5.get(), stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            load_impl<DimInfos...>(*this, src);
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_4 slice_start)
+        /// @brief Apply a custom function to each element of the tensor
+        /// @tparam F The function type (typically a lambda)
+        /// @param func Function that takes a cursor and performs operations on it
+        /// @details This is a power-user method that allows for custom element-wise
+        ///          operations beyond the standard operations provided by the class.
+        ///          The function should accept a cursor parameter and operate on it.
+        /// @example
+        ///   // Scale all elements by 2 and add 1
+        ///   tensor.apply([](auto elem) { 
+        ///     // The cursor's data_type must implement saxpy.
+        ///     elem->saxpy(2.0f, 1.0f);
+        ///   });
+        template <typename F>
+        DEVICE void apply(F func)
         {
-            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, size_0.get(), size_1.get(), size_2.get(), size_3.get(), _size, size_5.get(), stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            apply_impl<F, DimInfos...>(*this, func);
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_5 slice_start)
+        /// @brief Fill the tensor with zeros.
+        DEVICE void zero()
         {
-            return Tensor6D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, size_0.get(), size_1.get(), size_2.get(), size_3.get(), size_4.get(), _size, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
-        }
-    };
-
-    template <
-        typename _data_type,
-        class _dim_0,
-        class _dim_1,
-        class _dim_2,
-        class _dim_3,
-        class _dim_4,
-        class _dim_5,
-        class _dim_6,
-        int _size_0,
-        int _size_1,
-        int _size_2,
-        int _size_3,
-        int _size_4,
-        int _size_5,
-        int _size_6,
-        int _stride_6 = 1,
-        int _stride_5 = _size_6 * _stride_6,
-        int _stride_4 = _size_5 * _stride_5,
-        int _stride_3 = _size_4 * _stride_4,
-        int _stride_2 = _size_3 * _stride_3,
-        int _stride_1 = _size_2 * _stride_2,
-        int _stride_0 = _size_1 * _stride_1>
-    class Tensor7D : public TensorBase<_data_type>
-    {
-    public:
-        using data_type = _data_type;
-        using TensorBase<data_type>::TensorBase;
-        using TensorBase<data_type>::get;
-
-        using dim_0 = _dim_0;
-        using dim_1 = _dim_1;
-        using dim_2 = _dim_2;
-        using dim_3 = _dim_3;
-        using dim_4 = _dim_4;
-        using dim_5 = _dim_5;
-        using dim_6 = _dim_6;
-
-        using cursor_type = Cursor7D<data_type, _dim_0, _dim_1, _dim_2, _dim_3, _dim_4, _dim_5, _dim_6, _stride_6, _stride_5, _stride_4, _stride_3, _stride_2, _stride_1, _stride_0>;
-
-        static constexpr dim_0 size_0 = _size_0;
-        static constexpr dim_1 size_1 = _size_1;
-        static constexpr dim_2 size_2 = _size_2;
-        static constexpr dim_3 size_3 = _size_3;
-        static constexpr dim_4 size_4 = _size_4;
-        static constexpr dim_5 size_5 = _size_5;
-        static constexpr dim_6 size_6 = _size_6;
-        static constexpr int stride_0 = _stride_0;
-        static constexpr int stride_1 = _stride_1;
-        static constexpr int stride_2 = _stride_2;
-        static constexpr int stride_3 = _stride_3;
-        static constexpr int stride_4 = _stride_4;
-        static constexpr int stride_5 = _stride_5;
-        static constexpr int stride_6 = _stride_6;
-        static constexpr int size = size_0.get() * size_1.get() * size_2.get() * size_3.get() * size_4.get() * size_5.get() * size_6.get();
-
-        DEVICE constexpr cursor_type operator[](dim_0 d0) const { return cursor_type(get())[d0]; }
-        DEVICE constexpr cursor_type operator[](dim_1 d1) const { return cursor_type(get())[d1]; }
-        DEVICE constexpr cursor_type operator[](dim_2 d2) const { return cursor_type(get())[d2]; }
-        DEVICE constexpr cursor_type operator[](dim_3 d3) const { return cursor_type(get())[d3]; }
-        DEVICE constexpr cursor_type operator[](dim_4 d4) const { return cursor_type(get())[d4]; }
-        DEVICE constexpr cursor_type operator[](dim_5 d5) const { return cursor_type(get())[d5]; }
-        DEVICE constexpr cursor_type operator[](dim_6 d6) const { return cursor_type(get())[d6]; }
-
-        template <int _size>
-        DEVICE constexpr auto slice(dim_0 slice_start)
-        {
-            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, _size, size_1.get(), size_2.get(), size_3.get(), size_4.get(), size_5.get(), size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            auto zero_func = [] (auto obj) { obj->zero(); };
+            apply(zero_func);
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_1 slice_start)
+        /// @brief Fill the tensor with a specified value.
+        /// @tparam Vector The value type
+        /// @param value The value to fill with
+        template <typename Vector>
+        DEVICE void fill(Vector value)
         {
-            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), _size, size_2.get(), size_3.get(), size_4.get(), size_5.get(), size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            auto fill_func = [value] (auto obj) { obj->fill(value); };
+            apply(fill_func);
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_2 slice_start)
+        template <typename Vector>
+        DEVICE void add(Vector value)
         {
-            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), size_1.get(), _size, size_3.get(), size_4.get(), size_5.get(), size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            auto add_func = [value] (auto obj) { obj->add(value); };
+            apply(add_func);
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_3 slice_start)
+    private:
+        /// @brief Base case for loading data from a source cursor.
+        template <typename DstCursorType, typename SrcCursorType>
+        DEVICE static void load_impl(DstCursorType dst, SrcCursorType src)
         {
-            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), size_1.get(), size_2.get(), _size, size_4.get(), size_5.get(), size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            dst->load(src.get());
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_4 slice_start)
+        /// @brief Recursive case for loading data from a source cursor.
+        /// Recursively iterate over each dimension of the source cursor,
+        /// applying the dimension indexes to the source and destination cursors,
+        /// and load the tensor elements from the source to the destination.
+        /// @tparam FirstDimInfo the first dimension info.
+        /// @tparam RestDimInfos the rest of the dimension infos.
+        /// @tparam DstCursorType the type of the destination cursor.
+        /// @tparam SrcCursorType the type of the source cursor.
+        /// @param dst the destination cursor.
+        /// @param src the source cursor.
+        template <typename FirstDimInfo, typename... RestDimInfos, typename DstCursorType, typename SrcCursorType>
+        DEVICE static void load_impl(DstCursorType dst, SrcCursorType src)
         {
-            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), size_1.get(), size_2.get(), size_3.get(), _size, size_5.get(), size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            using FirstDimType = typename FirstDimInfo::dim_type;
+            auto size = FirstDimType(FirstDimInfo::module_type::size.get());
+            for (auto i : range(size))
+            {
+                load_impl<RestDimInfos...>(dst[i], src[i]);
+            }
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_5 slice_start)
+        /// @brief Base case for applying a function to tensor elements.
+        /// @tparam F The function type
+        /// @tparam CursorType The cursor type to operate on
+        /// @param obj The cursor
+        /// @param func The function to apply
+        template <typename F, typename CursorType>
+        DEVICE static void apply_impl(CursorType obj, F func)
         {
-            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), size_1.get(), size_2.get(), size_3.get(), size_4.get(), _size, size_6.get(), stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            func(obj);
         }
 
-        template <int _size>
-        DEVICE constexpr auto slice(dim_6 slice_start)
+        /// @brief Recursive case for applying a function to tensor elements.
+        /// @tparam F The function type
+        /// @tparam FirstDimInfo The first dimension info
+        /// @tparam RestDimInfos The remaining dimension infos
+        /// @tparam CursorType The cursor type
+        /// @param obj The cursor to operate on
+        /// @param func The function to apply
+        template <typename F, typename FirstDimInfo, typename... RestDimInfos, typename CursorType>
+        DEVICE static void apply_impl(CursorType obj, F func)
         {
-            return Tensor7D<data_type, dim_0, dim_1, dim_2, dim_3, dim_4, dim_5, dim_6, size_0.get(), size_1.get(), size_2.get(), size_3.get(), size_4.get(), size_5.get(), _size, stride_6, stride_5, stride_4, stride_3, stride_2, stride_1, stride_0>((*this)[slice_start].get());
+            using FirstDimType = typename FirstDimInfo::dim_type;
+            auto size = FirstDimType(FirstDimInfo::module_type::size.get());
+            for (auto i : range(size))
+            {
+                apply_impl<F, RestDimInfos...>(obj[i], func);
+            }
         }
     };
 }

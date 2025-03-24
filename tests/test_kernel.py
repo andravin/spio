@@ -72,13 +72,13 @@ def test_memcpy_kernel():
     assert torch.equal(outputs, inputs)
 
 
-def test_index_variadic():
-    """Test the index variadic class."""
+def test_index():
+    """Test the index class."""
     debug = False
     lineinfo = True
 
-    _, index_variadic = compile_and_load_kernel(
-        kernel_name="index_variadic",
+    _, index = compile_and_load_kernel(
+        kernel_name="index",
         debug=debug,
         lineinfo=lineinfo,
         src_module="spio.src_tests",
@@ -92,7 +92,7 @@ def test_index_variadic():
     inputs = torch.randn((I, J), device="cuda", dtype=torch.float32)
     outputs = torch.zeros((I, J), device="cuda", dtype=torch.float32)
 
-    index_variadic.launch((BLOCKS, 1, 1), (THREADS, 1, 1), (outputs, inputs))
+    index.launch((BLOCKS, 1, 1), (THREADS, 1, 1), (outputs, inputs))
     assert torch.equal(outputs, inputs)
 
 
