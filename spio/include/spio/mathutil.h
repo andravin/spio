@@ -12,6 +12,14 @@ namespace spio
     DEVICE inline constexpr T max(T a, T b) { return (a > b) ? a : b; }
 
     DEVICE inline constexpr int divup(int a, int b) { return (a + b - 1) / b; }
+
+    template <typename T>
+    DEVICE inline void swap(T &a, T &b)
+    {
+        T temp = a;
+        a = b;
+        b = temp;
+    }
 }
 
 #endif
