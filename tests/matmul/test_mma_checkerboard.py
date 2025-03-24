@@ -27,6 +27,7 @@ def test_mma_checkerboard_16c_kernel():
         header_dict={"parameters.h": gen.generate(specs)},
         src_module="spio.src_tests",
         lineinfo=True,
+        max_registers=128,
     )
     mma_kernel_16c.launch(grid, block, (C, A_16c, B_16c))
 
