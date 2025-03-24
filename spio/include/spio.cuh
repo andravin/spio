@@ -11,5 +11,6 @@
 #include "spio/async_strip_loader.cuh"
 #include "spio/strip_loader_params.h"
 #include "spio/mathutil.h"
+#include "spio/allocator.h"
 
 #endif
