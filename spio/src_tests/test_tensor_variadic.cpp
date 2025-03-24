@@ -58,6 +58,31 @@ DEVICE constexpr auto make_tensor_with_strides(DataType *data = nullptr)
         DimInfo<WidthDimType, WidthSize, WidthStride>>(data);
 }
 
+UTEST(TensorVariadic, tensor_2d_small)
+{
+    constexpr H Height = 4;
+    constexpr W Width = 8;
+    constexpr int Size = Height.get() * Width.get();
+
+    float tensor_data[Size];
+    for (int i = 0; i < Size; ++i)
+    {
+        tensor_data[i] = static_cast<float>(i);
+    }
+
+    auto tensor = make_tensor<float, H, W, Height.get(), Width.get()>(tensor_data);
+    EXPECT_EQ(tensor.size<H>(), Height);
+    EXPECT_EQ(tensor.size<W>(), Width);
+
+    EXPECT_EQ(*tensor, tensor_data[0]);
+    EXPECT_EQ(*tensor[W(3)], tensor_data[3]);
+    EXPECT_EQ(*tensor[H(2)], tensor_data[2 * Width.get()]);
+
+    EXPECT_EQ(*tensor[W(3)].rebase(), tensor_data[3]);
+    EXPECT_EQ(*tensor[H(2)].rebase(), tensor_data[2 * Width.get()]);
+    EXPECT_EQ(*tensor[W(3)].rebase()[H(2)], tensor_data[3 + 2 * Width.get()]);
+}
+
 UTEST(TensorVariadic, tensor_2d)
 {
     constexpr H Height = 480;
