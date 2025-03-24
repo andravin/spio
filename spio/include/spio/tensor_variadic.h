@@ -142,8 +142,8 @@ namespace spio
 
         DEVICE constexpr data_type *get() const { return Base::get() + _offset; }
 
-        /// @brief Create a new cursor with the offset folded into the base pointer.
-        /// @return a new cursor object
+        /// @brief Create a base cursor with the offset folded into the base pointer.
+        /// @return a new BaseCursor object
         DEVICE constexpr base_cursor_type rebase() const { return base_cursor_type(get()); }
 
         template <typename DimType>
@@ -167,7 +167,7 @@ namespace spio
             return Cursor(Base::get(), _offset + d.get() * stride);
         }
 
-        /// @brief  Increment the cursor in a specific dimension type.
+        /// @brief  Increment this cursor in a specific dimension type.
         /// @tparam Dim the dimension type in which the increment is applied.
         /// @param d The amount to increment by.
         /// @return a reference to the updated cursor.
@@ -188,7 +188,6 @@ namespace spio
         template <typename... IndexDimInfos>
         DEVICE constexpr Cursor operator[](Index<IndexDimInfos...> idx) const
         {
-            // Let the Index apply itself to this cursor, just like with Tensor
             return idx.apply_to(*this);
         }
 
@@ -199,6 +198,9 @@ namespace spio
         const int _offset;
     };
 
+    /// @brief A class that implements a cursor with no offset.
+    /// @tparam DataType the data type of the tensor
+    /// @tparam DimInfos the dimension infos
     template <typename DataType, typename... DimInfos>
     class BaseCursor : public Data<DataType>
     {
@@ -250,7 +252,6 @@ namespace spio
         template <typename... IndexDimInfos>
         DEVICE constexpr cursor_type operator[](Index<IndexDimInfos...> idx) const
         {
-            // Let the Index apply itself to this cursor, just like with Tensor
             return cursor_type(Base::get())[idx];
         }
     };
@@ -364,8 +365,7 @@ namespace spio
         template <typename... IndexDimInfos>
         DEVICE constexpr cursor_type operator[](Index<IndexDimInfos...> idx) const
         {
-            // Let the Index apply itself to this tensor
-            return idx.apply_to(*this);
+            return cursor_type(get())[idx];
         }
 
         /// @brief Slice method to create a view with a different offset and size in one dimension.
@@ -381,24 +381,75 @@ namespace spio
             return tensor_type((*this)[slice_start].get());
         }
 
+        /// @brief Load data from a source cursor that points to a shared memory buffer.
+        /// @tparam SrcCursorType the type of the source cursor.
+        /// @param src the source cursor.
         template <typename SrcCursorType>
         DEVICE void load(SrcCursorType src)
         {
             load_impl<DimInfos...>(*this, src);
         }
 
+        /// @brief Apply a custom function to each element of the tensor
+        /// @tparam F The function type (typically a lambda)
+        /// @param func Function that takes a cursor and performs operations on it
+        /// @details This is a power-user method that allows for custom element-wise
+        ///          operations beyond the standard operations provided by the class.
+        ///          The function should accept a cursor parameter and operate on it.
+        /// @example
+        ///   // Scale all elements by 2 and add 1
+        ///   tensor.apply([](auto elem) { 
+        ///     // The cursor's data_type must implement saxpy.
+        ///     elem->saxpy(2.0f, 1.0f);
+        ///   });
+        template <typename F>
+        DEVICE void apply(F func)
+        {
+            apply_impl<F, DimInfos...>(*this, func);
+        }
+
+        /// @brief Fill the tensor with zeros.
         DEVICE void zero()
         {
-            zero_impl<DimInfos...>(*this);
+            auto zero_func = [] (auto obj) { obj->zero(); };
+            apply(zero_func);
+        }
+
+        /// @brief Fill the tensor with a specified value.
+        /// @tparam Vector The value type
+        /// @param value The value to fill with
+        template <typename Vector>
+        DEVICE void fill(Vector value)
+        {
+            auto fill_func = [value] (auto obj) { obj->fill(value); };
+            apply(fill_func);
+        }
+
+        template <typename Vector>
+        DEVICE void add(Vector value)
+        {
+            auto add_func = [value] (auto obj) { obj->add(value); };
+            apply(add_func);
         }
 
     private:
+        /// @brief Base case for loading data from a source cursor.
         template <typename DstCursorType, typename SrcCursorType>
         DEVICE static void load_impl(DstCursorType dst, SrcCursorType src)
         {
             dst->load(src.get());
         }
 
+        /// @brief Recursive case for loading data from a source cursor.
+        /// Recursively iterate over each dimension of the source cursor,
+        /// applying the dimension indexes to the source and destination cursors,
+        /// and load the tensor elements from the source to the destination.
+        /// @tparam FirstDimInfo the first dimension info.
+        /// @tparam RestDimInfos the rest of the dimension infos.
+        /// @tparam DstCursorType the type of the destination cursor.
+        /// @tparam SrcCursorType the type of the source cursor.
+        /// @param dst the destination cursor.
+        /// @param src the source cursor.
         template <typename FirstDimInfo, typename... RestDimInfos, typename DstCursorType, typename SrcCursorType>
         DEVICE static void load_impl(DstCursorType dst, SrcCursorType src)
         {
@@ -410,20 +461,32 @@ namespace spio
             }
         }
 
-        template <typename SrcCursorType>
-        DEVICE static void zero_impl(SrcCursorType obj)
+        /// @brief Base case for applying a function to tensor elements.
+        /// @tparam F The function type
+        /// @tparam CursorType The cursor type to operate on
+        /// @param obj The cursor
+        /// @param func The function to apply
+        template <typename F, typename CursorType>
+        DEVICE static void apply_impl(CursorType obj, F func)
         {
-            obj->zero();
+            func(obj);
         }
 
-        template <typename FirstDimInfo, typename... RestDimInfos, typename SrcCursorType>
-        DEVICE static void zero_impl(SrcCursorType obj)
+        /// @brief Recursive case for applying a function to tensor elements.
+        /// @tparam F The function type
+        /// @tparam FirstDimInfo The first dimension info
+        /// @tparam RestDimInfos The remaining dimension infos
+        /// @tparam CursorType The cursor type
+        /// @param obj The cursor to operate on
+        /// @param func The function to apply
+        template <typename F, typename FirstDimInfo, typename... RestDimInfos, typename CursorType>
+        DEVICE static void apply_impl(CursorType obj, F func)
         {
             using FirstDimType = typename FirstDimInfo::dim_type;
             auto size = FirstDimType(FirstDimInfo::module_type::size.get());
             for (auto i : range(size))
             {
-                zero_impl<RestDimInfos...>(obj[i]);
+                apply_impl<F, RestDimInfos...>(obj[i], func);
             }
         }
     };

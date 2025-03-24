@@ -25,6 +25,7 @@ def compile_cuda(
     lineinfo: bool = False,
     header_dict: Dict[str, str] = None,
     max_registers: int = None,
+    default_device: bool = True,
 ) -> bytes:
     """Compile CUDA source code and return the resulting cubin.
 
@@ -50,6 +51,12 @@ def compile_cuda(
         options.append("-lineinfo")
     if max_registers is not None:
         options.append(f"-maxrregcount={max_registers}")
+    
+    # --extended-lambda or --expt-extended-lambda are supposed to allow adding __device__ labels
+    # to lambda expressions, but it did not work for me. So I'm using -default-device instead.
+    if default_device:
+        options.append("-default-device")
+    
     options += [f"-I{path}" for path in includes]
 
     if header_dict is not None:
