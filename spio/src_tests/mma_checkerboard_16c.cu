@@ -122,7 +122,7 @@ extern "C"
         auto smem_c = SmemCStore::allocate(smem_allocator);
         auto smem_c_store = smem_c[compute_idx.get<I32>()]
                                   [compute_idx.get<J64>().fold<8>()]
-                                  [c_idx.get<J2M4>().cast<J2>()];
+                                  [c_idx.get<J2M4>().cast<J2>()].rebase();
 
         for (int f = 0; f < C_Tile::data_type::size(); ++f)
         {
@@ -139,7 +139,7 @@ extern "C"
         // Transfer outputs from shared memory to global memory.
         auto c = C(c_ptr);
         auto smem_c_load_tensor = SmemCLoad(reinterpret_cast<const uint4 *>(smem_c.get()));
-        auto smem_c_load = smem_c_load_tensor[compute_idx.get<I32>()][compute_idx.get<J64>().fold<8>()];
+        auto smem_c_load = smem_c_load_tensor[compute_idx.get<I32>()][compute_idx.get<J64>().fold<8>()].rebase();
         for (int offset = compute_idx.get<LANE>().get(); offset < SmemCLoadIndex::size(); offset += ComputeIndex::size<LANE>().get())
         {
             SmemCLoadIndex idx(offset);
