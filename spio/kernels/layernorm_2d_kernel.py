@@ -137,30 +137,26 @@ def _get_kernel_spec(
                 "reverse_x": config.reverse_x,
             },
         ),
-        gen.Tensor("Input", gen.dtype.uint4, {"x": x, "c8": c8}, constant=True),
-        gen.Tensor("Output", gen.dtype.half2, {"x": x, "c2": c2}),
+        gen.Tensor("Input", gen.dtype.uint4, gen.Dims(x=x, c8=c8), constant=True),
+        gen.Tensor("Output", gen.dtype.half2, gen.Dims(x=x, c2=c2)),
         gen.Tensor(
             "SmemInputStore",
             gen.dtype.uint4,
-            {"ping_pong": 2, "x": config.warps_x, "c8": c8},
+            gen.Dims(ping_pong=2, x=config.warps_x, c8=c8),
         ),
         gen.Tensor(
             "SmemInputLoad",
             gen.dtype.half2,
-            {
-                "ping_pong": 2,
-                "x": config.warps_x,
-                "c2": c2,
-            },
+            gen.Dims(ping_pong=2, x=config.warps_x, c2=c2),
             constant=True,
         ),
         gen.Index(
-            "ThreadIdx", {"x": config.warps_x, "warp_c": config.warps_c, "c2": 32}
+            "ThreadIdx", gen.Dims(x=config.warps_x, warp_c=config.warps_c, c2=32)
         ),
         gen.Tensor(
             "SmemSum",
             gen.dtype.float,
-            {"x": config.warps_x, "warp_c": config.warps_c},
+            gen.Dims(x=config.warps_x, warp_c=config.warps_c),
         ),
     ]
 
