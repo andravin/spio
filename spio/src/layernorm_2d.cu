@@ -131,7 +131,7 @@ extern "C"
 
         // smem -> registers
         ThreadIdx tidx(threadIdx.x);
-        auto c2_warp_lane = tidx.get<WARP_C>().cast<C>().fold<2>() + tidx.get<C2>();
+        auto c2_warp_lane = tidx.get<WARP_C>().fold<2>() + tidx.get<C2>();
         auto smem_input_load = SmemInputLoad(reinterpret_cast<const __half2 *>(smem_input_buf))[tidx.get<X>()].rebase();
 
         // Load the weight and bias.
@@ -249,7 +249,7 @@ extern "C"
                 //
                 {
                     auto x_iter = block_x.unfold() + Block::warps_x * compute_iter;
-                    auto c2_warp_lane = tidx.get<WARP_C>().cast<C>().fold<2>() + tidx.get<C2>();
+                    auto c2_warp_lane = tidx.get<WARP_C>().fold<2>() + tidx.get<C2>();
                     auto x = x_iter + tidx.get<X>();
 
                     auto output = Output(output_ptr)[x].rebase();
