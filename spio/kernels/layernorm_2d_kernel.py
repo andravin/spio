@@ -155,12 +155,12 @@ def _get_kernel_spec(
             constant=True,
         ),
         gen.Index(
-            "ThreadIdx", {"warp_x": config.warps_x, "warp_c": config.warps_c, "c2": 32}
+            "ThreadIdx", {"x": config.warps_x, "warp_c": config.warps_c, "c2": 32}
         ),
         gen.Tensor(
             "SmemSum",
             gen.dtype.float,
-            {"warp_x": config.warps_x, "warp_c": config.warps_c},
+            {"x": config.warps_x, "warp_c": config.warps_c},
         ),
     ]
 
