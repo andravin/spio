@@ -69,16 +69,16 @@ namespace
         // Sum over warps.
         if constexpr (Block::warps_c > 1)
         {
-            auto smem_sum = SmemSum(smem_sum_buf).warp_x(tidx.warp_x());
+            auto smem_sum = SmemSum(smem_sum_buf)[tidx.get<WARP_X>()];
             int warp_c_idx = threadIdx.x % 32;
             if (warp_c_idx == 0)
             {
-                *smem_sum.warp_c(tidx.warp_c()) = sum;
+                *smem_sum[tidx.get<WARP_C>()] = sum;
             }
             __syncthreads();
             if (warp_c_idx < Block::warps_c)
             {
-                sum = *smem_sum.warp_c(warp_c_idx);
+                sum = *smem_sum[WARP_C(warp_c_idx)];
             }
             else
             {
@@ -105,7 +105,7 @@ extern "C"
         //
         // Define the shared memory buffers.
         //
-        __shared__ uint4 smem_input_buf[SmemInputStore::size];
+        __shared__ uint4 smem_input_buf[SmemInputStore::storage_size()];
         __shared__ float smem_sum_buf[Block::warps_x * Block::warps_c];
         __shared__ float smem_diff_sum_buf[Block::warps_x * Block::warps_c];
 
@@ -123,7 +123,7 @@ extern "C"
                 return blockIdx.x;
             };
         }();
-        auto block_x = BLOCK_X_Dim(bx);
+        auto block_x = BLOCK_X(bx);
 
         // input -> smem
         Input input(input_ptr);
@@ -131,11 +131,8 @@ extern "C"
 
         // smem -> registers
         ThreadIdx tidx(threadIdx.x);
-        auto c2_warp_lane = tidx.warp_c().fold<2>() + tidx.c2();
-        SmemInputLoad smem_input_load(reinterpret_cast<const __half2 *>(smem_input_buf));
-        {
-            smem_input_load = smem_input_load.x(tidx.warp_x().get());
-        }
+        auto c2_warp_lane = tidx.get<WARP_C>().cast<C>().fold<2>() + tidx.get<C2>();
+        auto smem_input_load = SmemInputLoad(reinterpret_cast<const __half2 *>(smem_input_buf))[tidx.get<WARP_X>().cast<X>()].rebase();
 
         // Load the weight and bias.
         float2 weight[Params::c2_per_thread];
@@ -145,7 +142,7 @@ extern "C"
             for (int c64 = 0; c64 < Params::c2_per_thread; ++c64)
             {
                 auto c2 = c2_warp_lane + c64 * 32;
-                if (c2 < Output::C2)
+                if (c2 < Output::size<C2>())
                 {
                     weight[c64] = weight_ptr[c2.get()];
                     if constexpr (Params::has_bias)
@@ -170,15 +167,15 @@ extern "C"
             if (iter < Params::warp_x)
             {
                 // Load the next input tile to shared memory asynchronously.
-                auto x_iter = block_x.unfold() + Block::warps_x * iter;
-                auto input_iter = input.x(x_iter);
-                for (int idx = threadIdx.x; idx < SmemInputStore::size / 2; idx += Block::threads)
+                auto x_iter = block_x.unfold() + X(Block::warps_x * iter);
+                auto input_iter = input[x_iter];
+                for (int idx = threadIdx.x; idx < SmemInputStore::size() / 2; idx += Block::threads)
                 {
-                    SmemInputStore::Index smem_store_idx(idx);
-                    bool thread_inbounds = (x_iter + smem_store_idx.x()) < Input::X;
+                    SmemInputStore::index_type smem_store_idx(idx);
+                    bool thread_inbounds = (x_iter + smem_store_idx.get<X>()) < Input::size<X>();
                     int zfill = thread_inbounds ? 0 : sizeof(Input::data_type);
                     __pipeline_memcpy_async(
-                        smem_input_store.ping_pong(iter % 2).get() + idx,
+                        smem_input_store[PING_PONG(iter % 2)].get() + idx,
                         input_iter.get() + idx,
                         sizeof(Input::data_type),
                         zfill);
@@ -197,10 +194,10 @@ extern "C"
                 __syncthreads();
                 for (int c64 = 0; c64 < Params::c2_per_thread; ++c64)
                 {
-                    auto c2 = c2_warp_lane + c64 * 32;
-                    if (c2 < Output::C2)
+                    auto c2 = C2(c2_warp_lane + c64 * 32);
+                    if (c2 < Output::size<C2>())
                     {
-                        input_tile[c64] = *smem_input_load.ping_pong(compute_iter % 2).c2(c2);
+                        input_tile[c64] = *smem_input_load[PING_PONG(compute_iter % 2)][c2];
                     }
                     else
                     {
@@ -235,7 +232,7 @@ extern "C"
                     for (int c64 = 0; c64 < Params::c2_per_thread; ++c64)
                     {
                         auto c2 = c2_warp_lane + c64 * 32;
-                        if (c2 < Output::C2)
+                        if (c2 < Output::size<C2>())
                         {
                             sum_diff_sq += halves_diff_sq(input_tile[c64], mean);
                         }
@@ -252,18 +249,18 @@ extern "C"
                 //
                 {
                     auto x_iter = block_x.unfold() + Block::warps_x * compute_iter;
-                    auto c2_warp_lane = tidx.warp_c().fold<2>() + tidx.c2();
-                    auto x = x_iter + tidx.warp_x().get();
+                    auto c2_warp_lane = tidx.get<WARP_C>().cast<C>().fold<2>() + tidx.get<C2>();
+                    auto x = x_iter + tidx.get<WARP_X>().cast<X>().get();
 
-                    auto output = Output(output_ptr).x(x);
+                    auto output = Output(output_ptr)[x].rebase();
 
                     for (int c64 = 0; c64 < Params::c2_per_thread; ++c64)
                     {
                         __half2 norm = halves_norm(input_tile[c64], mean, rstd, weight[c64], bias[c64]);
                         auto c2 = c2_warp_lane + c64 * 32;
-                        if (c2 < Output::C2 && x < Output::X)
+                        if (c2 < Output::size<C2>() && x < Output::size<X>())
                         {
-                            *output.c2(c2) = norm;
+                            *output[c2] = norm;
                         }
                     }
                 }
