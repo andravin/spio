@@ -192,7 +192,8 @@ def _get_kernel_spec(
         gen.Index("BlockQNIdx", {"q": block_q, "n": block_n}),
         gen.Fragment("Acc", gen.FragmentType.M16_N8_F32_C, "qn", "k"),
         gen.Fragment("In", gen.FragmentType.M16_K8_F16_A, "qn", "c"),
-        gen.Tensor("WeightsReg", gen.FragmentType.N8_K8_F16_B, {"r": r, "s": s}),
+        gen.Fragment("Wgts", gen.FragmentType.N8_K8_F16_B, "c", "k"),
+        gen.Tensor("WeightsReg", "Wgts", {"r": r, "s": s}),
         gen.Tensor("AccReg", "Acc", {"p": r}),
     ]
     return KernelSpec(gen_specs=gen_specs, launch_params=launch_params)
