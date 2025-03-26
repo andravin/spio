@@ -40,8 +40,8 @@ class Fragment:
 
     def generate(self) -> str:
         """Generate the fragment class code as a type alias."""
-        row_dim = self.row.capitalize()
-        col_dim = self.col.capitalize()
+        row_dim = self.row.upper()
+        col_dim = self.col.upper()
         fragment_class = f"spio::{self.fragment_type.value}<{row_dim}, {col_dim}>"
         return f"using {self.class_name} = {fragment_class};\n"
 
