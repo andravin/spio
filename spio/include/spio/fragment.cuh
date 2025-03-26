@@ -105,7 +105,6 @@ namespace spio
                 dst.fragment(i) = fragment(i);
             }
         }
-
     };
 
     /// @brief  Template base class for 16-row fp16 matrix fragments for operand A.
@@ -155,9 +154,37 @@ namespace spio
         using Base::fragment;
     };
 
+    /// @brief  Mixin class for loading fragments from memory.
+    /// @tparam Derived The derived fragment class that provides load() and load_trans() methods.
+    template <typename Derived>
+    class FragmentLoader
+    {
+    public:
+        /// @brief Load a fragment from memory.
+        /// @param p The pointer to the memory to load the fragment from.
+        /// @return The loaded fragment.
+        static __device__ Derived load_new(const void *p)
+        {
+            Derived ret;
+            ret.load(p);
+            return ret;
+        }
+
+        /// @brief Load a transposed fragment from memory.
+        /// @param p The pointer to the memory to load the fragment from.
+        /// @return The loaded fragment.
+        static __device__ Derived load_trans_new(const void *p)
+        {
+            Derived ret;
+            ret.load_trans(p);
+            return ret;
+        }
+    };
+
     /// @brief A matrix with float16 elements for M16_N8_K8 matrix multiplication.
     template <typename RowDim, typename ColDim>
-    class MMA_M16_K8_F16_A : public _MMA_M16_N8_F16_A<RowDim, ColDim, 1>
+    class MMA_M16_K8_F16_A : public _MMA_M16_N8_F16_A<RowDim, ColDim, 1>,
+                             public FragmentLoader<MMA_M16_K8_F16_A<RowDim, ColDim>>
     {
     public:
         using Vector = uint2;
@@ -174,7 +201,8 @@ namespace spio
 
     /// @brief A matrix with float16 elements for M16_N8_K16 matrix multiplication.
     template <typename RowDim, typename ColDim>
-    class MMA_M16_K16_F16_A : public _MMA_M16_N8_F16_A<RowDim, ColDim, 2>
+    class MMA_M16_K16_F16_A : public _MMA_M16_N8_F16_A<RowDim, ColDim, 2>,
+                              public FragmentLoader<MMA_M16_K16_F16_A<RowDim, ColDim>>
     {
     public:
         using Vector = uint4;
@@ -190,7 +218,8 @@ namespace spio
     };
 
     template <typename RowDim, typename ColDim>
-    class MMA_N8_K8_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 1>
+    class MMA_N8_K8_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 1>,
+                            public FragmentLoader<MMA_N8_K8_F16_B<RowDim, ColDim>>
     {
     public:
         using Vector = unsigned;
@@ -208,7 +237,8 @@ namespace spio
     /// @brief B matrix with float16 elements for M16_N8_K16 matrix multiplication.
     /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
     template <typename RowDim, typename ColDim>
-    class MMA_N8_K16_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 2>
+    class MMA_N8_K16_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 2>,
+                             public FragmentLoader<MMA_N8_K16_F16_B<RowDim, ColDim>>
     {
     public:
         using Vector = uint2;
@@ -222,7 +252,8 @@ namespace spio
     };
 
     template <typename RowDim, typename ColDim>
-    class MMA_N16_K16_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 4>
+    class MMA_N16_K16_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 4>,
+                              public FragmentLoader<MMA_N16_K16_F16_B<RowDim, ColDim>>
     {
     public:
         using Vector = uint4;
