@@ -167,10 +167,7 @@ extern "C"
 
         AccReg::data_type acc_data[AccReg::storage_size()];
         AccReg acc(acc_data);
-        for (auto p : range(acc.size<P>()))
-        {
-            acc[p]->fill(bias_f32);
-        }
+        acc.fill(bias_f32);
 
         // Run the first Weights::R pipeline steps.
         int iter = 1;
