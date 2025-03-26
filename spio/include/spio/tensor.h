@@ -210,6 +210,7 @@ namespace spio
         using Base::Base;
         using Base::get;
         using cursor_type = Cursor<DataType, DimInfos...>;
+        using base_cursor_type = BaseCursor<DataType, DimInfos...>;
 
         template <typename DimType>
         struct has_dimension
@@ -282,6 +283,7 @@ namespace spio
         using Data<data_type>::get;
 
         using cursor_type = Cursor<DataType, DimInfos...>;
+        using base_cursor_type = BaseCursor<DataType, DimInfos...>;
 
         // Index type that uses tensor's size and strides.
         using index_type = spio::Index<DimInfos...>;
