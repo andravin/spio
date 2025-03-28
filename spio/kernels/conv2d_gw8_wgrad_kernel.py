@@ -187,16 +187,16 @@ def _get_kernel_spec(
         gen.ParamsSpec(
             "Params",
             {
-                "R": r,
-                "S": s,
+                "R_Size": r,
+                "S_Size": s,
                 "PADDING_H": padding_h,
                 "PADDING_W": padding_w,
                 "TRANSPOSE_PADDING_H": transpose_padding_h,
-                "WARP_S": config.warp_s,
-                "WARP_S2": warp_s2,
-                "WARP_S2_UP": warp_s2_up,
+                "WARP_S_Size": config.warp_s,
+                "WARP_S2_Size": warp_s2,
+                "WARP_S2_UP_Size": warp_s2_up,
                 "BLOCK_N_ITERS": config.block_n_iters,
-                "WARP_N": config.warp_n,
+                "WARP_N_Size": config.warp_n,
             },
         ),
         #
@@ -243,16 +243,16 @@ def _get_kernel_spec(
         # MMA fragments
         #
         gen.Fragment("Acc", gen.FragmentType.M16_N8_F32_C, "c", "k"),
+        gen.Fragment("InputFragment", gen.FragmentType.M16_K8_F16_A, "c", "x"),
+        gen.Fragment("DeltaFragment", gen.FragmentType.N8_K8_F16_B, "x", "k"),
         #
         # MMA tensors
         #
         gen.Tensor(
-            "AccTensor", gen.FragmentType.M16_N8_F32_C, {"s2": warp_s2_up, "r": r}
+            "AccTensor", "Acc", {"s2": warp_s2_up, "r": r}
         ),
-        gen.Tensor("InputTensor", gen.FragmentType.M16_K8_F16_A, {"s2": warp_s2_up}),
-        gen.Tensor(
-            "DeltaTensor", gen.FragmentType.N8_K8_F16_B, {"n": config.warp_n, "r": r}
-        ),
+        gen.Tensor("InputTensor", "InputFragment", {"s2": warp_s2_up}),
+        gen.Tensor("DeltaTensor", "DeltaFragment", {"n": config.warp_n, "r": r}),
         #
         # Weights storing.
         #
