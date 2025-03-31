@@ -192,7 +192,7 @@ extern "C"
                 __pipeline_wait_prior(pipeline.active(LOAD_INPUT_STAGE) ? 1 : 0);
                 __syncthreads();
 
-                auto smem_input_load_iter = smem_input_load[PING_PONG(ping_pong)];
+                auto smem_input_load_iter = smem_input_load[PING_PONG(ping_pong)].rebase();
                 for (auto s : range(Weights::size<S>()))
                 {
                     auto in = In::load_new(smem_input_load_iter[s.cast<X>()].get());
@@ -249,7 +249,7 @@ extern "C"
                 {
                     __pipeline_wait_prior(pipeline.active(LOAD_INPUT_STAGE) ? 1 : 0);
                     __syncthreads();
-                    auto smem_input_load_iter = smem_input_load[PING_PONG(ping_pong)];
+                    auto smem_input_load_iter = smem_input_load[PING_PONG(ping_pong)].rebase();
                     for (auto s : range(Weights::size<S>()))
                     {
                         auto in = In::load_new(smem_input_load_iter[s.cast<X>()].get());
