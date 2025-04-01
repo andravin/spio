@@ -53,8 +53,7 @@ extern "C"
         auto input_n = [&]()
         {
             InputIdx idx(threadIdx.x);
-            
-            smem_input_store = SmemInput(smem_input_buf)[idx.get<N>()][idx.get<X>()][idx.get<C8>()].rebase();
+            smem_input_store = SmemInput(smem_input_buf)[idx].rebase();
             auto _input_n = idx.get<N>();
             auto block_x = block_q.unfold().cast<X>() - PADDING_W;
             auto x = block_x + idx.get<X>();
@@ -76,7 +75,7 @@ extern "C"
         {
             DeltaIdx idx(threadIdx.x);
             auto _delta_n = idx.get<N>();
-            smem_delta_store = SmemDelta(smem_delta_buf)[idx.get<N>()][idx.get<Q>()][idx.get<K8>()].rebase();
+            smem_delta_store = SmemDelta(smem_delta_buf)[idx].rebase();
             auto q = block_q.unfold() + idx.get<Q>();
             auto k8 = block_c.fold<8>().cast<K>() + idx.get<K8>();
             global_delta = Delta(deltas_ptr)[q][k8].rebase();
