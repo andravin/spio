@@ -15,12 +15,11 @@ extern "C"
         const float2 *__restrict__ bias_ptr)
     {
         //
-        // Define the shared memory buffers.
+        // Create the shared memory allocator.
         //
-        __shared__ uint4 smem_input_buf[SmemInput::storage_size()];
-        __shared__ uint4 smem_buf[spio::max(SmemWeights::storage_size(), SmemOutput::storage_size())];
-        uint4 *smem_weights_buf = smem_buf;
-        uint4 *smem_output_buf = smem_buf;
+        constexpr int smem_size = SmemInput::storage_size() + spio::max(SmemWeights::storage_size(), SmemOutput::storage_size());
+        __shared__ uint4 smem[smem_size];
+        StackAllocator smem_alloc(smem);
 
         //
         // Define the block tile.
@@ -47,21 +46,15 @@ extern "C"
         // Define tile mappings
         //
 
-        // Weights-smem to registers.
-        auto smem_weights_load = [&]()
-        {
-            SmemWeightsLoadIdx idx(threadIdx.x);
-            return ConstSmemWeights(smem_weights_buf)[idx.get<K8>()][idx.get<K>()];
-        }();
-
-        // Input to smem.
+        // Map input to smem.
+        auto smem_input = SmemInput::allocate(smem_alloc);
         Input::base_cursor_type input;
         SmemInput::base_cursor_type smem_input_store;
         bool thread_loads_input;
         bool z_inbounds;
         {
             InputIdx idx(threadIdx.x);
-            smem_input_store = SmemInput(smem_input_buf)[idx].rebase();
+            smem_input_store = smem_input[idx].rebase();
             auto n = block_idx.get<BLOCK_N>().unfold() + idx.get<N>();
             auto x = block_idx.get<BLOCK_Q>().unfold().cast<X>() + idx.get<X>() - Padding::w;
             auto c8 = block_idx.get<BLOCK_C>().fold<8>() + idx.get<C8>();
@@ -70,39 +63,20 @@ extern "C"
             thread_loads_input = threadIdx.x < idx.size();
         }
 
-        // Input-smem to register.
+        // Map weights-smem to registers.
+        auto smem_weights = ConstSmemWeights::allocate(smem_alloc);
+        auto smem_weights_load = [&]()
+        {
+            SmemWeightsLoadIdx idx(threadIdx.x);
+            return smem_weights[idx.get<K8>()][idx.get<K>()];
+        }();
+
+        // Map input-smem to register.
         auto smem_input_load = [&]()
         {
             SmemInputLoadIdx idx(threadIdx.x);
-            return SmemInput(smem_input_buf)[idx.get<N>()][idx.get<Q>().cast<X>()][idx.get<C8>()].rebase();
+            return smem_input[idx.get<N>()][idx.get<Q>().cast<X>()][idx.get<C8>()].rebase();
         }();
-
-        // Register to output-smem.
-        SmemOutput::base_cursor_type smem_output_store_qn0;
-        SmemOutput::base_cursor_type smem_output_store_qn8;
-        {
-            SmemOutputStoreIdx thread_idx(threadIdx.x);
-            Acc::Index acc_idx(thread_idx.get<LANE>().get());
-            BlockQNIdx block_qn_0_idx(acc_idx.get<QN>(0).get());
-            BlockQNIdx block_qn_8_idx(acc_idx.get<QN>(1).get());
-            auto smem_output_store = SmemOutput(reinterpret_cast<__half2 *>(smem_output_buf))[thread_idx.get<K8>()][acc_idx.get<K2>()];
-            smem_output_store_qn0 = smem_output_store[block_qn_0_idx].rebase();
-            smem_output_store_qn8 = smem_output_store[block_qn_8_idx].rebase();
-        }
-
-        // Output-smem to output.
-        ConstSmemOutput::base_cursor_type smem_output_load;
-        Output::base_cursor_type output;
-        bool thread_stores_output;
-        {
-            OutputStoreIdx idx(threadIdx.x);
-            smem_output_load = ConstSmemOutput(smem_output_buf)[idx].rebase();
-            auto q = block_idx.get<BLOCK_Q>().unfold() + idx.get<Q>();
-            auto n = block_idx.get<BLOCK_N>().unfold() + idx.get<N>();
-            auto k8 = block_idx.get<BLOCK_C>().fold<8>().cast<K>() + idx.get<K8>();
-            output = Output(dst)[n][block_idx.get<BLOCK_P>().unfold()][q][k8].rebase();
-            thread_stores_output = ((n < Output::size<N>()) && (q < Output::size<Q>()) && (k8 < Output::size<K8>()) && (threadIdx.x < OutputStoreIdx::size()));
-        }
 
         // Copy weights from global memory to smem asynchronously.
         auto weight = Weights(weights_ptr)[block_idx.get<BLOCK_C>().unfold().cast<K>()];
@@ -110,7 +84,7 @@ extern "C"
         {
             Weights::index_type weight_idx(idx);
             auto k = block_idx.get<BLOCK_C>().unfold().cast<K>() + weight_idx.get<K>();
-            memcpy_async(smem_weights_buf + idx, weight.get() + idx, k < Weights::size<K>());
+            memcpy_async(const_cast<uint4 *>(smem_weights.get()) + idx, weight.get() + idx, k < Weights::size<K>());
         }
         __pipeline_commit();
 
@@ -162,7 +136,37 @@ extern "C"
                 }
             }
         }
+        smem_weights.deallocate(smem_alloc);
 
+        // Map registers to output-smem.
+        auto smem_output = SmemOutput::allocate(smem_alloc);
+        SmemOutput::base_cursor_type smem_output_store_qn0;
+        SmemOutput::base_cursor_type smem_output_store_qn8;
+        {
+            SmemOutputStoreIdx thread_idx(threadIdx.x);
+            Acc::Index acc_idx(thread_idx.get<LANE>().get());
+            BlockQNIdx block_qn_0_idx(acc_idx.get<QN>(0).get());
+            BlockQNIdx block_qn_8_idx(acc_idx.get<QN>(1).get());
+            auto smem_output_store = smem_output[thread_idx.get<K8>()][acc_idx.get<K2>()];
+            smem_output_store_qn0 = smem_output_store[block_qn_0_idx].rebase();
+            smem_output_store_qn8 = smem_output_store[block_qn_8_idx].rebase();
+        }
+
+        // Map output-smem to global output.
+        ConstSmemOutput::base_cursor_type smem_output_load;
+        Output::base_cursor_type output;
+        bool thread_stores_output;
+        {
+            OutputStoreIdx idx(threadIdx.x);
+            smem_output_load = ConstSmemOutput(reinterpret_cast<ConstSmemOutput::data_type *>(smem_output.get()))[idx].rebase();
+            auto q = block_idx.get<BLOCK_Q>().unfold() + idx.get<Q>();
+            auto n = block_idx.get<BLOCK_N>().unfold() + idx.get<N>();
+            auto k8 = block_idx.get<BLOCK_C>().fold<8>().cast<K>() + idx.get<K8>();
+            output = Output(dst)[n][block_idx.get<BLOCK_P>().unfold()][q][k8].rebase();
+            thread_stores_output = ((n < Output::size<N>()) && (q < Output::size<Q>()) && (k8 < Output::size<K8>()) && (threadIdx.x < OutputStoreIdx::size()));
+        }
+
+        // Initialize the accumulators with the bias vector.
         AccReg::data_type acc_data[AccReg::storage_size()];
         AccReg acc(acc_data);
         acc.fill(bias_f32);
