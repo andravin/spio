@@ -123,7 +123,7 @@ extern "C"
         auto num_p = spio::min(BLOCK_P::stride, Output::size<P>() - block_idx.get<BLOCK_P>().unfold());
         int num_y = num_p.get() + Weights::size<R>().get() - 1;
         int num_iters = num_y + NUM_STAGES - 1;
-        int ping_pong = 0;
+        bool ping_pong = false;
         Pipeline pipeline;
 
         // Prefetch the first input row.
@@ -141,7 +141,7 @@ extern "C"
             __pipeline_commit();
             ++y;
         }
-        ping_pong ^= 1;
+        ping_pong = !ping_pong;
 
         __pipeline_wait_prior(1);
         __syncthreads();
@@ -179,20 +179,20 @@ extern "C"
                 if (thread_loads_input)
                 {
                     memcpy_async(
-                        smem_input_store[PING_PONG(ping_pong)].get(),
+                        smem_input_store[PING_PONG(ping_pong ? 1 : 0)].get(),
                         input[Y(y)].get(),
                         (y >= 0 && y < Input::size<Y>().get()) && z_inbounds);
                 }
                 __pipeline_commit();
                 ++y;
             }
-            ping_pong ^= 1;
+            ping_pong = !ping_pong;
             if (pipeline.active(COMPUTE_STAGE))
             {
                 __pipeline_wait_prior(pipeline.active(LOAD_INPUT_STAGE) ? 1 : 0);
                 __syncthreads();
 
-                auto smem_input_load_iter = smem_input_load[PING_PONG(ping_pong)].rebase();
+                auto smem_input_load_iter = smem_input_load[PING_PONG(ping_pong ? 1 : 0)].rebase();
                 for (auto s : range(Weights::size<S>()))
                 {
                     auto in = In::load_new(smem_input_load_iter[s.cast<X>()].get());
@@ -237,19 +237,19 @@ extern "C"
                     if (thread_loads_input)
                     {
                         memcpy_async(
-                            smem_input_store[PING_PONG(ping_pong)].get(),
+                            smem_input_store[PING_PONG(ping_pong ? 1 : 0)].get(),
                             input[Y(y)].get(),
                             (y >= 0 && y < Input::size<Y>().get()) && z_inbounds);
                     }
                     __pipeline_commit();
                     ++y;
                 }
-                ping_pong ^= 1;
+                ping_pong = !ping_pong;
                 if (pipeline.active(COMPUTE_STAGE))
                 {
                     __pipeline_wait_prior(pipeline.active(LOAD_INPUT_STAGE) ? 1 : 0);
                     __syncthreads();
-                    auto smem_input_load_iter = smem_input_load[PING_PONG(ping_pong)].rebase();
+                    auto smem_input_load_iter = smem_input_load[PING_PONG(ping_pong ? 1 : 0)].rebase();
                     for (auto s : range(Weights::size<S>()))
                     {
                         auto in = In::load_new(smem_input_load_iter[s.cast<X>()].get());
