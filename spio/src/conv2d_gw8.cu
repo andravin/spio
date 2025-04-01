@@ -61,13 +61,11 @@ extern "C"
         bool z_inbounds;
         {
             InputIdx idx(threadIdx.x);
-            smem_input_store = SmemInput(smem_input_buf)[idx.get<N>()][idx.get<X>()][idx.get<C8>()].rebase();
-
+            smem_input_store = SmemInput(smem_input_buf)[idx].rebase();
             auto n = block_idx.get<BLOCK_N>().unfold() + idx.get<N>();
             auto x = block_idx.get<BLOCK_Q>().unfold().cast<X>() + idx.get<X>() - Padding::w;
             auto c8 = block_idx.get<BLOCK_C>().fold<8>() + idx.get<C8>();
             input = Input(input_ptr)[n][x][c8].rebase();
-
             z_inbounds = ((n < Input::size<N>()) && (x >= 0 && x < Input::size<X>()) && (c8 < Input::size<C8>()));
             thread_loads_input = threadIdx.x < idx.size();
         }
@@ -88,8 +86,8 @@ extern "C"
             BlockQNIdx block_qn_0_idx(acc_idx.get<QN>(0).get());
             BlockQNIdx block_qn_8_idx(acc_idx.get<QN>(1).get());
             auto smem_output_store = SmemOutput(reinterpret_cast<__half2 *>(smem_output_buf))[thread_idx.get<K8>()][acc_idx.get<K2>()];
-            smem_output_store_qn0 = smem_output_store[block_qn_0_idx.get<N>()][block_qn_0_idx.get<Q>()].rebase();
-            smem_output_store_qn8 = smem_output_store[block_qn_8_idx.get<N>()][block_qn_8_idx.get<Q>()].rebase();
+            smem_output_store_qn0 = smem_output_store[block_qn_0_idx].rebase();
+            smem_output_store_qn8 = smem_output_store[block_qn_8_idx].rebase();
         }
 
         // Output-smem to output.
@@ -98,10 +96,10 @@ extern "C"
         bool thread_stores_output;
         {
             OutputStoreIdx idx(threadIdx.x);
+            smem_output_load = ConstSmemOutput(smem_output_buf)[idx].rebase();
             auto q = block_idx.get<BLOCK_Q>().unfold() + idx.get<Q>();
             auto n = block_idx.get<BLOCK_N>().unfold() + idx.get<N>();
             auto k8 = block_idx.get<BLOCK_C>().fold<8>().cast<K>() + idx.get<K8>();
-            smem_output_load = ConstSmemOutput(smem_output_buf)[idx.get<N>()][idx.get<Q>()][idx.get<K8>()].rebase();
             output = Output(dst)[n][block_idx.get<BLOCK_P>().unfold()][q][k8].rebase();
             thread_stores_output = ((n < Output::size<N>()) && (q < Output::size<Q>()) && (k8 < Output::size<K8>()) && (threadIdx.x < OutputStoreIdx::size()));
         }
