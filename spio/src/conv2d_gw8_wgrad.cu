@@ -36,10 +36,6 @@ extern "C"
         // Define the block tile.
         //
         BlockIdx block_idx(blockIdx.x);
-        auto block_n = block_idx.get<BLOCK_N>();
-        auto block_y = block_idx.get<BLOCK_Y>();
-        auto block_q = block_idx.get<BLOCK_Q>();
-        auto block_c = block_idx.get<BLOCK_C>();
 
         //
         // Define tile mappings.
@@ -55,9 +51,9 @@ extern "C"
             InputIdx idx(threadIdx.x);
             smem_input_store = SmemInput(smem_input_buf)[idx].rebase();
             auto _input_n = idx.get<N>();
-            auto block_x = block_q.unfold().cast<X>() - PADDING_W;
+            auto block_x = block_idx.get<BLOCK_Q>().unfold().cast<X>() - PADDING_W;
             auto x = block_x + idx.get<X>();
-            auto c8 = block_c.fold<8>() + idx.get<C8>();
+            auto c8 = block_idx.get<BLOCK_C>().fold<8>() + idx.get<C8>();
             global_input = Input(input_ptr)[x][c8].rebase();
             thread_loads_input = threadIdx.x < InputIdx::size();
             bool x_inbounds = (x >= 0 && x < Input::size<X>());
@@ -76,8 +72,8 @@ extern "C"
             DeltaIdx idx(threadIdx.x);
             auto _delta_n = idx.get<N>();
             smem_delta_store = SmemDelta(smem_delta_buf)[idx].rebase();
-            auto q = block_q.unfold() + idx.get<Q>();
-            auto k8 = block_c.fold<8>().cast<K>() + idx.get<K8>();
+            auto q = block_idx.get<BLOCK_Q>().unfold() + idx.get<Q>();
+            auto k8 = block_idx.get<BLOCK_C>().fold<8>().cast<K>() + idx.get<K8>();
             global_delta = Delta(deltas_ptr)[q][k8].rebase();
             thread_loads_delta = threadIdx.x < DeltaIdx::size();
             delta_inbounds = (k8 < Delta::size<K8>() && q < Delta::size<Q>());
@@ -122,15 +118,15 @@ extern "C"
             //
             // Define the input and delta (grad_output) pointers for the current batch iteration.
             //
-            auto input_n_iter = block_n.unfold() + input_n + n_iter * WARP_N_Size;
+            auto input_n_iter = block_idx.get<BLOCK_N>().unfold() + input_n + n_iter * WARP_N_Size;
             bool input_n_inbounds = (input_n_iter < Input::size<N>());
             auto global_input_n_iter = global_input[input_n_iter].rebase();
 
-            auto delta_n_iter = block_n.unfold() + delta_n + n_iter * WARP_N_Size;
+            auto delta_n_iter = block_idx.get<BLOCK_N>().unfold() + delta_n + n_iter * WARP_N_Size;
             bool delta_n_inbounds = (delta_n_iter < Delta::size<N>());
             auto global_delta_n_iter = global_delta[delta_n_iter].rebase();
 
-            int y = block_y.unfold().get();
+            int y = block_idx.get<BLOCK_Y>().unfold().get();
             int p = y - TRANSPOSE_PADDING_H;
             int ping_pong = 0;
 
@@ -208,7 +204,7 @@ extern "C"
         }
 
         // Store accumulator to wgrad-smem.
-        auto global_wgrad = Wgrad(wgrad_ptr)[block_c.unfold().cast<K>()].rebase();
+        auto global_wgrad = Wgrad(wgrad_ptr)[block_idx.get<BLOCK_C>().unfold().cast<K>()].rebase();
         SmemWgrad::base_cursor_type smem_wgrad_store;
         auto warp_s = [&]()
         {
@@ -248,7 +244,7 @@ extern "C"
                 WgradStoreIdx idx(iter);
                 auto smem_wgrad_load_iter = smem_wgrad_load[idx.get<K8>()][idx.get<S>()][idx.get<C>()].rebase();
                 auto wgrad_iter = global_wgrad[idx.get<K8>().unfold()][acc.size<R>() - 1 - r][idx.get<S>()][idx.get<C>()];
-                auto k = block_c.unfold().cast<K>() + idx.get<K8>().unfold();
+                auto k = block_idx.get<BLOCK_C>().unfold().cast<K>() + idx.get<K8>().unfold();
 #pragma unroll 4
                 for (int k2 = 0; k2 < 4; ++k2)
                 {
