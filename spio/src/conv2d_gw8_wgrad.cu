@@ -14,16 +14,15 @@ extern "C"
         const uint4 *__restrict__ deltas_ptr)
     {
         //
-        // Define the shared memory buffers.
-        //
-        // Overlap the wgrad shared memory buffer with the other smem buffers.
+        // Allocate the shared memory tensors.
         //
         __shared__ uint4 smem_buf[spio::max(
             SmemInput::storage_size() + SmemDelta::storage_size(),
             static_cast<int>(SmemWgrad::num_bytes() / sizeof(uint4)))];
-        uint4 *smem_input_buf = smem_buf;
-        uint4 *smem_delta_buf = smem_buf + SmemInput::storage_size();
-        float2 *smem_wgrad_buf = reinterpret_cast<float2 *>(smem_buf);
+
+        StackAllocator smem_alloc(smem_buf);
+        auto smem_input = SmemInput::allocate(smem_alloc);
+        auto smem_delta = SmemDelta::allocate(smem_alloc);
 
         //
         // Define the block tile.
@@ -42,7 +41,7 @@ extern "C"
         auto input_n = [&]()
         {
             InputIdx idx(threadIdx.x);
-            smem_input_store = SmemInput(smem_input_buf)[idx].rebase();
+            smem_input_store = smem_input[idx].rebase();
             auto _input_n = idx.get<N>();
             auto block_x = block_idx.get<BLOCK_Q>().unfold().cast<X>() - PADDING_W;
             auto x = block_x + idx.get<X>();
@@ -63,14 +62,13 @@ extern "C"
         auto delta_n = [&]()
         {
             DeltaIdx idx(threadIdx.x);
-            auto _delta_n = idx.get<N>();
-            smem_delta_store = SmemDelta(smem_delta_buf)[idx].rebase();
+            smem_delta_store = smem_delta[idx].rebase();
             auto q = block_idx.get<BLOCK_Q>().unfold() + idx.get<Q>();
             auto k8 = block_idx.get<BLOCK_C>().fold<8>().cast<K>() + idx.get<K8>();
             global_delta = Delta(deltas_ptr)[q][k8].rebase();
             thread_loads_delta = threadIdx.x < DeltaIdx::size();
             delta_inbounds = (k8 < Delta::size<K8>() && q < Delta::size<Q>());
-            return _delta_n;
+            return idx.get<N>();
         }();
 
         // Load input-smem to register.
@@ -78,14 +76,14 @@ extern "C"
         {
             SmemInputLoadIdx idx(threadIdx.x);
             auto x = idx.get<Q>().cast<X>() + idx.get<WARP_S>().unfold().cast<X>() + idx.get<S>().cast<X>();
-            smem_input_load = SmemInput(smem_input_buf)[x][idx.get<C8>()].rebase();
+            smem_input_load = smem_input[x][idx.get<C8>()].rebase();
         }
 
         // Load delta-smem to register.
         SmemDelta::base_cursor_type smem_delta_load;
         {
             SmemDeltaLoadIdx idx(threadIdx.x);
-            smem_delta_load = SmemDelta(smem_delta_buf)[idx.get<Q>()][idx.get<K8>()].rebase();
+            smem_delta_load = smem_delta[idx.get<Q>()][idx.get<K8>()].rebase();
         }
 
         //
@@ -196,6 +194,10 @@ extern "C"
             }
         }
 
+        smem_delta.deallocate(smem_alloc);
+        smem_input.deallocate(smem_alloc);
+        auto smem_wgrad = SmemWgrad::allocate(smem_alloc);
+
         // Store accumulator to wgrad-smem.
         auto global_wgrad = Wgrad(wgrad_ptr)[block_idx.get<BLOCK_C>().unfold().cast<K>()].rebase();
         SmemWgrad::base_cursor_type smem_wgrad_store;
@@ -204,7 +206,7 @@ extern "C"
             SmemWgradStoreIdx idx(threadIdx.x);
             auto _warp_s = idx.get<WARP_S>().unfold();
             Acc::Index acc_idx(idx.get<LANE>().get());
-            smem_wgrad_store = SmemWgrad(smem_wgrad_buf)[idx.get<K8>()][acc_idx.get<K2>()][_warp_s][acc_idx.get<C>()].rebase();
+            smem_wgrad_store = smem_wgrad[idx.get<K8>()][acc_idx.get<K2>()][_warp_s][acc_idx.get<C>()].rebase();
             return _warp_s;
         }();
 
@@ -229,13 +231,12 @@ extern "C"
             __syncthreads();
 
             // Add wgrad to the global result.
-            SmemWgrad smem_wgrad_load(smem_wgrad_buf);
 #pragma unroll 1
             for (int iter = threadIdx.x; iter < WgradStoreIdx::size(); iter += Block::threads)
             {
                 // Flip r-dimension.
                 WgradStoreIdx idx(iter);
-                auto smem_wgrad_load_iter = smem_wgrad_load[idx.get<K8>()][idx.get<S>()][idx.get<C>()].rebase();
+                auto smem_wgrad_load_iter = smem_wgrad[idx.get<K8>()][idx.get<S>()][idx.get<C>()].rebase();
                 auto wgrad_iter = global_wgrad[idx.get<K8>().unfold()][acc.size<R>() - 1 - r][idx.get<S>()][idx.get<C>()];
                 auto k = block_idx.get<BLOCK_C>().unfold().cast<K>() + idx.get<K8>().unfold();
 #pragma unroll 4
