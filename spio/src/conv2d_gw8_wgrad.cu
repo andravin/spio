@@ -236,7 +236,7 @@ extern "C"
             {
                 // Flip r-dimension.
                 WgradStoreIdx idx(iter);
-                auto smem_wgrad_load_iter = smem_wgrad[idx.get<K8>()][idx.get<S>()][idx.get<C>()].rebase();
+                auto smem_wgrad_load_iter = smem_wgrad[idx].rebase();
                 auto wgrad_iter = global_wgrad[idx.get<K8>().unfold()][acc.size<R>() - 1 - r][idx.get<S>()][idx.get<C>()];
                 auto k = block_idx.get<BLOCK_C>().unfold().cast<K>() + idx.get<K8>().unfold();
 #pragma unroll 4
