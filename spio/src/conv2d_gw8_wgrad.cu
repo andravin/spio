@@ -1,12 +1,5 @@
-#include <cuda_fp16.h>
-
-#include "spio/memory.cuh"
+#include "spio.cuh"
 #include "spio/pipeline.h"
-#include "spio/fragment.cuh"
-#include "spio/mma.cuh"
-#include "spio/ldmatrix.cuh"
-#include "spio/mathutil.h"
-#include "spio/fragment_mma.cuh"
 
 #include "parameters.h"
 
