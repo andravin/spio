@@ -17,12 +17,13 @@ extern "C"
         // Allocate the shared memory tensors.
         //
         static_assert(SmemInput::element_size == SmemDelta::element_size,
-            "SmemInput and SmemDelta assumed to have the same element size.");
-        __shared__ SmemInput::data_type smem_buf[spio::max(
+                      "SmemInput and SmemDelta assumed to have the same element size.");
+        constexpr int smem_size = spio::max(
             SmemInput::storage_size() + SmemDelta::storage_size(),
-            SmemWgrad::num_bytes() / SmemInput::element_size)];
+            SmemWgrad::num_bytes() / SmemInput::element_size);
+        __shared__ SmemInput::data_type smem[smem_size];
 
-        StackAllocator smem_alloc(smem_buf);
+        StackAllocator smem_alloc(smem);
         auto smem_input = SmemInput::allocate(smem_alloc);
         auto smem_delta = SmemDelta::allocate(smem_alloc);
 
