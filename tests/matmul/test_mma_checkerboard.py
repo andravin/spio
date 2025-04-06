@@ -154,7 +154,7 @@ def _get_specs(m: int, n: int, k: int):
         a_tile,
         b_tile,
         c_tile,
-        gen.Matmul(a_tile, b_tile, c_tile, c_tile, function_name="mma_gen"),
+        gen.Matmul(a_tile, b_tile, c_tile, c_tile, function_name="mma"),
         gen.Index("SmemCLoadIndex", gen.Dims(i=32, j8=8)),
         gen.Checkerboard("Smem_Checkers", "x", "k8", "checkers"),
         gen.Checkerboard("SmemA_Checkers", "i", "k8", "checkers"),
