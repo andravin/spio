@@ -106,9 +106,9 @@ extern "C"
                 __syncthreads();
                 a_tile.load(smem_a_load);
                 b_tile.load(smem_b_load);
+                mma_gen(a_tile, b_tile, c_tile, c_tile);
                 swap(smem_a_load_pong, smem_a_load);
                 swap(smem_b_load_pong, smem_b_load);
-                mma_gen(a_tile, b_tile, c_tile, c_tile);
                 __syncthreads();
             }
         }
