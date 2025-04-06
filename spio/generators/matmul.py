@@ -13,7 +13,7 @@ class Matmul:
 
     Performs the operation:
         d = a x b + c
-   
+
     This code implements a generalized tensor-matrix that supports:
     - Any number of independent dimensions.
     - Any number of reduction dimensions.
@@ -29,7 +29,6 @@ class Matmul:
     tensor_c: Tensor
     tensor_d: Tensor
     function_name: str = "tensor_matmul"
-    reduction_first: bool = True
     use_zigzag: bool = True  # Add zigzag parameter
 
     def generate(self) -> str:
@@ -61,13 +60,12 @@ class Matmul:
         lines.append(f" * - Tensor B dimensions: {', '.join(b_dims)}")
         lines.append(f" * - Output dimensions: {', '.join(a_only_dims + b_only_dims)}")
         lines.append(f" * - Reduction dimensions: {', '.join(reduction_dims)}")
-        if self.reduction_first:
-            lines.append(f" * Using reduction-first traversal order.")
-        else:
-            lines.append(f" * Using independent-first traversal order.")
+        lines.append(f" * Using reduction-first traversal order.")
         if self.use_zigzag:
             lines.append(f" * Using zigzag traversal for all dimensions.")
-        lines.append(" * Note: Tensors must be initialized before calling this function.")
+        lines.append(
+            " * Note: Tensors must be initialized before calling this function."
+        )
         lines.append(" */")
 
         # Function declaration with concrete types
@@ -84,74 +82,71 @@ class Matmul:
 
         # Generate all index combinations
         all_indices = []
-        
-        # Determine traversal order based on reduction_first flag
-        if self.reduction_first:
-            traversal_order = reduction_dims + a_only_dims + b_only_dims
-        else:
-            traversal_order = a_only_dims + b_only_dims + reduction_dims
-        
+
+        # Determine traversal order
+        traversal_order = reduction_dims + a_only_dims + b_only_dims
+
         # Generate cartesian product of all indices
         index_values = {}
         for dim in traversal_order:
             size = dim_sizes[dim]
             index_values[dim] = list(range(size))
-        
+
         # Build all index combinations
         def build_indices(dimensions, current_indices=None, depth=0):
             if current_indices is None:
                 current_indices = {}
-            
+
             if depth == len(dimensions):
                 all_indices.append(current_indices.copy())
                 return
-            
+
             dim = dimensions[depth]
-            
+
             # Implement zigzag pattern for ALL dimensions after the first one
             values = index_values[dim]
-            
+
             # Zigzag applies to any dimension after the first one
             should_zigzag = self.use_zigzag and depth > 0
-            
+
             # Alternate direction based on the parity of preceding indices
             if should_zigzag:
                 # Sum of all previous indices to determine direction
                 indices_sum = sum(current_indices.get(d, 0) for d in dimensions[:depth])
-                
+
                 # Reverse the traversal order if the sum is odd
                 if indices_sum % 2 == 1:
                     values = values[::-1]
-            
+
             # Process all values for this dimension
             for val in values:
                 current_indices[dim] = val
                 build_indices(dimensions, current_indices, depth + 1)
-        
+
         # Generate all index combinations
         build_indices(traversal_order)
-        
+
         # Generate unrolled matrix multiply operations
         lines.append(f"{indent}// Fully unrolled matrix multiply operations")
-        
+
         for idx in all_indices:
             # Build indexed tensor references
             a_ref = "*a"
-            b_ref = "*b" 
+            b_ref = "*b"
             c_ref = "*c"
             d_ref = "*d"
-            
+
             for dim in sorted(a_dims):
                 a_ref += f"[{dim_name_to_dim_or_fold_class_name(dim)}({idx[dim]})]"
-                
+
             for dim in sorted(b_dims):
                 b_ref += f"[{dim_name_to_dim_or_fold_class_name(dim)}({idx[dim]})]"
-                
+
             # Output and accumulator tensors have only independent dimensions
             for dim in sorted(a_only_dims + b_only_dims):
                 c_ref += f"[{dim_name_to_dim_or_fold_class_name(dim)}({idx[dim]})]"
                 d_ref += f"[{dim_name_to_dim_or_fold_class_name(dim)}({idx[dim]})]"
-                
+
             # Generate the mma operation
             lines.append(f"{indent}mma_trans({d_ref}, {a_ref}, {b_ref}, {c_ref});")
 
@@ -179,7 +174,6 @@ def generate_tensor_matmul(
     tensor_c: Tensor,
     tensor_d: Tensor,
     function_name: str = "tensor_matmul",
-    reduction_first: bool = True,
     use_zigzag: bool = True,
 ) -> str:
     """Generate optimized code for matrix multiplication of tensors."""
@@ -189,7 +183,6 @@ def generate_tensor_matmul(
         tensor_c=tensor_c,
         tensor_d=tensor_d,
         function_name=function_name,
-        reduction_first=reduction_first,
         use_zigzag=use_zigzag,
     )
     return generator.generate()
