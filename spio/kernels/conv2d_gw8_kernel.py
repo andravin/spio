@@ -155,7 +155,11 @@ def _get_kernel_spec(
             gen.Dims(k8=block_c8, k=8, r=r, s=s),
             constant=True,
         ),
-        gen.Index("SmemWeightsLoadIdx", gen.Dims(k8=block_c8, repeat=4, k=8)),
+        gen.Index(
+            "SmemWeightsLoadIdx",
+            gen.Dims(k8=block_c8, repeat=4, k=8),
+            dummies=["repeat"],
+        ),
         gen.Tensor(
             "SmemInput",
             gen.dtype.uint4,
@@ -167,9 +171,10 @@ def _get_kernel_spec(
             gen.Dims(
                 c8=block_c8,
                 repeat=32 // (block_q * block_n),
-                q=block_q,
+                x=block_q,
                 n=block_n,
             ),
+            dummies=["repeat"],
         ),
         gen.Index("SmemOutputStoreIdx", gen.Dims(k8=block_c8, lane=32)),
         gen.Tensor(

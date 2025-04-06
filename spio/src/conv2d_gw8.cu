@@ -65,18 +65,10 @@ extern "C"
 
         // Map weights-smem to registers.
         auto smem_weights = ConstSmemWeights::allocate(smem_alloc);
-        auto smem_weights_load = [&]()
-        {
-            SmemWeightsLoadIdx idx(threadIdx.x);
-            return smem_weights[idx.get<K8>()][idx.get<K>()];
-        }();
+        auto smem_weights_load = smem_weights[SmemWeightsLoadIdx(threadIdx.x)];
 
         // Map input-smem to register.
-        auto smem_input_load = [&]()
-        {
-            SmemInputLoadIdx idx(threadIdx.x);
-            return smem_input[idx.get<N>()][idx.get<Q>().cast<X>()][idx.get<C8>()].rebase();
-        }();
+        auto smem_input_load = smem_input[SmemInputLoadIdx(threadIdx.x)].rebase();
 
         // Copy weights from global memory to smem asynchronously.
         auto weight = Weights(weights_ptr)[block_idx.get<BLOCK_C>().unfold().cast<K>()];

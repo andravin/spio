@@ -61,6 +61,14 @@ namespace spio
         {
             static constexpr int value = T::module_type::size.get();
         };
+
+        // Add a new trait to identify dummy dimensions
+        template<typename DimInfo>
+        struct is_dummy_dimension {
+            static constexpr bool value = false;
+        };
+        
+        // Specialization will be added via template specialization in generated code
     }
 
     // Adding an index_traits namespace for Index-specific traits
@@ -104,6 +112,10 @@ namespace spio
             return dim_traits::dimension_size<DimType, DimInfos...>::value;
         }
 
+        //@brief  Apply the index to a tensor or cursor.
+        //@details Applies every dimension of the index to the tensor or cursor's subscript operator.
+        //@tparam TensorOrCursor the type of the tensor or cursor to apply the index to
+        //@return a new tensor or cursor with the index applied
         template <typename TensorOrCursor>
         DEVICE constexpr auto apply_to(TensorOrCursor tensor) const {
             // Start the recursive application with the first dimension
@@ -114,22 +126,26 @@ namespace spio
         // Base case: no more dimensions to apply
         template <typename TensorOrCursor>
         DEVICE constexpr auto apply_dimensions(TensorOrCursor tensor) const {
-            // All dimensions applied, return the tensor/cursor
             return tensor;
         }
 
         // Recursive case: apply the first dimension, then recurse with the rest
         template <typename FirstDimInfo, typename... RestDimInfos, typename TensorOrCursor>
         DEVICE constexpr auto apply_dimensions(TensorOrCursor tensor) const {
-            // Get this dimension's value using its type
-            using CurrentDimType = typename FirstDimInfo::dim_type;
-            auto dim_value = get<CurrentDimType>();
-            
-            // Apply it to the tensor
-            auto next_tensor = tensor[dim_value];
-            
-            // Continue recursively with remaining dimensions
-            return apply_dimensions<RestDimInfos...>(next_tensor);
+            // Skip dummy dimensions
+            if constexpr (detail::is_dummy_dimension<FirstDimInfo>::value) {
+                return apply_dimensions<RestDimInfos...>(tensor);
+            } else {
+                // Get this dimension's value using its type
+                using CurrentDimType = typename FirstDimInfo::dim_type;
+                auto dim_value = get<CurrentDimType>();
+                
+                // Apply it to the tensor
+                auto next_tensor = tensor[dim_value];
+                
+                // Continue recursively with remaining dimensions
+                return apply_dimensions<RestDimInfos...>(next_tensor);
+            }
         }
     };
 }

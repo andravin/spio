@@ -83,11 +83,7 @@ extern "C"
         }
 
         // Load delta-smem to register.
-        SmemDelta::base_cursor_type smem_delta_load;
-        {
-            SmemDeltaLoadIdx idx(threadIdx.x);
-            smem_delta_load = smem_delta[idx.get<Q>()][idx.get<K8>()].rebase();
-        }
+        SmemDelta::base_cursor_type smem_delta_load = smem_delta[SmemDeltaLoadIdx(threadIdx.x)].rebase();
 
         //
         // Declare the accumulators.

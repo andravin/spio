@@ -227,6 +227,7 @@ def _get_kernel_spec(
                 "s": 2,
                 "q": BLOCK_Q,
             },
+            dummies=["repeat"],
         ),
         #
         # Delta loading
@@ -237,7 +238,12 @@ def _get_kernel_spec(
         ),
         gen.Index(
             "SmemDeltaLoadIdx",
-            {"k8": warps_c8, "repeat": (32 * warps_s) // BLOCK_Q, "q": BLOCK_Q},
+            {
+                "k8": warps_c8,
+                "repeat": (32 * warps_s) // BLOCK_Q,
+                "q": BLOCK_Q,
+            },
+            dummies=["repeat"],
         ),
         #
         # MMA fragments
