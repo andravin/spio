@@ -147,8 +147,26 @@ class Matmul:
                 c_ref += f"[{dim_name_to_dim_or_fold_class_name(dim)}({idx[dim]})]"
                 d_ref += f"[{dim_name_to_dim_or_fold_class_name(dim)}({idx[dim]})]"
 
-            # Generate the mma operation
-            lines.append(f"{indent}mma_trans({d_ref}, {a_ref}, {b_ref}, {c_ref});")
+            # Determine zigzag parity for B dimensions
+            is_zag = False
+            if self.use_zigzag and b_only_dims:
+                # Find indices of all dimensions before the first B-only dimension
+                first_b_dim = b_only_dims[0]
+                first_b_dim_pos = traversal_order.index(first_b_dim)
+                indices_before_b = [
+                    idx.get(dim, 0)
+                    for dim in traversal_order[:first_b_dim_pos]
+                    if dim in idx
+                ]
+                is_zag = sum(indices_before_b) % 2 == 1
+
+            # Use reverse version on "zag" iterations for all fragment types
+            if is_zag:
+                lines.append(
+                    f"{indent}mma_trans_reverse({d_ref}, {a_ref}, {b_ref}, {c_ref});"
+                )
+            else:
+                lines.append(f"{indent}mma_trans({d_ref}, {a_ref}, {b_ref}, {c_ref});")
 
         # Close function
         lines.append("}")
