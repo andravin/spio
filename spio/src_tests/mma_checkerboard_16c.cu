@@ -78,8 +78,14 @@ extern "C"
         A_Tile a_tile(a_data);
         B_Tile b_tile(b_data);
 
+        auto smem_a_store_ping = smem_a_store[PING(0)].rebase();
+        auto smem_b_store_ping = smem_b_store[PING(0)].rebase();
+
         auto smem_a_store_pong = smem_a_store[PING(1)].rebase();
         auto smem_b_store_pong = smem_b_store[PING(1)].rebase();
+
+        auto smem_a_load_ping = smem_a_load[PING(0)].rebase();
+        auto smem_b_load_ping = smem_b_load[PING(0)].rebase();
 
         auto smem_a_load_pong = smem_a_load[PING(1)].rebase();
         auto smem_b_load_pong = smem_b_load[PING(1)].rebase();
@@ -87,30 +93,54 @@ extern "C"
         constexpr auto size = A::size<K16>();
         constexpr auto step_size = A_Tile::size<K16>();
 
+        loader_a.load(smem_a_store_ping.get(), a.get());
+        loader_b.load(smem_b_store_ping.get(), b.get());
+        __pipeline_commit();
+        a.step(step_size);
+        b.step(step_size);
+
         // Compute.
-        for (auto iter : range_with_step<step_size.get()>(size + step_size))
+        for (int iter = 0; iter < size.get(); iter += 2 * step_size.get())
         {
-            if (iter < size)
+            if (iter < size.get() - step_size.get())
             {
-                loader_a.load(smem_a_store.get(), a.get());
-                loader_b.load(smem_b_store.get(), b.get());
-                __pipeline_commit();
-                a.step(step_size);
-                b.step(step_size);
-                swap(smem_a_store_pong, smem_a_store);
-                swap(smem_b_store_pong, smem_b_store);
+                loader_a.load(smem_a_store_pong.get(), a.get());
+                loader_b.load(smem_b_store_pong.get(), b.get());
             }
-            if (iter > 0)
+            a.step(step_size);
+            b.step(step_size);
+            __pipeline_commit();
+            __pipeline_wait_prior(1);
+            __syncthreads();
+            a_tile.load(smem_a_load_ping);
+            b_tile.load(smem_b_load_ping);
+            mma(a_tile, b_tile, c_tile, c_tile);
+            __syncthreads();
+
+            if (iter < size.get() - 2 * step_size.get())
             {
-                __pipeline_wait_prior(iter < size ? 1 : 0);
-                __syncthreads();
-                a_tile.load(smem_a_load);
-                b_tile.load(smem_b_load);
-                mma(a_tile, b_tile, c_tile, c_tile);
-                swap(smem_a_load_pong, smem_a_load);
-                swap(smem_b_load_pong, smem_b_load);
-                __syncthreads();
+                loader_a.load(smem_a_store_ping.get(), a.get());
+                loader_b.load(smem_b_store_ping.get(), b.get());
             }
+            a.step(step_size);
+            b.step(step_size);
+            __pipeline_commit();
+            __pipeline_wait_prior(1);
+            __syncthreads();
+            a_tile.load(smem_a_load_pong);
+            b_tile.load(smem_b_load_pong);
+            mma(a_tile, b_tile, c_tile, c_tile);
+            __syncthreads();
+        }
+        __pipeline_wait_prior(0);
+
+        // Final compute for any leftover step.
+        int last_step = size.get() - size.get() % step_size.get();
+        if (last_step < size.get()) {
+            a_tile.load(smem_a_load_pong);
+            b_tile.load(smem_b_load_pong);
+            mma(a_tile, b_tile, c_tile, c_tile);
+            __syncthreads();
         }
 
         // Store outputs through shared memory.
