@@ -57,8 +57,8 @@ extern "C"
         B_Tile::data_type::LoadIndex b_load_idx(compute_idx.get<LANE>().get());
         auto smem_a_checkers = SmemA_Checkers(a_load_idx.get<I>(), a_load_idx.get<K8>()).get<CHECKERS>();
         auto smem_b_checkers = SmemB_Checkers(b_load_idx.get<J>(), b_load_idx.get<K8>()).get<CHECKERS>();
-        auto smem_a_load = SmemA(smem_a)[compute_idx.get<I32>().fold<16>()][smem_a_checkers].rebase();
-        auto smem_b_load = SmemB(smem_b)[compute_idx.get<J64>().fold<16>()][smem_b_checkers].rebase();
+        auto smem_a_load = SmemA(smem_a)[compute_idx.get<WARP_I>().fold<16>()][smem_a_checkers].rebase();
+        auto smem_b_load = SmemB(smem_b)[compute_idx.get<WARP_J>().fold<16>()][smem_b_checkers].rebase();
 
         // Initialize the accumulators.
         C_Tile::data_type c_data[C_Tile::storage_size()];
@@ -135,8 +135,8 @@ extern "C"
         auto smem_c = SmemCStore::allocate(smem_allocator);
 
         using J2M4 = Module<J, 4, 2>;
-        auto smem_c_store = smem_c[compute_idx.get<I32>()]
-                                  [compute_idx.get<J64>().fold<8>()]
+        auto smem_c_store = smem_c[compute_idx.get<WARP_I>()]
+                                  [compute_idx.get<WARP_J>().fold<8>()]
                                   [c_idx.get<J2M4>().cast<J2>()]
                                       .rebase();
 
@@ -155,12 +155,12 @@ extern "C"
         // Transfer outputs from shared memory to global memory.
         auto c = C(c_ptr);
         auto smem_c_load_tensor = SmemCLoad(reinterpret_cast<const uint4 *>(smem_c.get()));
-        auto smem_c_load = smem_c_load_tensor[compute_idx.get<I32>()][compute_idx.get<J64>().fold<8>()].rebase();
+        auto smem_c_load = smem_c_load_tensor[compute_idx.get<WARP_I>()][compute_idx.get<WARP_J>().fold<8>()].rebase();
         for (int offset = compute_idx.get<LANE>().get(); offset < SmemCLoadIndex::size(); offset += ComputeIndex::size<LANE>().get())
         {
             SmemCLoadIndex idx(offset);
-            auto i = block_i.unfold() + compute_idx.get<I32>().unfold() + idx.get<I>();
-            auto j8 = block_j.fold<8>() + compute_idx.get<J64>().fold<8>() + idx.get<J8>();
+            auto i = block_i.unfold() + compute_idx.get<WARP_I>().unfold() + idx.get<I>();
+            auto j8 = block_j.fold<8>() + compute_idx.get<WARP_J>().fold<8>() + idx.get<J8>();
             if (i < c.size<I>() && j8 < c.size<J8>())
             {
                 *c[i][j8] = *smem_c_load[idx];
