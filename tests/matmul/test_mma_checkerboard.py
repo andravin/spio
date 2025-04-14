@@ -24,6 +24,7 @@ def test_mma_checkerboard_16c_kernel():
 
     m, n, k = (8192, 1024, 1024)
 
+    # TODO: fix for warp_m=64, warp_n=32
     config = MmaConfig(warp_m=32, warp_n=64, chunk_k16=2)
 
     specs, grid, block, max_registers = _get_specs(m, n, k, config=config)
@@ -53,6 +54,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     """Return the generator specs, grid and block for the mma checkerboard kernel."""
     assert k % 16 == 0, "Kernel requires K to be a multiple of 16."
     assert n % 8 == 0, "Kernel requires N to be a multiple of 8."
+    assert config.chunk_k16 in [1, 2], "Chunk size must be 1 or 2."
 
     block_x = 128
 
