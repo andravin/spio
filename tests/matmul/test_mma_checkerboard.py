@@ -63,7 +63,9 @@ def _get_specs(m: int, n: int, k: int):
     k16 = k // 16
     n8 = n // 8
 
+    block_x8 = block_x // 8
     block_x16 = block_x // 16
+    block_x32 = block_x // 32
 
     assert k16 % chunk_k16 == 0, "Kernel requires K to be a multiple of the chunk size."
 
@@ -98,13 +100,13 @@ def _get_specs(m: int, n: int, k: int):
     smem_tensor_c_store = gen.Tensor(
         "SmemCStore",
         gen.dtype.half2,
-        gen.Dims(i32=4, j8=16, i16=2, i=16, j2=4),
+        gen.Dims(i32=block_x32, j8=block_x8, i16=2, i=16, j2=4),
         strides=gen.Strides(j8=(32 + 1) * 4),
     )
     smem_tensor_c_load = gen.Tensor(
         "SmemCLoad",
         gen.dtype.uint4,
-        gen.Dims(i32=4, j8=16, i=32),
+        gen.Dims(i32=block_x32, j8=block_x8, i=32),
         gen.Strides(j8=32 + 1),
         constant=True,
     )
