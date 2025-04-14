@@ -60,13 +60,6 @@ def _get_specs(m: int, n: int, k: int):
     warp_m16 = warp_m // 16
     warp_n16 = warp_n // 16
 
-    params = dict(
-        warp_m16=warp_m16,
-        warp_n16=warp_n16,
-        k16=k // 16,
-        vec_bytes=8 * 2,
-        warps=warps,
-    )
     k16 = k // 16
     n8 = n // 8
 
@@ -122,7 +115,6 @@ def _get_specs(m: int, n: int, k: int):
     specs = [
         gen.Fold("block_i", "i", block_x),
         gen.Fold("block_j", "j", block_x),
-        gen.ParamsSpec("Params", params),
         tensor_a,
         tensor_b,
         tensor_c,
