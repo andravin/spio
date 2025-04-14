@@ -23,8 +23,6 @@ extern "C"
         const uint4 *__restrict__ a_ptr,
         const uint4 *__restrict__ b_ptr)
     {
-        using J2M4 = Module<J, 4, 2>;
-
         __shared__ uint4 smem[spio::max(
             SmemA::storage_size() + SmemB::storage_size(),
             SmemCLoad::storage_size())];
@@ -127,6 +125,8 @@ extern "C"
         smem_b.deallocate(smem_allocator);
 
         auto smem_c = SmemCStore::allocate(smem_allocator);
+
+        using J2M4 = Module<J, 4, 2>;
         auto smem_c_store = smem_c[compute_idx.get<I32>()]
                                   [compute_idx.get<J64>().fold<8>()]
                                   [c_idx.get<J2M4>().cast<J2>()]
@@ -155,7 +155,7 @@ extern "C"
             auto j8 = block_j.fold<8>() + compute_idx.get<J64>().fold<8>() + idx.get<J8>();
             if (i < c.size<I>() && j8 < c.size<J8>())
             {
-                *c[i][j8] = *smem_c_load[idx.get<J8>()][idx.get<I>()];
+                *c[i][j8] = *smem_c_load[idx];
             }
         }
     }
