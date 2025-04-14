@@ -99,7 +99,7 @@ extern "C"
         {
             for (auto phase : range(PING(2)))
             {
-                if (iter + 1 + phase.get() < size.get() - step_size.get())
+                if (iter + (phase.get() + 1) * step_size.get() < size.get())
                 {
                     loader_a.load(smem_a_store[(phase + 1) % 2].get(), a.get());
                     loader_b.load(smem_b_store[(phase + 1) % 2].get(), b.get());
@@ -118,7 +118,7 @@ extern "C"
         __pipeline_wait_prior(0);
 
         // Final compute for any leftover step.
-        if constexpr (size % step_size != 0)
+        if constexpr (size % (step_size * 2) != 0)
         {
             a_tile.load(smem_a_load);
             b_tile.load(smem_b_load);

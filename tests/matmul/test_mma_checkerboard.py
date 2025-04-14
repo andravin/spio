@@ -24,7 +24,7 @@ def test_mma_checkerboard_16c_kernel():
 
     m, n, k = (8192, 1024, 1024)
 
-    config = MmaConfig()
+    config = MmaConfig(warp_m=32, warp_n=64, chunk_k16=2)
 
     specs, grid, block, max_registers = _get_specs(m, n, k, config=config)
 
@@ -49,9 +49,7 @@ def test_mma_checkerboard_16c_kernel():
     assert_all_close_with_acc_depth(C, C_ref, acc_depth=k)
 
 
-def _get_specs(
-    m: int, n: int, k: int, config: MmaConfig = None
-):
+def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     """Return the generator specs, grid and block for the mma checkerboard kernel."""
     assert k % 16 == 0, "Kernel requires K to be a multiple of 16."
     assert n % 8 == 0, "Kernel requires N to be a multiple of 8."
@@ -79,7 +77,10 @@ def _get_specs(
     block_x8 = block_x // 8
     block_x16 = block_x // 16
 
-    assert k16 % config.chunk_k16 == 0, "Kernel requires K to be a multiple of the chunk size."
+    double_chunk = 2 * config.chunk_k16
+    assert (
+        k16 % double_chunk == 0
+    ), f"Kernel requires K={k} to be a multiple of twice the chunk size {double_chunk}."
 
     tensor_a = gen.Tensor(
         "A", gen.dtype.uint4, gen.Dims(k16=k16, i=m, k8=2), constant=True
