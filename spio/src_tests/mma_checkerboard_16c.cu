@@ -23,35 +23,36 @@ extern "C"
         const uint4 *__restrict__ a_ptr,
         const uint4 *__restrict__ b_ptr)
     {
+        // Allocate sufficient shared memory for the kernel.
         __shared__ uint4 smem[spio::max(
             SmemA::storage_size() + SmemB::storage_size(),
             SmemCLoad::storage_size())];
 
+        // Allocate shared memory tensors for double-buffering loads from matrices A and B.
         StackAllocator smem_allocator(smem);
         auto smem_a = SmemA::allocate(smem_allocator);
         auto smem_b = SmemB::allocate(smem_allocator);
 
+        // Get the tile coordinates for this the thread block.
         BLOCK_I block_i(blockIdx.y);
         BLOCK_J block_j(blockIdx.x);
 
-        // Map the thread index to the global memory load index.
+        // Map this thread to the global memory load index.
         GlobalLoadIndex global_load_idx(threadIdx.x);
-
-        // Position the global memory input tiles.
         auto global_x16 = global_load_idx.get<X16>();
         auto global_x = global_x16.unfold() + global_load_idx.get<X>();
         auto a = A(a_ptr)[block_i.unfold() + global_x.cast<I>()][global_load_idx.get<K8>()].rebase();
         auto b = B(b_ptr)[block_j.unfold() + global_x.cast<J>()][global_load_idx.get<K8>()].rebase();
 
-        // Define the mapping from the global memory tile to the shared memory tile.
+        // Map the global memory tile to the shared memory tile.
         auto smem_checkers = Smem_Checkers(global_load_idx.get<X>(), global_load_idx.get<K8>()).get<CHECKERS>();
         auto smem_a_store = SmemA(smem_a)[global_x16.cast<I>()][smem_checkers].rebase();
         auto smem_b_store = SmemB(smem_b)[global_x16.cast<J>()][smem_checkers].rebase();
 
-        // Define the mapping from the thread index to the warp's i32 x j64 tiles and the lane index.
+        // Get the tile coordinates for this thread.
         ComputeIndex compute_idx(threadIdx.x);
 
-        // Define the mapping from the shared memory tile to the register tile.
+        // Map the shared memory tile to the registers.
         A_Tile::data_type::LoadIndex a_load_idx(compute_idx.get<LANE>().get());
         B_Tile::data_type::LoadIndex b_load_idx(compute_idx.get<LANE>().get());
         auto smem_a_checkers = SmemA_Checkers(a_load_idx.get<I>(), a_load_idx.get<K8>()).get<CHECKERS>();
@@ -59,31 +60,39 @@ extern "C"
         auto smem_a_load = SmemA(smem_a)[compute_idx.get<I32>().fold<16>()][smem_a_checkers].rebase();
         auto smem_b_load = SmemB(smem_b)[compute_idx.get<J64>().fold<16>()][smem_b_checkers].rebase();
 
-        // Initialize the accumulator.
+        // Initialize the accumulators.
         C_Tile::data_type c_data[C_Tile::storage_size()];
         C_Tile c_tile(c_data);
         c_tile.zero();
 
+        // Get the global tile coordinates for this thread block.
         auto global_load_i = block_i.unfold() + global_load_idx.get<X>().cast<I>();
         auto global_load_j = block_j.unfold() + global_load_idx.get<X>().cast<J>();
 
+        // Constructor the global memory loaders for A and B.
         A_Loader loader_a(global_load_i < A::size<I>());
         B_Loader loader_b(global_load_j < B::size<J>());
 
+        // Allocate the registers for the A and B tiles.
         A_Tile::data_type a_data[A_Tile::storage_size()];
         B_Tile::data_type b_data[B_Tile::storage_size()];
 
+        // Construct tensors for the A and B tiles.
         A_Tile a_tile(a_data);
         B_Tile b_tile(b_data);
 
         constexpr auto size = A::size<K16>();
         constexpr auto step_size = A_Tile::size<K16>();
 
-        loader_a.load(smem_a_store.get(), a.get());
-        loader_b.load(smem_b_store.get(), b.get());
-        __pipeline_commit();
-        a.step(step_size);
-        b.step(step_size);
+        // Prefetch the first chunk of data from A and B.
+        if constexpr (size > 0)
+        {
+            loader_a.load(smem_a_store.get(), a.get());
+            loader_b.load(smem_b_store.get(), b.get());
+            __pipeline_commit();
+            a.step(step_size);
+            b.step(step_size);
+        }
 
         // Compute.
         for (int iter = 0; iter < size.get(); iter += 2 * step_size.get())
@@ -109,8 +118,7 @@ extern "C"
         __pipeline_wait_prior(0);
 
         // Final compute for any leftover step.
-        int last_step = size.get() - size.get() % step_size.get();
-        if (last_step < size.get())
+        if constexpr (size % step_size != 0)
         {
             a_tile.load(smem_a_load);
             b_tile.load(smem_b_load);
