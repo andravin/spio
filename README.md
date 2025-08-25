@@ -13,9 +13,9 @@ Our initial focus is grouped convolution with group width 8 and stride 1, a prom
 ## Key Features
 
 ### 🔧 Typed Dimension System
-Spio uses a compile-time tensor specification system that generates type-safe CUDA classes for tensor indexing. This eliminates common indexing errors and makes kernel code more readable and maintainable.
+Spio extends the "Named Tensors" approach to use compile-time type-checking for dimension consistency. Each dimension type identifies a unique logical dimension that can be used across multiple tensors. When the same dimension type appears in different tensors, it represents the same logical dimension, while each tensor defines its own size and stride for that dimension based on its layout.
 
-Each dimension type identifies a unique logical dimension that can be used across multiple tensors. When the same dimension type appears in different tensors, it represents the same logical dimension, while each tensor defines its own size and stride for that dimension based on its layout.
+This eliminates common indexing errors and makes kernel code more readable and maintainable through **operator overloading on dimension types** that enables **index-position free** indexing where users don't need to track dimension index positions, sizes, or strides across different tensors.
 
 ### ⚡ Just-in-Time Kernel Generation
 Kernels are compiled at runtime using NVIDIA's libnvrtc, automatically optimized for your specific GPU architecture. No CUDA toolkit installation required - Spio uses the same NVIDIA libraries that PyTorch already depends on.
@@ -83,7 +83,7 @@ output = spio.grouped_conv2d(x, weight, groups=8)
 
 ### Typed Tensors
 
-Spio's typed tensor system provides compile-time safety and readability for multi-dimensional indexing through **operator overloading on dimension types**. Each dimension type identifies a unique logical dimension that can be used across multiple tensors. When the same dimension type appears in different tensors, it represents the same logical dimension, while each tensor defines its own size and stride for that dimension based on its layout. This enables **index-position free** indexing where users don't need to track dimension index positions, sizes, or strides across different tensors.
+Spio's typed tensor system extends the "Named Tensors" approach to use compile-time type-checking for dimension consistency. Each dimension type identifies a unique logical dimension that can be used across multiple tensors. When the same dimension type appears in different tensors, it represents the same logical dimension, while each tensor defines its own size and stride for that dimension based on its layout. This enables **index-position free** indexing where users don't need to track dimension index positions, sizes, or strides across different tensors.
 
 Define tensor layouts in Python:
 
@@ -147,6 +147,7 @@ The system automatically handles:
 - **Per-tensor size and stride**: Each tensor defines its own size and stride for shared dimensions
 - **Index-position free operations**: No need to track array positions, sizes, or strides manually
 - **Type safety**: Prevents using wrong dimension types at compile time
+- **Memory layout optimization**: Automatic padding and alignment
 
 ### GPU Support
 
