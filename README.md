@@ -140,7 +140,7 @@ auto c_element = C(c_ptr)[global_i];
 // auto wrong = smem_a[compute_idx.get<WARP_J>()];  // Compile error: WARP_J not valid for SmemA
 ```
 
-The main computation loop demonstrates how typed dimensions provide compile-time safety - it's impossible to use an incompatible dimension type with a tensor that doesn't support it, as the type system will generate a compilation error:
+The main computation loop demonstrates how typed dimensions provide compile-time safety by preventing incompatible dimension types from being used with tensors that don't support them. The tensor implementations use `constexpr` with known tile sizes so that tensor indexing arithmetic is greatly simplified at compile-time and loops with constant bounds are unrolled. This produces highly optimized code that runs at near full utilization on NVIDIA Ada GeForce RTX 4090 GPUs:
 
 ```c++
 // Main computation loop with pipelined memory operations
@@ -161,15 +161,18 @@ for (int iter = 0; iter < size.get(); iter += 2 * step_size.get())
         // Advance the global memory tiles.
         a.step(step_size); 
         b.step(step_size);
+
+        // Synchronize on the previous iteration's global memory load.
         __pipeline_commit();
         __pipeline_wait_prior(1);
         __syncthreads();
 
-        // Load the register tiles from shared memory.
+        // Load matrix tiles from shared memory.
         a_tile.load(smem_a_load[phase]);
         b_tile.load(smem_b_load[phase]);
 
-        // Tensor core matrix multiply-accumulate.
+        // Matrix-multiply the tiles using tensor cores.
+        // Compile-time type checking ensures the compatibility of the tile dimensions.
         mma(a_tile, b_tile, c_tile, c_tile);
         __syncthreads();
     }
