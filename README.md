@@ -6,7 +6,7 @@ High-performance CUDA kernels for training convolutional neural networks with Py
 
 ## Overview
 
-Spio is a framework for developing and deploying efficient GPU kernels for deep learning. While ConvNet model architectures have evolved rapidly, kernel implementations have lagged behind, creating a gap between theoretical and sustained performance. Poor GPU kernels mean that practical performance falls far short of the theoretical roofline implied by model architectures, shifting the accuracy versus attainable latency curve to a much worse accuracy versus sustained latency curve. Spio bridges this efficiency gap by providing tools to create kernels that approach theoretical hardware limits.
+Spio is a framework for developing and deploying efficient GPU kernels for deep learning. While ConvNet model architectures have evolved rapidly, kernel implementations have lagged behind, creating a gap between theoretical and sustained performance. Poor GPU kernels mean that practical performance falls far short of the theoretical roofline, shifting the accuracy versus attainable latency curve to a much worse accuracy versus sustained latency curve. Spio bridges this efficiency gap by providing tools to create kernels that approach theoretical hardware limits.
 
 Our initial focus is grouped convolution with group width 8 and stride 1, a promising operation that has fallen into disuse due to inefficient implementations. Spio's grouped convolution kernels achieve near-optimal memory bandwidth utilization on NVIDIA Ampere and Ada GPUs.
 
