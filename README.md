@@ -85,32 +85,48 @@ output = spio.grouped_conv2d(x, weight, groups=8)
 
 Spio's typed tensor system extends the "Named Tensors" approach to use compile-time type-checking for dimension consistency. Each dimension type identifies a unique logical dimension that can be used across multiple tensors. When the same dimension type appears in different tensors, it represents the same logical dimension, while each tensor defines its own size and stride for that dimension based on its layout. This enables **index-position free** indexing where users don't need to track dimension index positions, sizes, or strides across different tensors.
 
-Define tensor layouts in Python:
+Define tensor layouts for a matrix multiply kernel in the Python generator:
 
 ```python
-# The 'i' dimension type represents the same logical dimension across all tensors
+# Dimension 'i' represents the same logical dimension across all tensors
 # But each tensor defines its own size and stride for 'i' based on its layout
 tensor_a = gen.Tensor(
     "A", gen.dtype.uint4, 
-    gen.Dims(k16=k16, i=m, k8=2),  # 'i' is at position 1 with size m
+    # Dimension 'i' is at position 1 with size m
+    gen.Dims(k16=k16, i=m, k8=2),
     constant=True
 )
 smem_tensor_a = gen.Tensor(
     "SmemA", gen.dtype.uint4,
-    gen.Dims(ping=2, k16=config.chunk_k16, i16=block_x16, checkers=32)  # 'i16' at position 2 with size block_x16
+    # Fold dimension 'i' with stride 16 at position 2 with size block_x16
+    gen.Dims(ping=2, k16=config.chunk_k16, i16=block_x16, checkers=32)  
 )
 tensor_c = gen.Tensor(
-    "C", gen.dtype.uint4, 
-    gen.Dims(i=m, j8=n8)  # 'i' is at position 0 with size m
+    "C", gen.dtype.uint4,
+    # Dimension 'i' is at position 0 with size m 
+    gen.Dims(i=m, j8=n8)
 )
+
+# Define additional tensors for the CUDA kernel...
+```
+
+Define thread-block tiles in Python:
+```python
+# Dimension 'block_i' folds dimension 'i' with stride block_x.
+gen.Fold("block_i", "i", block_x),
+
+# Dimension 'block_j' folds dimension 'j' with stride block_x.
+gen.Fold("block_j", "j", block_x),
 ```
 
 In traditional CUDA code, you manually track array indices and remember that `A[k][i][k8]` corresponds to `C[i][j8]`. With Spio's operator overloading, the same dimension type automatically maps to the correct position and stride in each tensor:
 
 ```c++
-// Index-position free indexing using operator overloading
-// The dimension type 'i' automatically maps to the correct position and stride in each tensor
+// Dimension 'i' and folds 'block_i' and 'block_j' generate types I, BLOCK_I, and BLOCK_J
+// that you use in the CUDA kernel.
 
+// Map thread-block coordinates to blocks of I and J.
+BLOCK_I block_i(blockIdx.y);
 auto global_i = block_i.unfold() + global_load_idx.get<X>().cast<I>();
 
 // Same 'i' dimension type works correctly across different tensors
@@ -124,15 +140,45 @@ auto c_element = C(c_ptr)[global_i];
 // auto wrong = smem_a[compute_idx.get<WARP_J>()];  // Compile error: WARP_J not valid for SmemA
 ```
 
-Real example from [mma_checkerboard_16c.cu](spio/src_tests/mma_checkerboard_16c.cu):
+The main computation loop demonstrates how typed dimensions provide compile-time safety - it's impossible to use an incompatible dimension type with a tensor that doesn't support it, as the type system will generate a compilation error:
 
 ```c++
-// Multi-dimensional indexing with automatic position mapping and stride calculation
-auto smem_c_store = smem_c[compute_idx.get<WARP_I>()]     // WARP_I maps to its position in smem_c
-                          [compute_idx.get<WARP_J>().fold<8>()]  // WARP_J.fold<8> maps to j8 dimension
-                          [c_idx.get<J2M4>().cast<J2>()]         // Type conversion and mapping
-                              .rebase();
+// Main computation loop with pipelined memory operations
+for (int iter = 0; iter < size.get(); iter += 2 * step_size.get())
+{
+    // Double-buffer loads and compute.
+    for (auto phase : range(PING(2)))
+    {
+        // If not the last iteration, load the next tile from global
+        // memory to shared memory asynchronously.
+        if (iter + (phase.get() + 1) * step_size.get() < size.get())
+        {
+            // Load into the back-buffer.
+            loader_a.load(smem_a_store[(phase + 1) % 2].get(), a.get());
+            loader_b.load(smem_b_store[(phase + 1) % 2].get(), b.get());
+        }
 
+        // Advance the global memory tiles.
+        a.step(step_size); 
+        b.step(step_size);
+        __pipeline_commit();
+        __pipeline_wait_prior(1);
+        __syncthreads();
+
+        // Load the register tiles from shared memory.
+        a_tile.load(smem_a_load[phase]);
+        b_tile.load(smem_b_load[phase]);
+
+        // Tensor core matrix multiply-accumulate.
+        mma(a_tile, b_tile, c_tile, c_tile);
+        __syncthreads();
+    }
+}
+```
+
+The output staging loop demonstrates how dimensions can be dynamically refolded with different strides, while the type system ensures compile-time safety by preventing incompatible fold operations:
+
+```c++
 // Nested loops using typed dimension iterators - no manual index calculations
 for (auto i16 : range(c_tile.size<I16>())) {
     for (auto j16 : range(c_tile.size<J16>())) {
