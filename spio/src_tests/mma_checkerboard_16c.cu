@@ -69,7 +69,7 @@ extern "C"
         auto global_load_i = block_i.unfold() + global_load_idx.get<X>().cast<I>();
         auto global_load_j = block_j.unfold() + global_load_idx.get<X>().cast<J>();
 
-        // Constructor the global memory loaders for A and B.
+        // Construct the global memory loaders for A and B.
         A_Loader loader_a(global_load_i < A::size<I>());
         B_Loader loader_b(global_load_j < B::size<J>());
 
