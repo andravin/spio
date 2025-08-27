@@ -9,8 +9,8 @@ from importlib_resources import files as importlib_resources_files
 def _get_cuda_rt_include_path() -> str:
     """Get the CUDA runtime include path from the nvidia.cuda_runtime package."""
     try:
-        with importlib_resources_files("nvidia.cuda_runtime.include") as path:
-            return str(path)
+        path = importlib_resources_files("nvidia.cuda_runtime.include")
+        return str(path)
     except FileNotFoundError as e:
         raise RuntimeError("Could not find CUDA runtime include directory.") from e
 
@@ -40,7 +40,7 @@ setup(
         "requests",
         "filelock",
         "packaging",
-        "importlib_resources",
+        "importlib_resources>=6.0.0",
     ],
     include_package_data=True,
 )
