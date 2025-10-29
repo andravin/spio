@@ -89,7 +89,11 @@ class Reflection:
     def arrange_args(self, args: Dict[str, torch.Tensor]) -> List[torch.Tensor]:
         """Arrange the arguments list for the kernel or function."""
         return [
-            args[name] if args[name] is None or args[name].numel() > 0 else None
+            (
+                self.arginfo[name].format(args[name])
+                if args[name] is None or args[name].numel() > 0
+                else None
+            )
             for name in self.args
         ]
 

@@ -2,21 +2,16 @@
 
 from dataclasses import dataclass
 from itertools import product
-from typing import Generator, Tuple, List
+from typing import Generator
 
-from ..generators import (
-    MacroSpec,
-    ParamsSpec,
-    IndexSpec,
-    TensorSpec,
-    FragmentSpec,
-    GenSpecs,
-)
-from ..util import divup
+from .. import generators as gen
+from ..cuda.driver import DeviceAttributes
+
+from ..util import divup, next_relative_prime
 from .launch_params import LaunchParams
 from .conv2d_gw8_params import Conv2dGw8Params
 from .conv2d_stats import Conv2dStats
-from .kernel_factory import make_kernel_factory
+from .kernel_factory import KernelFactory, KernelSpec
 from .kernel import get_full_kernel_name
 
 
@@ -30,7 +25,7 @@ class Conv2dGw8Config:
 
 
 def _get_configs(
-    params: Conv2dGw8Params, **_kwargs
+    params: Conv2dGw8Params, _device_attr: DeviceAttributes, **_kwargs
 ) -> Generator[Conv2dGw8Config, None, None]:
     """Generate configurations for the Conv2d GW8 kernel."""
     # igrad is unused in this function
@@ -56,9 +51,12 @@ def _get_kernel_name(igrad=False) -> str:
     return "spio_conv2d_gw8_fprop" if not igrad else "spio_conv2d_gw8_dgrad"
 
 
-def _get_specs(
-    params: Conv2dGw8Params, config: Conv2dGw8Config = None, igrad: bool = False
-) -> Tuple[List[GenSpecs], LaunchParams]:
+def _get_kernel_spec(
+    params: Conv2dGw8Params,
+    config: Conv2dGw8Config,
+    _device_attr: DeviceAttributes,
+    igrad: bool = False,
+) -> KernelSpec:
     """The code generator specs and launch parameters."""
     params.validate()
 
@@ -96,8 +94,8 @@ def _get_specs(
     blocks_n = divup(n, block_n)
     blocks_p = divup(p, block_p)
     blocks_q = divup(q, block_q)
-    blocks_c8 = divup(c8, block_c8)
-    blocks = blocks_n * blocks_p * blocks_q * blocks_c8
+    blocks_c = divup(c, block_c)
+    blocks = blocks_n * blocks_p * blocks_q * blocks_c
     warps = block_groups
     threads = warps * 32
 
@@ -108,77 +106,106 @@ def _get_specs(
 
     kernel_has_bias = params.has_bias and not igrad
 
-    specs = [
-        MacroSpec({"SPIO_CONV_KERNEL": full_kernel_name}),
-        ParamsSpec(
+    # With 16 bytes-per-element, smem effectively has 8 banks.
+    num_smem_banks = 8
+
+    smem_x_stride = next_relative_prime(block_n * block_c8, num_smem_banks)
+
+    gen_specs = [
+        gen.Macro({"SPIO_CONV_KERNEL": full_kernel_name}),
+        gen.Fold("block_n", "n", block_n),
+        gen.Fold("block_p", "p", block_p),
+        gen.Fold("block_q", "q", block_q),
+        gen.Fold("block_c", "c", block_c),
+        gen.ParamsSpec(
             "Block",
             {
-                "n": block_n,
-                "p": block_p,
-                "q": block_q,
-                "c8": block_c8,
-                "padding_h": padding_h,
-                "padding_w": padding_w,
                 "threads": threads,
             },
         ),
-        ParamsSpec("Mode", {"igrad": igrad, "has_bias": kernel_has_bias}),
-        IndexSpec(
-            "BlockIdx",
-            {"n": blocks_n, "p": blocks_p, "q": blocks_q, "c8": blocks_c8},
-        ),
-        IndexSpec("InputIdx", {"n": block_n, "x": block_w, "c8": block_c8}),
-        TensorSpec("Input", "const uint4", {"n": n, "y": h, "x": w, "c8": c8}),
-        TensorSpec("Bias", "const float2", {"k8": c8, "k2": 4}),
-        IndexSpec("BiasIdx", {"k8": block_c8, "lane": 32}),
-        TensorSpec("Output", "uint4", {"n": n, "p": p, "q": q, "k8": c8}),
-        TensorSpec("Weights", "const uint4", {"k": c, "r": r, "s": s}),
-        TensorSpec("SmemWeights", "uint4", {"k": block_c, "r": r, "s": s}),
-        TensorSpec(
-            "ConstSmemWeights",
-            "const uint4",
-            {"kd8": block_c8, "km8": 8, "rs": r * s},
-        ),
-        IndexSpec("SmemWeightsLoadIdx", {"kd8": block_c8, "rs": 4, "km8": 8}),
-        TensorSpec(
-            "SmemInput",
-            "uint4",
-            {"ping_pong": 2, "x": block_w, "n": block_n, "c8": block_c8 + 1},
-        ),
-        IndexSpec(
-            "SmemInputLoadIdx",
+        gen.ParamsSpec(
+            "Padding",
             {
-                "c8": block_c8,
-                "repeat": 32 // (block_q * block_n),
-                "q": block_q,
-                "n": block_n,
+                "h": padding_h,
+                "w": padding_w,
             },
         ),
-        IndexSpec("SmemOutputStoreIdx", {"k8": block_c8, "lane": 32}),
-        TensorSpec(
+        gen.ParamsSpec("Mode", {"igrad": igrad, "has_bias": kernel_has_bias}),
+        gen.Index(
+            "BlockIdx",
+            gen.Dims(
+                block_n=blocks_n,
+                block_p=blocks_p,
+                block_q=blocks_q,
+                block_c=blocks_c,
+            ),
+        ),
+        gen.Index("InputIdx", gen.Dims(n=block_n, x=block_w, c8=block_c8)),
+        gen.Tensor(
+            "Input", gen.dtype.uint4, gen.Dims(n=n, y=h, x=w, c8=c8), constant=True
+        ),
+        gen.Tensor("Bias", gen.dtype.float2, gen.Dims(k8=c8, k2=4), constant=True),
+        gen.Index("BiasIdx", gen.Dims(k8=block_c8, lane=32)),
+        gen.Tensor("Output", gen.dtype.uint4, gen.Dims(n=n, p=p, q=q, k8=c8)),
+        gen.Tensor("Weights", gen.dtype.uint4, gen.Dims(k=c, r=r, s=s), constant=True),
+        gen.Tensor("SmemWeights", gen.dtype.uint4, gen.Dims(k=block_c, r=r, s=s)),
+        gen.Tensor(
+            "ConstSmemWeights",
+            gen.dtype.uint4,
+            gen.Dims(k8=block_c8, k=8, r=r, s=s),
+            constant=True,
+        ),
+        gen.Index(
+            "SmemWeightsLoadIdx",
+            gen.Dims(k8=block_c8, repeat=4, k=8),
+            dummies=["repeat"],
+        ),
+        gen.Tensor(
+            "SmemInput",
+            gen.dtype.uint4,
+            gen.Dims(ping_pong=2, x=block_w, n=block_n, c8=block_c8),
+            strides=gen.Strides(x=smem_x_stride),
+        ),
+        gen.Index(
+            "SmemInputLoadIdx",
+            gen.Dims(
+                c8=block_c8,
+                repeat=32 // (block_q * block_n),
+                x=block_q,
+                n=block_n,
+            ),
+            dummies=["repeat"],
+        ),
+        gen.Index("SmemOutputStoreIdx", gen.Dims(k8=block_c8, lane=32)),
+        gen.Tensor(
             "SmemOutput",
-            "__half2",
-            {"q": block_q, "n": block_n, "k8": block_c8 + 1, "k2": 4},
+            gen.dtype.half2,
+            gen.Dims(q=block_q, n=block_n, k8=block_c8 + 1, k2=4),
         ),
-        TensorSpec(
+        gen.Tensor(
             "ConstSmemOutput",
-            "const uint4",
-            {"q": block_q, "n": block_n, "k8": block_c8 + 1},
+            gen.dtype.uint4,
+            gen.Dims(q=block_q, n=block_n, k8=block_c8 + 1),
+            constant=True,
         ),
-        IndexSpec("OutputStoreIdx", {"n": block_n, "q": block_q, "k8": block_c8}),
-        IndexSpec("OutputQNIdx", {"q": block_q, "n": block_n}),
-        FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k"),
+        gen.Index("OutputStoreIdx", gen.Dims(n=block_n, q=block_q, k8=block_c8)),
+        gen.Index("BlockQNIdx", gen.Dims(q=block_q, n=block_n)),
+        gen.Fragment("Acc", gen.FragmentType.M16_N8_F32_C, "qn", "k"),
+        gen.Fragment("In", gen.FragmentType.M16_K8_F16_A, "qn", "c"),
+        gen.Fragment("Wgts", gen.FragmentType.N8_K8_F16_B, "c", "k"),
+        gen.Tensor("WeightsReg", "Wgts", gen.Dims(r=r, s=s)),
+        gen.Tensor("AccReg", "Acc", gen.Dims(p=r)),
     ]
-    return specs, launch_params
+    return KernelSpec(gen_specs=gen_specs, launch_params=launch_params)
 
 
-conv2d_gw8_kernel_factory = make_kernel_factory(
+conv2d_gw8_kernel_factory = KernelFactory(
     Conv2dGw8Params,
     Conv2dGw8Config,
     Conv2dStats,
     kernel_name=_get_kernel_name,
     configs=_get_configs,
-    specs=_get_specs,
+    kernel_spec=_get_kernel_spec,
     kernel_source_file="conv2d_gw8.cu",
     src_module="spio.src",
     includes_module="spio.include",

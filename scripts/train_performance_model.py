@@ -17,6 +17,8 @@ from spio.kernels import (
     Conv2dGw8Params,
     Conv2dGw8Config,
     Conv2dGw8WgradConfig,
+    LayerNorm2dParams,
+    LayerNorm2dConfig,
     get_device_performance_model_file_name,
     PERFORMANCE_MODEL_EXTENSION,
 )
@@ -24,15 +26,19 @@ from spio.util.parse_dataclass import parse_dataclass
 from spio.reflection import get_kernel_reflection
 
 
-PARAMS_CLASSES = {"Conv2dGw8Params": Conv2dGw8Params}
+PARAMS_CLASSES = {
+    "Conv2dGw8Params": Conv2dGw8Params,
+    "LayerNorm2dParams": LayerNorm2dParams,
+}
 CONFIG_CLASSES = {
     "Conv2dGw8Config": Conv2dGw8Config,
     "Conv2dGw8WgradConfig": Conv2dGw8WgradConfig,
+    "LayerNorm2dConfig": LayerNorm2dConfig,
 }
 
 device_arch_table = {
     "nvidia_a100-pcie-40gb": "sm_80",
-    "nvidia_a100-sxm4-80gb" : "sm_80",
+    "nvidia_a100-sxm4-80gb": "sm_80",
     "nvidia_geforce_rtx_3090": "sm_86",
     "nvidia_geforce_rtx_4090": "sm_89",
 }

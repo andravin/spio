@@ -2,7 +2,6 @@
 #define SPIO_MMA_H_
 
 /// Define functions for tensor core matrix multiply-accumulate.
-#include "spio/fragment.cuh"
 
 namespace spio
 {

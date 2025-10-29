@@ -11,10 +11,12 @@ class LaunchParams:
     Attributes:
         grid: The grid size.
         block: The block size.
+        shared_mem_bytes: The amount of dynamic shared memory in bytes.
     """
 
     grid: Union[int, Tuple[int, ...]]
     block: Union[int, Tuple[int, ...]]
+    shared_mem_bytes: int = 0
 
     def __post_init__(self):
         assert self.grid > 0

@@ -29,8 +29,22 @@ def main():
         type=str,
         help="Path to the PyTorch benchmark data directory",
     )
+    parser.add_argument(
+        "--fprop-kernel-name", type=str, default="spio_conv2d_gw8_fprop"
+    )
+    parser.add_argument(
+        "--dgrad-kernel-name", type=str, default="spio_conv2d_gw8_dgrad"
+    )
+    parser.add_argument(
+        "--wgrad-kernel-name", type=str, default="spio_conv2d_gw8_wgrad"
+    )
+    parser.add_argument("--fprop-only", action="store_true")
     parser.add_argument("--max-bandwidth-gb-s", type=float, default=MAX_BANDWIDTH_GB_S)
     args = parser.parse_args()
+
+    if args.fprop_only:
+        args.dgrad_kernel_name = None
+        args.wgrad_kernel_name = None
 
     if not Path(args.spio_data_dir).is_dir():
         raise ValueError(f"Invalid data directory: {args.spio_data_dir}")
@@ -44,9 +58,9 @@ def main():
     # Concatenate all DataFrames into a single DataFrame
     df = df.sort_values(by="batch_size")
 
-    fprop_kernel_name = "spio_conv2d_gw8_fprop"
-    dgrad_kernel_name = "spio_conv2d_gw8_dgrad"
-    wgrad_kernel_name = "spio_conv2d_gw8_wgrad"
+    fprop_kernel_name = args.fprop_kernel_name
+    dgrad_kernel_name = args.dgrad_kernel_name
+    wgrad_kernel_name = args.wgrad_kernel_name
     spio_kernel_labels = ["Spio Fprop", "Spio Dgrad", "Spio Wgrad"]
 
     # Extract the "Kernel" column and split to get the root names
@@ -62,19 +76,34 @@ def main():
     }
 
     df_fprop = dataframes[fprop_kernel_name]
-    df_dgrad = dataframes[dgrad_kernel_name]
-    df_wgrad = dataframes[wgrad_kernel_name]
+    if dgrad_kernel_name is not None:
+        df_dgrad = dataframes[dgrad_kernel_name]
+    else:
+        df_dgrad = None
+    if wgrad_kernel_name is not None:
+        df_wgrad = dataframes[wgrad_kernel_name]
+    else:
+        df_wgrad = None
 
     dirname_params = extract_parameters_from_dirname(args.spio_data_dir)
-    params = conv2d_gw8_kernel_params_from_dirname_params(dirname_params)
+    if fprop_kernel_name == "spio_conv2d_gw8_fprop":
+        params = conv2d_gw8_kernel_params_from_dirname_params(dirname_params)
+    elif fprop_kernel_name == "spio_layernorm_2d":
+        params = layernorm_2d_kernel_params_from_dirname_params(dirname_params)
+    else:
+        raise ValueError(f"Unknown kernel name: {fprop_kernel_name}")
 
     fprop_reflection = get_kernel_reflection(fprop_kernel_name)
-    dgrad_reflection = get_kernel_reflection(dgrad_kernel_name)
-    wgrad_reflection = get_kernel_reflection(wgrad_kernel_name)
+    if dgrad_kernel_name is not None:
+        dgrad_reflection = get_kernel_reflection(dgrad_kernel_name)
+    if wgrad_kernel_name is not None:
+        wgrad_reflection = get_kernel_reflection(wgrad_kernel_name)
 
     add_eff_bandwidth_gb_s(df_fprop, params, fprop_reflection.stats, "output")
-    add_eff_bandwidth_gb_s(df_dgrad, params, dgrad_reflection.stats, "grad_input")
-    add_eff_bandwidth_gb_s(df_wgrad, params, wgrad_reflection.stats, "grad_weight")
+    if dgrad_kernel_name is not None:
+        add_eff_bandwidth_gb_s(df_dgrad, params, dgrad_reflection.stats, "grad_input")
+    if wgrad_kernel_name is not None:
+        add_eff_bandwidth_gb_s(df_wgrad, params, wgrad_reflection.stats, "grad_weight")
 
     plot_eff_bw(
         df_fprop,
@@ -135,21 +164,39 @@ def main():
     plt.ylabel("Effective Bandwidth (GB/s)")
     plt.ylim(0, args.max_bandwidth_gb_s)
     device_name = dirname_params["device_name"]
-    plt.title("Grouped Convolution Performance")
-    plt.suptitle(
-        (
+    if fprop_kernel_name == "spio_conv2d_gw8_fprop":
+        title = "Grouped Convolution Performance"
+    elif fprop_kernel_name == "spio_layernorm_2d":
+        title = "LayerNorm Performance"
+    else:
+        raise ValueError(f"Unknown kernel name: {fprop_kernel_name}")
+    plt.title(title)
+    if fprop_kernel_name == "spio_conv2d_gw8_fprop":
+        suptitle = (
             f"{params.c} channels, {params.h}x{params.w} input, "
             f"{params.r}x{params.s} kernel, group width {params.group_width}, "
             f"{device_name}"
-        ),
-        fontsize=10,
-    )
+        )
+    elif fprop_kernel_name == "spio_layernorm_2d":
+        suptitle = f"{params.c} channels, {params.h}x{params.w} input, {device_name}"
+    else:
+        raise ValueError(f"Unknown kernel name: {fprop_kernel_name}")
+
+    plt.suptitle(suptitle, fontsize=10)
     plt.legend()
 
-    fig_file_name = (
-        f"batch_size_vs_eff_bandwidth__{device_name}__{block_name}_"
-        f"{params.c}c_{params.r}r_{params.s}s_{params.group_width}gw"
-    )
+    if fprop_kernel_name == "spio_conv2d_gw8_fprop":
+        fig_file_name = (
+            f"batch_size_vs_eff_bandwidth__{device_name}__{block_name}_"
+            f"{params.c}c_{params.r}r_{params.s}s_{params.group_width}gw"
+        )
+    elif fprop_kernel_name == "spio_layernorm_2d":
+        fig_file_name = (
+            f"batch_size_vs_eff_bandwidth__{device_name}__{block_name}_"
+            f"{params.c}c_{params.h}x{params.w}__layernorm"
+        )
+    else:
+        raise ValueError(f"Unknown kernel name: {fprop_kernel_name}")
     if args.torch_data_dir is not None and torch_params_are_depthwise:
         fig_file_name += "__torch_depthwise"
     fig_file_name += ".png"
@@ -169,18 +216,30 @@ def main():
     plt.xlabel("Batch Size")
     plt.ylabel("Latency (microseconds)")
     plt.title("Latency vs Batch Size")
-    plt.suptitle(
-        f"{params.c} channels, {params.h}x{params.w} input, "
-        f"{params.r}x{params.s} kernel, group width {params.group_width}, "
-        f"{device_name}",
-        fontsize=10,
-    )
+    if fprop_kernel_name == "spio_conv2d_gw8_fprop":
+        suptitle = (
+            f"{params.c} channels, {params.h}x{params.w} input, "
+            f"{params.r}x{params.s} kernel, group width {params.group_width}, "
+            f"{device_name}"
+        )
+    elif fprop_kernel_name == "spio_layernorm_2d":
+        suptitle = f"{params.c} channels, {params.h}x{params.w} input, {device_name}"
+
+    plt.suptitle(suptitle, fontsize=10)
     plt.legend()
 
-    fig_file_name = (
-        f"batch_size_vs_latency__{device_name}__{block_name}_"
-        f"{params.c}c_{params.r}r_{params.s}s_{params.group_width}gw"
-    )
+    if fprop_kernel_name == "spio_conv2d_gw8_fprop":
+        fig_file_name = (
+            f"batch_size_vs_latency__{device_name}__{block_name}_"
+            f"{params.c}c_{params.r}r_{params.s}s_{params.group_width}gw"
+        )
+    elif fprop_kernel_name == "spio_layernorm_2d":
+        fig_file_name = (
+            f"batch_size_vs_latency__{device_name}__{block_name}_"
+            f"{params.c}c_{params.h}x{params.w}__layernorm"
+        )
+    else:
+        raise ValueError(f"Unknown kernel name: {fprop_kernel_name}")
     if args.torch_data_dir is not None and torch_params_are_depthwise:
         fig_file_name += "__torch_depthwise"
     fig_file_name += ".png"
@@ -427,12 +486,31 @@ def conv2d_gw8_kernel_params_from_dirname_params(dirname_params):
     )
 
 
+def layernorm_2d_kernel_params_from_dirname_params(dirname_params):
+    """Get kernel parameters from the directory name parameters."""
+    block_name = dirname_params["block_name"]
+
+    if block_name in ["convfirst", "convnext"]:
+        c = dirname_params["channels"]
+    else:
+        raise ValueError(f"Unsupported block name: {block_name}")
+    fprop_reflection = get_kernel_reflection("spio_layernorm_2d")
+    params_cls = fprop_reflection.params
+    return params_cls(
+        n=dirname_params.get("batch_size"),
+        c=c,
+        h=dirname_params["height_width"],
+        w=dirname_params["height_width"],
+    )
+
+
 # Plot the data
 def plot_eff_bw(df_fprop, df_dgrad, df_wgrad, kernel_names, linestyle="-", colors=None):
     """Plot effective bandwidth."""
+    data_frames = [df for df in [df_fprop, df_dgrad, df_wgrad] if df is not None]
     if colors is None:
         colors = [f"C{i}" for i in range(len(kernel_names))]
-    for df, label, color in zip([df_fprop, df_dgrad, df_wgrad], kernel_names, colors):
+    for df, label, color in zip(data_frames, kernel_names, colors):
         plt.plot(
             df["batch_size"],
             df["eff_bw_gb_s"],
@@ -448,7 +526,8 @@ def plot_latency_microseconds(
     """Plot latency in microseconds."""
     if colors is None:
         colors = [f"C{i}" for i in range(len(kernel_names))]
-    for df, label, color in zip([df_fprop, df_dgrad, df_wgrad], kernel_names, colors):
+    data_frames = [df for df in [df_fprop, df_dgrad, df_wgrad] if df is not None]
+    for df, label, color in zip(data_frames, kernel_names, colors):
         plt.plot(
             df["batch_size"],
             df["CUDA_time_av"] * 1000.0,

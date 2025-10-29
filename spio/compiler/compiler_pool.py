@@ -7,6 +7,8 @@ import os
 import signal
 from typing import List, Any, Tuple, TYPE_CHECKING
 
+from ..cuda.driver import DeviceAttributes
+
 from .compile_kernel import compile_kernel
 
 if TYPE_CHECKING:
@@ -36,7 +38,7 @@ def compile_kernel_configs(
     kernel_factory: "KernelFactory",
     params: "Params",
     configs: List[Any] = None,
-    arch: Tuple[int, int] = None,
+    device_attr: DeviceAttributes = None,
     **kernel_kwargs,
 ) -> List["Kernel"]:
     """Compile multiple kernel configurations in parallel.
@@ -59,12 +61,14 @@ def compile_kernel_configs(
         List[Kernel]: List of compiled kernel objects.
     """
     if configs is None:
-        configs = list(kernel_factory.configs(params, **kernel_kwargs))
+        configs = list(kernel_factory.configs(params, device_attr, **kernel_kwargs))
     kernels = [
-        kernel_factory.make_kernel(params, config=config, **kernel_kwargs)
+        kernel_factory.make_kernel(
+            params, config=config, device_attr=device_attr, **kernel_kwargs
+        )
         for config in configs
     ]
-    compile_kernels(kernels, arch=arch)
+    compile_kernels(kernels, arch=device_attr.compute_capability)
     return kernels
 
 

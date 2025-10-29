@@ -20,7 +20,9 @@ from ..util import (
     get_formatted_arch,
     logger_enabled,
     time_function,
+    get_device_ordinal,
 )
+from ..cuda.driver import get_device_attributes
 
 from .kernel import Kernel
 
@@ -110,7 +112,10 @@ class PerformanceModelCache:
         if performance_model is None:
             return None
 
-        configs = list(kernel_factory.configs(params, **kernel_kwargs))
+        device_idx = get_device_ordinal(device)
+        device_attr = get_device_attributes(device_idx)
+
+        configs = list(kernel_factory.configs(params, device_attr, **kernel_kwargs))
         return _predict_best_config(
             performance_model,
             params,
