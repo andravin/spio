@@ -13,9 +13,21 @@ Our initial focus is grouped convolution with group width of 8 and stride 1, a p
 ## Key Features
 
 ### 🔧 Typed Dimension System
-Spio extends the "Named Tensors" approach to use compile-time type-checking for dimension consistency. Each dimension type identifies a unique logical dimension that can be used across multiple tensors. When the same dimension type appears in different tensors, it represents the same logical dimension, while each tensor defines its own size and stride for that dimension based on its layout.
+Unlike “Named Tensors,” which attach string names to dimensions and validate them at run time, Spio uses Typed Dimensions: each dimension is a distinct C++ type generated at build time and checked at compile time.
 
-This eliminates common indexing errors and makes kernel code more readable and maintainable through **operator overloading on dimension types** that enables **index-position-free** indexing where users don't need to track dimension index positions, sizes, or strides across different tensors.
+- Named Tensors (strings, run-time):
+  - Dimension identity is a string evaluated at run time
+  - Errors surface during execution
+  - Requires lookups and checks in hot paths
+
+- Typed Dimensions (types, compile-time):
+  - Each logical dimension is a unique C++ type (e.g., I, J, K8)
+  - Misuses fail to compile (zero run-time overhead)
+  - Operator overloading maps types to per-tensor positions/strides
+
+When the same dimension type appears in different tensors, it represents the same logical dimension; each tensor still defines its own size and stride for that dimension based on its layout. This enables index-position-free indexing—users don’t track index positions, sizes, or strides across tensors; the type system ensures correctness at compile time.
+
++In practice, the generated tensor classes overload the indexing operators (e.g., operator[] and helpers like get<Dim>) to accept dimension types. For each dimension type present in a tensor’s layout, the overload applies that tensor’s stride for that type; if a dimension type not used by the tensor is provided, the expression fails to compile (static_assert), with zero run-time name lookups or checks.
 
 ### ⚡ Just-in-Time Kernel Generation
 Kernels are compiled at runtime using NVIDIA's NVRTC (libnvrtc), automatically optimized for your specific GPU architecture. No CUDA toolkit installation required—Spio uses the same NVIDIA libraries that PyTorch already depends on.
@@ -98,7 +110,11 @@ output = spio.grouped_conv2d(x, weight, groups=8)
 
 ### Typed Tensors
 
-Spio's typed tensor system extends the "Named Tensors" approach to use compile-time type-checking for dimension consistency. Each dimension type identifies a unique logical dimension that can be used across multiple tensors. When the same dimension type appears in different tensors, it represents the same logical dimension, while each tensor defines its own size and stride for that dimension based on its layout. This enables **index-position-free** indexing where users don't need to track dimension index positions, sizes, or strides across different tensors.
+Spio’s typed tensor system represents dimensions as distinct C++ types (not run-time strings). The generator emits those types (e.g., I, J, K16, BLOCK_I), and kernels use operator overloading to map them to the correct position and stride per tensor. The same dimension type denotes the same logical axis across tensors, while each tensor provides its own size/stride. Because dimension identity is a type, mistakes are caught at compile time, with no run-time name lookups or checks. This is what enables index-position-free indexing and aggressive compile-time optimization (constexpr indexing, loop unrolling).
+
++Operator overloading details:
++- The generated tensor classes define typed indexing (operator[] chains and get<Dim>() helpers) that accept dimension types in any order and compute offsets using that tensor’s per-dimension strides.
++- If you pass a dimension type that the tensor does not declare, the code fails to compile via static_assert, preventing invalid indexing from reaching run time.
 
 Define tensor layouts for a matrix multiply kernel in the Python generator:
 
