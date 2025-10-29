@@ -16,6 +16,9 @@ def assert_all_close_with_acc_depth(
 
     Computes the absolute tolerance as a function of the accumumlation depth.
 
+    Note: this function assumes that operands are in float16 and accumulation
+    is in float32.
+
     Args:
         actual: The actual tensor.
         expected: The expected tensor.
