@@ -8,17 +8,17 @@ High-performance CUDA kernels for training convolutional neural networks with Py
 
 Spio is a framework for developing and deploying efficient GPU kernels for deep learning. While ConvNet model architectures have evolved rapidly, kernel implementations have lagged behind, creating a gap between theoretical and sustained performance. Poor GPU kernels mean that practical performance falls far short of the theoretical roofline, shifting the accuracy versus attainable latency curve to a much worse accuracy versus sustained latency curve. Spio bridges this efficiency gap by providing tools to create kernels that approach theoretical hardware limits.
 
-Our initial focus is grouped convolution with group width 8 and stride 1, a promising operation that has fallen into disuse due to inefficient implementations. Spio's grouped convolution kernels achieve near-optimal memory bandwidth utilization on NVIDIA Ampere and Ada GPUs.
+Our initial focus is grouped convolution with group width of 8 and stride 1, a promising operation that has fallen into disuse due to inefficient implementations. Spio's grouped convolution kernels achieve near-optimal memory bandwidth utilization on NVIDIA Ampere and Ada GPUs.
 
 ## Key Features
 
 ### 🔧 Typed Dimension System
 Spio extends the "Named Tensors" approach to use compile-time type-checking for dimension consistency. Each dimension type identifies a unique logical dimension that can be used across multiple tensors. When the same dimension type appears in different tensors, it represents the same logical dimension, while each tensor defines its own size and stride for that dimension based on its layout.
 
-This eliminates common indexing errors and makes kernel code more readable and maintainable through **operator overloading on dimension types** that enables **index-position free** indexing where users don't need to track dimension index positions, sizes, or strides across different tensors.
+This eliminates common indexing errors and makes kernel code more readable and maintainable through **operator overloading on dimension types** that enables **index-position-free** indexing where users don't need to track dimension index positions, sizes, or strides across different tensors.
 
 ### ⚡ Just-in-Time Kernel Generation
-Kernels are compiled at runtime using NVIDIA's libnvrtc, automatically optimized for your specific GPU architecture. No CUDA toolkit installation required - Spio uses the same NVIDIA libraries that PyTorch already depends on.
+Kernels are compiled at runtime using NVIDIA's NVRTC (libnvrtc), automatically optimized for your specific GPU architecture. No CUDA toolkit installation required—Spio uses the same NVIDIA libraries that PyTorch already depends on.
 
 ### 🎯 Performance Models
 Machine learning models predict optimal kernel configurations based on layer parameters and hardware characteristics. This eliminates expensive auto-tuning while achieving better performance than heuristic-based approaches.
@@ -30,18 +30,18 @@ Seamless integration with PyTorch through custom operators and torch.compile sup
 
 ### Algorithm Innovation
 
-The cuDNN Conv2d kernels use "implicit GEMM" with 1D horizontal tiling, causing excessive memory traffic due to overlapping reads in the convolution halo. Spio uses 2D tiling with a circular buffer overlap-add algorithm that:
+The cuDNN Conv2d kernels use "implicit GEMM" with 1D horizontal tiling, causing excessive memory traffic due to overlapping reads in the convolution halo. Spio uses 2D tiling with a circular-buffer overlap-add algorithm that:
 
 - Reduces tile overlap and global memory traffic
 - Maximizes register usage through loop unrolling
 - Increases occupancy by minimizing local memory footprint
-- Leverages tensor cores with 8x8 matrix operations for group width 8
+- Leverages Tensor Cores with 8×8 matrix operations for a group width of 8
 
 ### Benchmark Results
 
-On NVIDIA RTX 3090, Spio approaches theoretical DRAM bandwidth limits for forward pass (FProp), input gradients (DGrad), and weight gradients (WGrad), while PyTorch/cuDNN implementations suffer from excess data transfers.
+On NVIDIA GeForce RTX 3090, Spio approaches theoretical DRAM bandwidth limits for forward pass (FProp), input gradients (DGrad), and weight gradients (WGrad), while PyTorch/cuDNN implementations suffer from excess data transfers.
 
-On NVIDIA RTX 4090, Spio exceeds DRAM bandwidth limits for small batch sizes by effectively utilizing the 72MB L2 cache:
+On NVIDIA GeForce RTX 4090, Spio exceeds the effective DRAM bandwidth limit for small batch sizes by effectively utilizing the 72 MB L2 cache:
 
 ![Benchmark Result on NVIDIA GeForce RTX 4090](figures/batch_size_vs_eff_bandwidth__nvidia_geforce_rtx_4090__convfirst_64c_3r_3s_8gw.png)
 
@@ -49,11 +49,26 @@ Benchmarks use realistic workloads with layers embedded in ConvFirst or MBConv b
 
 ## Quick Start
 
+### Prerequisites
+- Linux x86_64
+- NVIDIA GPU: Ampere (sm_80/sm_86) or Ada (sm_89)
+- NVIDIA driver compatible with your PyTorch CUDA build
+- Python 3.9+
+
+### Python dependency
+Required (install separately):
+- PyTorch (CUDA build, not CPU-only). The CUDA runtime, cuDNN, cuBLAS, and NVRTC are bundled with the CUDA wheels; no system CUDA toolkit is required.
+
+Install a CUDA-enabled PyTorch, for example:
+```bash
+pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
+```
+
 ### Installation
 
 ```bash
 # Install system dependencies (Ubuntu)
-sudo apt update && sudo apt install build-essential
+sudo apt update && sudo apt install -y build-essential
 
 # Clone and install
 git clone https://github.com/andravin/spio.git
@@ -83,7 +98,7 @@ output = spio.grouped_conv2d(x, weight, groups=8)
 
 ### Typed Tensors
 
-Spio's typed tensor system extends the "Named Tensors" approach to use compile-time type-checking for dimension consistency. Each dimension type identifies a unique logical dimension that can be used across multiple tensors. When the same dimension type appears in different tensors, it represents the same logical dimension, while each tensor defines its own size and stride for that dimension based on its layout. This enables **index-position free** indexing where users don't need to track dimension index positions, sizes, or strides across different tensors.
+Spio's typed tensor system extends the "Named Tensors" approach to use compile-time type-checking for dimension consistency. Each dimension type identifies a unique logical dimension that can be used across multiple tensors. When the same dimension type appears in different tensors, it represents the same logical dimension, while each tensor defines its own size and stride for that dimension based on its layout. This enables **index-position-free** indexing where users don't need to track dimension index positions, sizes, or strides across different tensors.
 
 Define tensor layouts for a matrix multiply kernel in the Python generator:
 
@@ -115,16 +130,16 @@ global_load_index = gen.Index("GlobalLoadIndex", gen.Dims(x16=block_x16, x=16, k
 Define thread-block tiles in Python:
 ```python
 # Dimension 'block_i' folds dimension 'i' with stride block_x.
-gen.Fold("block_i", "i", block_x),
+gen.Fold("block_i", "i", block_x)
 
 # Dimension 'block_j' folds dimension 'j' with stride block_x.
-gen.Fold("block_j", "j", block_x),
+gen.Fold("block_j", "j", block_x)
 ```
 
 In traditional CUDA code, you manually track array indices and remember that `A[k][i][k8]` corresponds to `C[i][j8]`. With Spio's operator overloading, the same dimension type automatically maps to the correct position and stride in each tensor:
 
 ```c++
-// Include gnerated code.
+// Include generated code.
 #include "parameters.h"
 
 // Dimension 'i' and folds 'block_i' and 'block_j' generate types I, BLOCK_I, and BLOCK_J
@@ -148,10 +163,10 @@ auto c_element = C(c_ptr)[global_i];
 // The user doesn't track positions, sizes, or strides - the type system handles it all
 // Type safety prevents dimension misuse at compile time
 // This line generates a compile error because WARP_J is not a valid dimension for SmemA
-// auto wrong = smem_a[compute_idx.get<WARP_J>()];  
+// auto wrong = smem_a[global_load_idx.get<WARP_J>()];  
 ```
 
-The main computation loop demonstrates how typed dimensions provide compile-time safety by preventing incompatible dimension types from being used with tensors that don't support them. The tensor implementations use `constexpr` with known tile sizes so that tensor indexing arithmetic is greatly simplified at compile-time and loops with constant bounds are unrolled. This produces highly optimized code that runs at near full utilization on NVIDIA Ada GeForce RTX 4090 GPUs:
+The main computation loop demonstrates how typed dimensions provide compile-time safety by preventing incompatible dimension types from being used with tensors that don't support them. The tensor implementations use `constexpr` with known tile sizes so that tensor indexing arithmetic is greatly simplified at compile-time and loops with constant bounds are unrolled. This produces highly optimized code that runs at near full utilization on NVIDIA GeForce RTX 4090 (Ada) GPUs:
 
 ```c++
 // Main computation loop with pipelined memory operations
@@ -182,7 +197,7 @@ for (int iter = 0; iter < size.get(); iter += 2 * step_size.get())
         a_tile.load(smem_a_load[phase]);
         b_tile.load(smem_b_load[phase]);
 
-        // Matrix-multiply the tiles using tensor cores.
+        // Matrix-multiply the tiles using Tensor Cores.
         // Compile-time type checking ensures the compatibility of the tile dimensions.
         mma(a_tile, b_tile, c_tile, c_tile);
         __syncthreads();
@@ -202,14 +217,10 @@ for (auto i16 : range(c_tile.size<I16>())) {
 ```
 
 The system automatically handles:
+
 - **Logical dimension consistency**: Same dimension type represents the same logical dimension across all tensors
 - **Automatic position mapping**: Operator overloading maps dimension types to correct array positions
 - **Per-tensor size and stride**: Each tensor defines its own size and stride for shared dimensions
-- **Index-position free operations**: No need to track array positions, sizes, or strides manually
+- **Index-position-free operations**: No need to track array positions, sizes, or strides manually
 - **Type safety**: Prevents using wrong dimension types at compile time
 - **Memory layout optimization**: Automatic padding and alignment
-
-### GPU Support
-
-- **NVIDIA Ampere**: sm_80 (A100), sm_86 (RTX 30-series)
-- **NVIDIA Ada**: sm_89 (RTX 40-series)
