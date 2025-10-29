@@ -19,30 +19,6 @@ from ..transform._transform import _transform as spio_transform
 from ..kernels import Params, KernelFactory
 
 
-@contextlib.contextmanager
-def _precision_guard():
-    # Disable TF32 for reference computations (default on; set SPIO_DISABLE_TF32=0 to skip)
-    if os.environ.get("SPIO_DISABLE_TF32", "1") == "0":
-        yield
-        return
-    old_mm = torch.backends.cuda.matmul.allow_tf32
-    old_cudnn = torch.backends.cudnn.allow_tf32
-    old_bench = torch.backends.cudnn.benchmark
-    try:
-        torch.backends.cuda.matmul.allow_tf32 = False
-        torch.backends.cudnn.allow_tf32 = False
-        torch.backends.cudnn.benchmark = False
-        try:
-            torch.set_float32_matmul_precision("high")
-        except Exception:
-            pass
-        yield
-    finally:
-        torch.backends.cuda.matmul.allow_tf32 = old_mm
-        torch.backends.cudnn.allow_tf32 = old_cudnn
-        torch.backends.cudnn.benchmark = old_bench
-
-
 # Pre-fill output tensors with this value to ensure every element is written by the kernel.
 DEAD_VALUE = -42.0
 
@@ -285,3 +261,58 @@ def run_layer_test(
 
 def _all_to_float(args: List[torch.Tensor]) -> List[torch.Tensor]:
     return [t.float() if t is not None else None for t in args]
+
+@contextlib.contextmanager
+def _precision_guard():
+    # Disable TF32 control if explicitly requested
+    if os.environ.get("SPIO_DISABLE_TF32", "1") == "0":
+        yield
+        return
+
+    # Prefer PyTorch 2.9+ API; do not mix with old flags
+    try:
+        old_states = {
+            "backends.fp32_precision": torch.backends.fp32_precision,
+            "cuda.matmul.fp32_precision": torch.backends.cuda.matmul.fp32_precision,
+            "cudnn.fp32_precision": torch.backends.cudnn.fp32_precision,
+            "cudnn.conv.fp32_precision": torch.backends.cudnn.conv.fp32_precision,
+            "cudnn.rnn.fp32_precision": torch.backends.cudnn.rnn.fp32_precision,
+            "cudnn.benchmark": torch.backends.cudnn.benchmark,
+        }
+        torch.backends.fp32_precision = "ieee"
+        torch.backends.cuda.matmul.fp32_precision = "ieee"
+        torch.backends.cudnn.fp32_precision = "ieee"
+        torch.backends.cudnn.conv.fp32_precision = "ieee"
+        torch.backends.cudnn.rnn.fp32_precision = "ieee"
+        torch.backends.cudnn.benchmark = False
+        try:
+            yield
+        finally:
+            torch.backends.fp32_precision = old_states["backends.fp32_precision"]
+            torch.backends.cuda.matmul.fp32_precision = old_states["cuda.matmul.fp32_precision"]
+            torch.backends.cudnn.fp32_precision = old_states["cudnn.fp32_precision"]
+            torch.backends.cudnn.conv.fp32_precision = old_states["cudnn.conv.fp32_precision"]
+            torch.backends.cudnn.rnn.fp32_precision = old_states["cudnn.rnn.fp32_precision"]
+            torch.backends.cudnn.benchmark = old_states["cudnn.benchmark"]
+        return
+    except AttributeError:
+        # Older PyTorch: fall back to legacy flags
+        pass
+
+    # Legacy path (pre-2.9)
+    old_mm = torch.backends.cuda.matmul.allow_tf32
+    old_cudnn = torch.backends.cudnn.allow_tf32
+    old_bench = torch.backends.cudnn.benchmark
+    try:
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cudnn.benchmark = False
+        try:
+            torch.set_float32_matmul_precision("high")
+        except Exception:
+            pass
+        yield
+    finally:
+        torch.backends.cuda.matmul.allow_tf32 = old_mm
+        torch.backends.cudnn.allow_tf32 = old_cudnn
+        torch.backends.cudnn.benchmark = old_bench
