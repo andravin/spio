@@ -1,6 +1,8 @@
 """Helper function for implementing kernel and operator unit tests."""
 
 from typing import List, Type, Callable
+import contextlib
+import os
 
 import torch
 
@@ -15,6 +17,30 @@ from ..reflection import (
 from ..cuda.driver import get_device_attributes
 from ..transform._transform import _transform as spio_transform
 from ..kernels import Params, KernelFactory
+
+
+@contextlib.contextmanager
+def _precision_guard():
+    # Disable TF32 for reference computations (default on; set SPIO_DISABLE_TF32=0 to skip)
+    if os.environ.get("SPIO_DISABLE_TF32", "1") == "0":
+        yield
+        return
+    old_mm = torch.backends.cuda.matmul.allow_tf32
+    old_cudnn = torch.backends.cudnn.allow_tf32
+    old_bench = torch.backends.cudnn.benchmark
+    try:
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cudnn.benchmark = False
+        try:
+            torch.set_float32_matmul_precision("high")
+        except Exception:
+            pass
+        yield
+    finally:
+        torch.backends.cuda.matmul.allow_tf32 = old_mm
+        torch.backends.cudnn.allow_tf32 = old_cudnn
+        torch.backends.cudnn.benchmark = old_bench
 
 
 # Pre-fill output tensors with this value to ensure every element is written by the kernel.
@@ -44,7 +70,8 @@ def run_kernel_test(
     device_idx = get_device_ordinal(device)
     device_attr = get_device_attributes(device_idx)
 
-    torch_output = reference_function(*reference_args, **torch_kwargs)
+    with _precision_guard():
+        torch_output = reference_function(*reference_args, **torch_kwargs)
     kernels = compile_kernel_configs(
         kernel_factory,
         params,
@@ -87,17 +114,18 @@ def run_grad_kernel_test(
 
     grad_outputs = reflection.get_grad_output_args(args)
 
-    output = reference_function(*reference_args, **reference_kwargs)
-    num_grad_inputs = len(reflection.grad_input_names)
-    ref_grads = {
-        grad_input.name: torch.autograd.grad(
-            output,
-            args[grad_input.grad_of],
-            grad_outputs,
-            retain_graph=(idx < num_grad_inputs - 1),
-        )[0]
-        for idx, grad_input in enumerate(reflection.grad_input_names)
-    }
+    with _precision_guard():
+        output = reference_function(*reference_args, **reference_kwargs)
+        num_grad_inputs = len(reflection.grad_input_names)
+        ref_grads = {
+            grad_input.name: torch.autograd.grad(
+                output,
+                args[grad_input.grad_of],
+                grad_outputs,
+                retain_graph=(idx < num_grad_inputs - 1),
+            )[0]
+            for idx, grad_input in enumerate(reflection.grad_input_names)
+        }
 
     grad_input_names = [grad_name.name for grad_name in reflection.grad_input_names]
     grad_input_stats = [
@@ -151,7 +179,9 @@ def run_function_test(function, params, device="cuda"):
 
     reference_args = _all_to_float(reference_reflection.arrange_args(args))
     reference_kwargs = reference_reflection.get_function_kwargs(params)
-    reference_output = reference_function(*reference_args, **reference_kwargs)
+
+    with _precision_guard():
+        reference_output = reference_function(*reference_args, **reference_kwargs)
 
     stats = reflection.stats(params, output_names=reflection.output_names)
     acc_depth = stats.accumulation_depths[0]
@@ -180,7 +210,8 @@ def run_grad_function_test(function: Callable, params: Params, device: str = "cu
     reference_kwargs = reference_reflection.get_function_kwargs(params)
 
     float_args = _all_to_float(reference_args)
-    reference_outputs = reference_function(*float_args, **reference_kwargs)
+    with _precision_guard():
+        reference_outputs = reference_function(*float_args, **reference_kwargs)
     grad_outputs = list(reflection.make_grad_outputs(params).values())
     float_grad_outputs = _all_to_float(grad_outputs)
     grad_input_names = [f"grad_{name}" for name in reflection.args]
@@ -195,9 +226,10 @@ def run_grad_function_test(function: Callable, params: Params, device: str = "cu
             grad = torch.autograd.grad(
                 output, arg, *grad_outputs, retain_graph=not_last
             )
-            reference_grad = torch.autograd.grad(
-                reference_outputs, float_arg, *float_grad_outputs, retain_graph=not_last
-            )
+            with _precision_guard():
+                reference_grad = torch.autograd.grad(
+                    reference_outputs, float_arg, *float_grad_outputs, retain_graph=not_last
+                )
             assert_all_close_with_acc_depth(
                 grad[0], reference_grad[0], msg=str(params), acc_depth=acc_depths[idx]
             )
@@ -231,7 +263,8 @@ def run_layer_test(
     )
 
     reference_model = torch.nn.Sequential(reference_layer)
-    reference_output = reference_model(*reference_args)
+    with _precision_guard():
+        reference_output = reference_model(*reference_args)
 
     layer, num_spio_modules = spio_transform(reference_model)
     assert num_spio_modules == 1, f"Expected 1 Spio module, matched {num_spio_modules}"
