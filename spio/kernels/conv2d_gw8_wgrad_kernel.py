@@ -2,21 +2,16 @@
 
 from dataclasses import dataclass
 from itertools import product
-from typing import Generator, Tuple, List
+from typing import Generator
 
-from ..generators import (
-    GenSpecs,
-    MacroSpec,
-    ParamsSpec,
-    IndexSpec,
-    TensorSpec,
-    FragmentSpec,
-)
-from ..util import divup
+from .. import generators as gen
+from ..util import divup, next_relative_prime
+from ..cuda.driver import DeviceAttributes
+
 from .launch_params import LaunchParams
 from .conv2d_gw8_params import Conv2dGw8Params
 from .conv2d_stats import Conv2dStats
-from .kernel_factory import make_kernel_factory
+from .kernel_factory import KernelFactory, KernelSpec
 from .kernel import get_full_kernel_name
 
 
@@ -38,6 +33,7 @@ BLOCK_Q = 8
 
 def _get_configs(
     params: Conv2dGw8Params,
+    _device_attr: DeviceAttributes,
 ) -> Generator[Conv2dGw8WgradConfig, None, None]:
     """Generate tile configurations for the given layer parameters."""
     max_groups = min(params.groups, 8)
@@ -88,9 +84,12 @@ def _get_configs(
     )
 
 
-def _get_specs(
-    params: Conv2dGw8Params, config: Conv2dGw8WgradConfig = None, **_kwargs
-) -> Tuple[List[GenSpecs], LaunchParams]:
+def _get_kernel_spec(
+    params: Conv2dGw8Params,
+    config: Conv2dGw8WgradConfig,
+    _device_attr: DeviceAttributes,
+    **_kwargs,
+) -> KernelSpec:
     """Get the code gen specs and launch params."""
     params.validate()
 
@@ -133,74 +132,93 @@ def _get_specs(
     warp_s2 = config.warp_s // 2
     warp_s2_up = divup(config.warp_s, 2)
 
+    # There are effectively 8 shared memory banks when storing 16-byte elements (8c float16).
+    num_smem_banks = 8
+
+    smem_x_stride = next_relative_prime(block_c8, num_smem_banks)
+
     smem_tensors = [
-        TensorSpec(
+        gen.Tensor(
             "SmemInput",
-            "uint4",
-            {"ping_pong": 2, "n": config.warp_n, "x": block_w, "c8": block_c8 + 1},
+            gen.dtype.uint4,
+            {"ping_pong": 2, "n": config.warp_n, "x": block_w, "c8": block_c8},
+            strides={"x": smem_x_stride},
         ),
-        TensorSpec(
+        gen.Tensor(
             "SmemDelta",
-            "uint4",
-            {"ping_pong": 2, "n": config.warp_n, "q": BLOCK_Q, "k8": block_c8 + 1},
+            gen.dtype.uint4,
+            {"ping_pong": 2, "n": config.warp_n, "q": BLOCK_Q, "k8": block_c8},
+            strides={"x": smem_x_stride},
         ),
-        TensorSpec("SmemWgrad", "float2", {"k8": block_c8, "s": s, "c": 8, "k2": 4}),
+        gen.Tensor(
+            "SmemWgrad", gen.dtype.float2, {"k8": block_c8, "s": s, "c": 8, "k2": 4}
+        ),
     ]
 
-    # TODO: ensure that the smem tensors fit in the shared memory.
-    # smem_size = smem_tensors[0].num_bytes + smem_tensors[1].num_bytes
+    smem_size = max(
+        smem_tensors[0].num_bytes + smem_tensors[1].num_bytes, smem_tensors[2].num_bytes
+    )
+    assert smem_size < _device_attr.max_shared_memory_per_block
 
     launch_params = LaunchParams(grid=blocks, block=threads)
 
     full_kernel_name = get_full_kernel_name(KERNEL_NAME, params)
 
-    specs = [
-        MacroSpec({"SPIO_CONV_WGRAD_KERNEL": full_kernel_name}),
+    gen_specs = [
+        gen.Macro({"SPIO_CONV_WGRAD_KERNEL": full_kernel_name}),
         #
         # Block parameters.
         #
-        ParamsSpec(
+        gen.Fold("block_n", "n", block_n),
+        gen.Fold("block_y", "y", block_h),
+        gen.Fold("block_p", "p", block_p),
+        gen.Fold("block_q", "q", BLOCK_Q),
+        gen.Fold("block_c", "c", block_c),
+        gen.Fold("warp_s", "s", config.warp_s),
+        gen.ParamsSpec(
             "Block",
             {
-                "n": block_n,
-                "h": block_h,
-                "q": BLOCK_Q,
-                "c8": block_c8,
-                "p": block_p,
                 "threads": threads,
             },
         ),
         #
         # Constant parameters.
         #
-        ParamsSpec(
+        gen.ParamsSpec(
             "Params",
             {
-                "R": r,
-                "S": s,
+                "R_Size": r,
+                "S_Size": s,
                 "PADDING_H": padding_h,
                 "PADDING_W": padding_w,
                 "TRANSPOSE_PADDING_H": transpose_padding_h,
-                "WARP_S": config.warp_s,
-                "WARP_S2": warp_s2,
-                "WARP_S2_UP": warp_s2_up,
+                "WARP_S_Size": config.warp_s,
+                "WARP_S2_Size": warp_s2,
+                "WARP_S2_UP_Size": warp_s2_up,
                 "BLOCK_N_ITERS": config.block_n_iters,
-                "WARP_N": config.warp_n,
+                "WARP_N_Size": config.warp_n,
             },
         ),
         #
         # Block indices.
         #
-        IndexSpec(
+        gen.Index(
             "BlockIdx",
-            {"n": blocks_n, "y": blocks_h, "q": blocks_q, "c8": blocks_c8},
+            {
+                "block_n": blocks_n,
+                "block_y": blocks_h,
+                "block_q": blocks_q,
+                "block_c": blocks_c8,
+            },
         ),
         #
         # Input loading.
         #
-        IndexSpec("InputIdx", {"n": config.warp_n, "x": block_w, "c8": block_c8}),
-        TensorSpec("Input", "const uint4", {"n": n, "y": h, "x": w, "c8": c8}),
-        IndexSpec(
+        gen.Index("InputIdx", {"n": config.warp_n, "x": block_w, "c8": block_c8}),
+        gen.Tensor(
+            "Input", gen.dtype.uint4, {"n": n, "y": h, "x": w, "c8": c8}, constant=True
+        ),
+        gen.Index(
             "SmemInputLoadIdx",
             {
                 "c8": warps_c8,
@@ -209,41 +227,57 @@ def _get_specs(
                 "s": 2,
                 "q": BLOCK_Q,
             },
+            dummies=["repeat"],
         ),
         #
         # Delta loading
         #
-        IndexSpec("DeltaIdx", {"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}),
-        TensorSpec("Delta", "const uint4", {"n": n, "p": p, "q": q, "k8": c8}),
-        IndexSpec(
-            "SmemDeltaLoadIdx",
-            {"k8": warps_c8, "repeat": (32 * warps_s) // BLOCK_Q, "q": BLOCK_Q},
+        gen.Index("DeltaIdx", {"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}),
+        gen.Tensor(
+            "Delta", gen.dtype.uint4, {"n": n, "p": p, "q": q, "k8": c8}, constant=True
         ),
-        TensorSpec("DeltaFrag", "spio::MMA_N8_K8_F16_B", {"n": config.warp_n, "r": r}),
+        gen.Index(
+            "SmemDeltaLoadIdx",
+            {
+                "k8": warps_c8,
+                "repeat": (32 * warps_s) // BLOCK_Q,
+                "q": BLOCK_Q,
+            },
+            dummies=["repeat"],
+        ),
         #
-        # Accumulator
+        # MMA fragments
         #
-        FragmentSpec("Acc", "MMA_M16_N8_F32_C", "c", "k"),
-        TensorSpec("AccTensor", "spio::MMA_M16_N8_F32_C", {"s2": warp_s2_up, "r": r}),
+        gen.Fragment("Acc", gen.FragmentType.M16_N8_F32_C, "c", "k"),
+        gen.Fragment("InputFragment", gen.FragmentType.M16_K8_F16_A, "c", "x"),
+        gen.Fragment("DeltaFragment", gen.FragmentType.N8_K8_F16_B, "x", "k"),
+        #
+        # MMA tensors
+        #
+        gen.Tensor(
+            "AccTensor", "Acc", {"s2": warp_s2_up, "r": r}
+        ),
+        gen.Tensor("InputTensor", "InputFragment", {"s2": warp_s2_up}),
+        gen.Tensor("DeltaTensor", "DeltaFragment", {"n": config.warp_n, "r": r}),
         #
         # Weights storing.
         #
-        IndexSpec("SmemWgradStoreIdx", {"k8": warps_c8, "warp_s": warps_s, "lane": 32}),
+        gen.Index("SmemWgradStoreIdx", {"k8": warps_c8, "warp_s": warps_s, "lane": 32}),
         # Each thread stores 8k for a particular (k8, r, s, c).
-        IndexSpec("WgradStoreIdx", {"k8": warps_c8, "s": s, "c": 8}),
+        gen.Index("WgradStoreIdx", {"k8": warps_c8, "s": s, "c": 8}),
         # Reduce Wgrad through global memory using float32 precision.
-        TensorSpec("Wgrad", "float", {"k": c, "r": r, "s": s, "c": 8}),
+        gen.Tensor("Wgrad", gen.dtype.float, {"k": c, "r": r, "s": s, "c": 8}),
     ] + smem_tensors
-    return specs, launch_params
+    return KernelSpec(gen_specs=gen_specs, launch_params=launch_params)
 
 
-conv2d_gw8_wgrad_kernel_factory = make_kernel_factory(
+conv2d_gw8_wgrad_kernel_factory = KernelFactory(
     Conv2dGw8Params,
     Conv2dGw8WgradConfig,
     Conv2dStats,
     kernel_name=KERNEL_NAME,
     configs=_get_configs,
-    specs=_get_specs,
+    kernel_spec=_get_kernel_spec,
     kernel_source_file="conv2d_gw8_wgrad.cu",
     src_module="spio.src",
     includes_module="spio.include",

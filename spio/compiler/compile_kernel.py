@@ -18,6 +18,7 @@ def compile_kernel(
     arch: Tuple[int, int] = None,
     debug: bool = False,
     lineinfo: bool = False,
+    max_registers: int = None,
 ):
     """Compile a CUDA kernel from a source file and return the cubin.
 
@@ -29,6 +30,7 @@ def compile_kernel(
         arch (tuple): GPU architecture (e.g., (8, 0) for sm_80).
         debug (bool): Whether to include debug information.
         lineinfo (bool): Whether to include line information.
+        max_registers (int): Maximum number of registers to use for the kernel.
     """
     assert arch is not None, "Must specify GPU architecture for kernel compilation."
     if arch[0] < 8:
@@ -44,6 +46,7 @@ def compile_kernel(
         device_debug=debug,
         lineinfo=lineinfo,
         header_dict=header_dict,
+        max_registers=max_registers,
     )
 
 
@@ -73,6 +76,7 @@ def compile_and_load_kernel(
     device_ordinal: int = 0,
     debug: bool = False,
     lineinfo: bool = False,
+    max_registers: int = None,
 ):
     """Compile and load a CUDA kernel."""
     arch = torch.cuda.get_device_capability(device_ordinal)
@@ -86,5 +90,6 @@ def compile_and_load_kernel(
         debug=debug,
         lineinfo=lineinfo,
         arch=arch,
+        max_registers=max_registers,
     )
     return load_kernel(kernel_name, cubin, device_ordinal=device_ordinal)

@@ -45,6 +45,27 @@ cdef extern from "cuda.h":
         CU_POINTER_ATTRIBUTE_SYNC_MEMOPS = 6
         CU_POINTER_ATTRIBUTE_BUFFER_ID = 7
 
+    ctypedef enum CUdevice_attribute:
+        CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16
+        CU_DEVICE_ATTRIBUTE_L2_CACHE_SIZE = 38
+        CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75
+        CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76
+        CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN = 97
+
+    ctypedef enum CUfunction_attribute:
+        CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 0
+        CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES = 1
+        CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES = 2
+        CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES = 3
+        CU_FUNC_ATTRIBUTE_NUM_REGS = 4
+        CU_FUNC_ATTRIBUTE_PTX_VERSION = 5
+        CU_FUNC_ATTRIBUTE_BINARY_VERSION = 6
+        CU_FUNC_ATTRIBUTE_CACHE_MODE_CA = 7
+        CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8
+        CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT = 9
+
+
+
     ctypedef enum CUstream_flags:
         CU_STREAM_DEFAULT = 0
         CU_STREAM_NON_BLOCKING = 1
@@ -73,6 +94,8 @@ cdef extern from "cuda.h":
 
     CUresult cuInit(unsigned int Flags)
     CUresult cuDeviceGet(CUdevice *device, int ordinal)
+    CUresult cuDeviceGetAttribute(int *pi, int attrib, CUdevice dev)
+    CUresult cuDeviceGetName(char* name, int  len, CUdevice dev)
     CUresult cuDevicePrimaryCtxRetain(CUcontext *pctx, CUdevice dev)
     CUresult cuDevicePrimaryCtxRelease(CUdevice dev)
 
@@ -87,6 +110,8 @@ cdef extern from "cuda.h":
     CUresult cuModuleUnload(CUmodule hmod)
 
     CUresult cuFuncLoad(CUfunction function)
+    CUresult cuFuncSetAttribute(CUfunction function, int attrib, int value)
+    CUresult cuFuncGetAttribute(int *pi, int attrib, CUfunction function)
     CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX, unsigned int gridDimY, unsigned int gridDimZ, unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ, unsigned int sharedMemBytes, CUstream hStream, void **kernelParams, void **extra)
     
     CUresult cuCtxSynchronize()

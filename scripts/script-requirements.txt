@@ -3,3 +3,4 @@ scikit-learn
 timm
 tqdm
 tabulate
+matplotlib
