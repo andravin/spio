@@ -24,7 +24,7 @@ Kernels are compiled at runtime using NVIDIA's NVRTC (libnvrtc), automatically o
 Machine learning models predict optimal kernel configurations based on layer parameters and hardware characteristics. This eliminates expensive auto-tuning while achieving better performance than heuristic-based approaches.
 
 ### 🚀 PyTorch Integration
-Seamless integration with PyTorch through custom operators and torch.compile support. Drop-in replacement for existing operations with significant speedups.
+Seamless integration with PyTorch through custom operators and `torch.compile` support. Drop-in replacement for existing operations with significant speedups.
 
 ## Performance Results
 
@@ -161,9 +161,7 @@ auto a_element = A(a_ptr)[global_i][global_load_idx.get<K8>()];
 auto c_element = C(c_ptr)[global_i];                            
 
 // The user doesn't track positions, sizes, or strides - the type system handles it all
-// Type safety prevents dimension misuse at compile time
-// This line generates a compile error because WARP_J is not a valid dimension for SmemA
-// auto wrong = smem_a[global_load_idx.get<WARP_J>()];  
+// Type safety prevents dimension misuse at compile time (e.g., using WARP_J with SmemA would fail to compile)
 ```
 
 The main computation loop demonstrates how typed dimensions provide compile-time safety by preventing incompatible dimension types from being used with tensors that don't support them. The tensor implementations use `constexpr` with known tile sizes so that tensor indexing arithmetic is greatly simplified at compile-time and loops with constant bounds are unrolled. This produces highly optimized code that runs at near full utilization on NVIDIA GeForce RTX 4090 (Ada) GPUs:
