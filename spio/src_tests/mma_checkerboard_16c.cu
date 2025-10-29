@@ -1,5 +1,6 @@
 #include "spio.cuh"
 
+// Include generated dimension and tensor classes.
 #include "parameters.h"
 
 extern "C"
