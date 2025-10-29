@@ -106,6 +106,8 @@ tensor_c = gen.Tensor(
     # Dimension 'i' is at position 0 with size m 
     gen.Dims(i=m, j8=n8)
 )
+global_load_index = gen.Index("GlobalLoadIndex", gen.Dims(x16=block_x16, x=16, k8=2))
+
 
 # Define additional tensors for the CUDA kernel...
 ```
@@ -122,11 +124,19 @@ gen.Fold("block_j", "j", block_x),
 In traditional CUDA code, you manually track array indices and remember that `A[k][i][k8]` corresponds to `C[i][j8]`. With Spio's operator overloading, the same dimension type automatically maps to the correct position and stride in each tensor:
 
 ```c++
+// Include gnerated code.
+#include "parameters.h"
+
 // Dimension 'i' and folds 'block_i' and 'block_j' generate types I, BLOCK_I, and BLOCK_J
 // that you use in the CUDA kernel.
 
 // Map thread-block coordinates to blocks of I and J.
 BLOCK_I block_i(blockIdx.y);
+
+// Map the thread index to our tensor's global coordinates X16, X, and K8.
+GlobalLoadIndex global_load_idx(threadIdx.x);
+
+// Add the block and thread coordinates to compute this thread's I-coordinate.
 auto global_i = block_i.unfold() + global_load_idx.get<X>().cast<I>();
 
 // Same 'i' dimension type works correctly across different tensors
@@ -137,7 +147,8 @@ auto c_element = C(c_ptr)[global_i];
 
 // The user doesn't track positions, sizes, or strides - the type system handles it all
 // Type safety prevents dimension misuse at compile time
-// auto wrong = smem_a[compute_idx.get<WARP_J>()];  // Compile error: WARP_J not valid for SmemA
+// This line generates a compile error because WARP_J is not a valid dimension for SmemA
+// auto wrong = smem_a[compute_idx.get<WARP_J>()];  
 ```
 
 The main computation loop demonstrates how typed dimensions provide compile-time safety by preventing incompatible dimension types from being used with tensors that don't support them. The tensor implementations use `constexpr` with known tile sizes so that tensor indexing arithmetic is greatly simplified at compile-time and loops with constant bounds are unrolled. This produces highly optimized code that runs at near full utilization on NVIDIA Ada GeForce RTX 4090 GPUs:
