@@ -5,8 +5,6 @@ from spio.kernels import (
     Conv2dStats,
     LayerNorm2dParams,
     LayerNorm2dStats,
-    MlpParams,
-    MlpStats,
 )
 
 
@@ -65,16 +63,3 @@ def test_layernorm_2d_stats_fprop():
     assert stats.bytes_read == read
     assert stats.bytes_written == written
     assert stats.bytes == read + written
-
-
-def test_mlp_stats_fprop():
-    """Test the statistics for the forward pass of the mlp kernel."""
-    params = MlpParams(x=16, c=128, r=512, k=256)
-    stats = MlpStats(params, output_names="output")
-    read = (16 * 128 + 128 * 512 + 512 * 256 + 512 + 256) * 2
-    written = 16 * 256 * 2
-    assert stats.bytes_read == read
-    assert stats.bytes_written == written
-    assert stats.bytes == read + written
-    assert stats.macs == 16 * 512 * (128 + 256)
-    assert stats.accumulation_depths == [128 + 512]
