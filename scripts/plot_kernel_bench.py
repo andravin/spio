@@ -253,12 +253,15 @@ def find_torch_grouped_conv_kernels(df, kernel_iters, depthwise=False):
     grouped_fprop_kernels = [
         "sm86_xmma_fprop_implicit_gemm_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage3_warpsize1x4x1_g8_tensor16x8x16_t1r3s3_execute_kernel__5x_cudnn",
         "sm86_xmma_fprop_implicit_gemm_indexed_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage3_warpsize1x4x1_g8_tensor16x8x16_execute_kernel__5x_cudnn",
+        "sm80_xmma_fprop_implicit_gemm_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage4_warpsize1x4x1_g8_tensor16x8x16_execute_kernel__5x_cudnn",
     ]
 
     grouped_dgrad_kernels = [
         "sm80_xmma_dgrad_implicit_gemm_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage4_warpsize1x4x1_g8_tensor16x8x16_execute_kernel__5x_cudnn",
         "sm80_xmma_dgrad_implicit_gemm_indexed_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage4_warpsize1x4x1_g8_tensor16x8x16_execute_kernel__5x_cudnn",
         "sm80_xmma_dgrad_implicit_gemm_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage4_warpsize1x4x1_g8_tensor16x8x16_t1r3s3_execute_kernel__5x_cudnn",
+        "sm80_xmma_dgrad_implicit_gemm_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage3_warpsize1x4x1_g8_tensor16x8x16_t1r3s3_execute_kernel__5x_cudnn",
+        "sm80_xmma_dgrad_implicit_gemm_f16f16_f16f32_f32_nhwckrsc_nhwc_tilesize64x64x64_stage4_warpsize1x4x1_g8_tensor16x8x16_execute_kernel__5x_cudnn",
     ]
 
     grouped_wgrad_kernels = [
