@@ -374,7 +374,7 @@ def main():
 
     torch.backends.cudnn.benchmark = True
 
-    if args.spio:
+    if args.spio and args.timm_model is not None:
         timm.layers.set_use_spio(True)
         use_spio = True
 
