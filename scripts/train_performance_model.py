@@ -341,7 +341,7 @@ def get_device_name_from_data_dir(dir_name: str) -> str:
         if parts[0] != "bench":
             raise ValueError(
                 f"Invalid model benchmark directory name: {dir_name}: "
-                "Expected 'modelbench__<device_name> or bench_<device_name>..."
+                "Expected 'modelbench___<device_name> or bench_<device_name>..."
             )
     device_name = parts[1]
     return device_name
