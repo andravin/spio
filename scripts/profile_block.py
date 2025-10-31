@@ -582,11 +582,16 @@ def benchmark_configs(model, inputs, args, data_path: Path):
     # For each unique KernelParams, compile all kernel configurations.
     # Store the kernels in a table.
     kernel_table: Dict[KernelParams, List[Kernel]] = {}
+    the_device_idx = None
     for kernel_params in unique_kernel_params:
         kernel_factory = kernel_params.kernel_factory
         params = kernel_params.params
         device = kernel_params.device
         device_idx = get_device_ordinal(device)
+        if the_device_idx is None:
+            the_device_idx = device_idx
+        elif the_device_idx != device_idx:
+            raise ValueError("All kernels must be for the same device.")
         device_attr = get_device_attributes(device_idx)
         kernel_kwargs = dict(kernel_params.kernel_kwargs)
         configs = kernel_factory.configs(
@@ -618,7 +623,7 @@ def benchmark_configs(model, inputs, args, data_path: Path):
         kernels_to_compile.extend(kernel_lst[:num_unique_configs])
 
     with Timer(f"Compiling {len(kernels_to_compile)} kernels"):
-        compile_kernels(kernels_to_compile, arch=arch)
+        compile_kernels(kernels_to_compile, arch=device_attr.compute_capability)
 
     with data_path.open("w") as f:
 
