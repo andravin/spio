@@ -26,7 +26,8 @@ def _cuda_rt_include():
 
 class build_ext(_build_ext):
     """Custom build_ext to define extensions lazily."""
-    def build_extensions(self):
+    def run(self):
+        # Populate extensions before the parent run() checks them
         from Cython.Build import cythonize
 
         inc_path = _cuda_rt_include()
@@ -34,21 +35,28 @@ class build_ext(_build_ext):
             Extension(
                 name="spio.cuda.driver",
                 sources=["spio/cuda/driver.pyx"],
-                # We use the CUDA Driver API at runtime: link to libcuda.so from the NVIDIA driver
-                libraries=["cuda"],
-                include_dirs=[inc_path],
+                libraries=["cuda"],           # link to libcuda.so from the NVIDIA driver
+                include_dirs=[inc_path],      # headers from nvidia-cuda-runtime wheel
                 language="c",
             ),
         ]
-        self.extensions = cythonize(exts, language_level=3)
-        super().build_extensions()
+        exts = cythonize(exts, language_level=3)
+
+        # Editable builds with recent setuptools expect this attr on Extension
+        for ext in exts:
+            if not hasattr(ext, "_needs_stub"):
+                ext._needs_stub = False
+
+        self.extensions = exts
+        super().run()
 
 
 setup(
     name="spio",
     version="0.3.0",
     packages=find_packages(),
-    ext_modules=[],  # built in build_ext
+    # Make setuptools see an extension so build_ext is scheduled
+    ext_modules=[Extension("spio.cuda.driver", sources=["spio/cuda/driver.pyx"])],
     cmdclass={"build_ext": build_ext},
     include_package_data=True,
 )
