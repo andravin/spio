@@ -38,6 +38,7 @@ CONFIG_CLASSES = {
 
 device_arch_table = {
     "nvidia_a100-pcie-40gb": "sm_80",
+    "nvidia_a100-sxm4-40gb": "sm_80",
     "nvidia_a100-sxm4-80gb": "sm_80",
     "nvidia_geforce_rtx_3090": "sm_86",
     "nvidia_geforce_rtx_4090": "sm_89",
