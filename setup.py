@@ -123,7 +123,7 @@ class build_ext(_build_ext):
 
 setup(
     name="spio",
-    version="0.3.0",
+    version="0.4.0rc1",
     packages=find_packages(),
     # Keep a placeholder so build_ext is scheduled; link details are set in build_ext.run
     ext_modules=[Extension("spio.cuda.driver", sources=["spio/cuda/driver.pyx"])],
