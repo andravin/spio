@@ -21,9 +21,9 @@ Unlike “Named Tensors,” which attach string names to dimensions and validate
   - Misuses fail to compile (zero run-time overhead)
   - Operator overloading maps types to per-tensor positions/strides
 
-When the same dimension type appears in different tensors, it represents the same logical dimension; each tensor still defines its own size and stride for that dimension based on its layout. This enables index-position-free indexing—users don’t track index positions, sizes, or strides across tensors; the type system ensures correctness at compile time.
+When the same dimension type appears in different tensors, it represents the same logical dimension; each tensor still defines its own size and stride for that dimension based on its layout. This enables position-free indexing—users don’t track index positions, sizes, or strides across tensors; the type system ensures correctness at compile time.
 
-In practice, the generated tensor classes overload the indexing operators (e.g., operator[] and helpers like get<Dim>) to accept dimension types. For each dimension type present in a tensor’s layout, the overload applies that tensor’s stride for that type; if a dimension type not used by the tensor is provided, the expression fails to compile (static_assert), with zero run-time name lookups or checks.
+In practice, the generated tensor classes overload the indexing operator (e.g., `operator[]` and helpers like `get<Dim>()`) to accept dimension types. For each dimension type present in a tensor’s layout, the overload applies that tensor’s stride for that type; if a dimension type not used by the tensor is provided, the expression fails to compile (static_assert), with zero run-time name lookups or checks.
 
 ### ⚡ Just-in-Time Kernel Generation
 Kernels are compiled at runtime using NVIDIA's NVRTC (libnvrtc), automatically optimized for your specific GPU architecture. No CUDA toolkit installation required—Spio uses the same NVIDIA libraries that PyTorch already depends on.
