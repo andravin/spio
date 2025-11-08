@@ -2,6 +2,9 @@
 
 Experimental CUDA kernel framework unifying typed dimensions, NVRTC JIT specialization, and ML‑guided tuning.
 
+[![PyPI version](https://img.shields.io/pypi/v/spio.svg)](https://pypi.org/project/spio/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 ## Overview
 
 Spio is an experimental CUDA research playground that packages several forward-looking ideas for building next-generation GPU kernels: strongly typed tensor dimensions, pipeline-oriented code generation, and machine-learned performance models that steer NVRTC-compiled kernels at runtime.
@@ -9,6 +12,7 @@ Spio is an experimental CUDA research playground that packages several forward-l
 ## Key Features
 
 ### 🔧 Typed Dimension System
+
 Unlike “Named Tensors,” which attach string names to dimensions and validate them at run time, Spio uses Typed Dimensions: each dimension is a distinct C++ type generated at build time and checked at compile time.
 
 - Named Tensors (strings, run-time):
@@ -23,15 +27,18 @@ Unlike “Named Tensors,” which attach string names to dimensions and validate
 
 When the same dimension type appears in different tensors, it represents the same logical dimension; each tensor still defines its own size and stride for that dimension based on its layout. This enables position-free indexing—users don’t track index positions, sizes, or strides across tensors; the type system ensures correctness at compile time.
 
-In practice, the generated tensor classes overload the indexing operator (e.g., `operator[]` and helpers like `get<Dim>()`) to accept dimension types. For each dimension type present in a tensor’s layout, the overload applies that tensor’s stride for that type; if a dimension type not used by the tensor is provided, the expression fails to compile (static_assert), with zero run-time name lookups or checks.
+In practice, the generated tensor classes overload the indexing operator (e.g., `operator[]` and helpers like `get&lt;Dim&gt;()`) to accept dimension types. For each dimension type present in a tensor’s layout, the overload applies that tensor’s stride for that type; if a dimension type not used by the tensor is provided, the expression fails to compile (static_assert), with zero run-time name lookups or checks.
 
 ### ⚡ Just-in-Time Kernel Generation
+
 Kernels are compiled at runtime using NVIDIA's NVRTC (libnvrtc), automatically optimized for your specific GPU architecture. No CUDA toolkit installation required—Spio uses the same NVIDIA libraries that PyTorch already depends on.
 
 ### 🎯 Performance Models
+
 Machine learning models predict optimal kernel configurations based on layer parameters and hardware characteristics. This eliminates expensive auto-tuning while achieving better performance than heuristic-based approaches.
 
 ### 🚀 PyTorch Integration
+
 Seamless integration with PyTorch through custom operators and `torch.compile` support. Drop-in replacement for existing operations with significant speedups.
 
 ## Performance Results
@@ -58,27 +65,41 @@ Benchmarks use realistic workloads with layers embedded in ConvFirst or MBConv b
 ## Quick Start
 
 ### Prerequisites
+
 - Linux x86_64
 - NVIDIA GPU: Ampere (sm_80/sm_86) or Ada (sm_89)
-- NVIDIA driver compatible with your PyTorch CUDA build
+- NVIDIA driver (compatible with CUDA 12 runtime)
 - Python 3.9+
-
-### Python dependency
-Required (install separately):
-- PyTorch (CUDA build, not CPU-only). The CUDA runtime, cuDNN, cuBLAS, and NVRTC are bundled with the CUDA wheels; no system CUDA toolkit is required.
-
-Install a CUDA-enabled PyTorch, for example:
-```bash
-pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision
-```
 
 ### Installation
 
-```bash
-# Install system dependencies (Ubuntu)
-sudo apt update && sudo apt install -y build-essential
+First install a C compiler. On Ubuntu,
 
-# Clone and install
+```bash
+sudo apt update && sudo apt install -y build-essential
+```
+
+Create and activate a virtual environment (recommended):
+
+```bash
+python3 -m venv spio_env
+source spio_env/bin/activate
+```
+
+Then install Spio from PyPI using pip:
+
+```bash
+pip install spio
+```
+
+Notes:
+
+- PyTorch (torch>=2.4.0) is an explicit dependency and will be installed automatically when you install Spio; no separate install step is required.
+- CUDA toolkit installation is not required. Spio relies on NVIDIA's CUDA runtime and NVRTC libraries that are pulled in via wheels and are the same libraries PyTorch uses.
+
+Alternatively, clone the Spio repository and install from source.
+
+```bash
 git clone https://github.com/andravin/spio.git
 cd spio
 pip install .
@@ -86,6 +107,12 @@ pip install .
 # Run tests (optional)
 cd tests
 SPIO_WORKERS=$(nproc) pytest .
+```
+
+Exit the virtual environment when finished.
+
+```bash
+deactivate
 ```
 
 ### Usage
@@ -108,7 +135,7 @@ Spio’s typed dimensions system represents dimensions as distinct C++ types (no
 
 Operator overloading details:
 
-- The generated tensor classes define typed indexing (operator[] chains and get<Dim>() helpers) that accept dimension types in any order and compute offsets using that tensor’s per-dimension strides.
+- The generated tensor classes define typed indexing (operator[] chains and get&lt;Dim&gt;() helpers) that accept dimension types in any order and compute offsets using that tensor’s per-dimension strides.
 - If you pass a dimension type that the tensor does not declare, the code fails to compile via static_assert, preventing invalid indexing from reaching run time.
 
 Define tensor layouts for a matrix multiply kernel in the Python generator:
