@@ -1,22 +1,10 @@
-#include <cuda_pipeline.h>
-#include <cuda_fp16.h>
-
+#include "spio.cuh"
 #include "spio/pipeline.h"
-#include "spio/mma.cuh"
-#include "spio/ldmatrix.cuh"
 
 #include "parameters.h"
 
 using namespace spio;
 using namespace Params;
-
-namespace
-{
-    __device__ constexpr int _max(int a, int b)
-    {
-        return a > b ? a : b;
-    }
-}
 
 extern "C"
 {
@@ -26,95 +14,83 @@ extern "C"
         const uint4 *__restrict__ deltas_ptr)
     {
         //
-        // Define the shared memory buffers.
+        // Allocate the shared memory tensors.
         //
-        // Overlap the wgrad shared memory buffer with the other smem buffers.
-        //
-        __shared__ uint4 smem_buf[_max(SmemInput::size + SmemDelta::size, SmemWgrad::num_bytes / sizeof(uint4))];
-        uint4 *smem_input_buf = smem_buf;
-        uint4 *smem_delta_buf = smem_buf + SmemInput::size;
-        float2 *smem_wgrad_buf = reinterpret_cast<float2 *>(smem_buf);
+        static_assert(SmemInput::element_size == SmemDelta::element_size,
+                      "SmemInput and SmemDelta assumed to have the same element size.");
+        constexpr int smem_size = spio::max(
+            SmemInput::storage_size() + SmemDelta::storage_size(),
+            SmemWgrad::num_bytes() / SmemInput::element_size);
+        __shared__ SmemInput::data_type smem[smem_size];
+
+        StackAllocator smem_alloc(smem);
+        auto smem_input = SmemInput::allocate(smem_alloc);
+        auto smem_delta = SmemDelta::allocate(smem_alloc);
 
         //
         // Define the block tile.
         //
         BlockIdx block_idx(blockIdx.x);
-        int block_n = block_idx.n() * Block::n;
-        int block_y = block_idx.y() * Block::h;
-        int block_q = block_idx.q() * Block::q;
-        int block_c8 = block_idx.c8() * Block::c8;
-        int block_c = block_c8 * 8;
 
         //
         // Define tile mappings.
         //
 
         // Load input to smem.
-        Input global_input(input_ptr);
-        SmemInput smem_input_store(smem_input_buf);
+        Input::base_cursor_type global_input;
+        SmemInput::base_cursor_type smem_input_store;
         bool thread_loads_input;
-        int input_zfill;
-        int input_n;
+        bool input_inbounds;
+        auto input_n = [&]()
         {
             InputIdx idx(threadIdx.x);
-            smem_input_store = smem_input_store.n(idx.n()).x(idx.x()).c8(idx.c8());
-            input_n = idx.n();
-            int block_x = block_q - PADDING_W;
-            int x = block_x + idx.x();
-            int c8 = block_c8 + idx.c8();
-            global_input = global_input.x(x).c8(c8);
-            thread_loads_input = threadIdx.x < InputIdx::size;
-            bool x_inbounds = (x >= 0 && x < Input::X);
-            bool c8_inbounds = (c8 < Input::C8);
-            bool thread_inbounds = (x_inbounds && c8_inbounds);
-            input_zfill = thread_inbounds ? 0 : sizeof(Input::data_type);
-        }
+            smem_input_store = smem_input[idx].rebase();
+            auto _input_n = idx.get<N>();
+            auto block_x = block_idx.get<BLOCK_Q>().unfold().cast<X>() - PADDING_W;
+            auto x = block_x + idx.get<X>();
+            auto c8 = block_idx.get<BLOCK_C>().fold<8>() + idx.get<C8>();
+            global_input = Input(input_ptr)[x][c8].rebase();
+            thread_loads_input = threadIdx.x < InputIdx::size();
+            bool x_inbounds = (x >= 0 && x < Input::size<X>());
+            bool c8_inbounds = (c8 < Input::size<C8>());
+            input_inbounds = (x_inbounds && c8_inbounds);
+            return _input_n;
+        }();
 
         // Load delta to smem.
-        Delta global_delta(deltas_ptr);
-        SmemDelta smem_delta_store(smem_delta_buf);
-        int delta_zfill;
-        int delta_n;
+        Delta::base_cursor_type global_delta;
+        SmemDelta::base_cursor_type smem_delta_store;
+        bool delta_inbounds;
         bool thread_loads_delta;
+        auto delta_n = [&]()
         {
             DeltaIdx idx(threadIdx.x);
-            delta_n = idx.n();
-            smem_delta_store = smem_delta_store.n(idx.n()).q(idx.q()).k8(idx.k8());
-            int q = block_q + idx.q();
-            int k8 = block_c8 + idx.k8();
-            global_delta = global_delta.q(q).k8(k8);
-            thread_loads_delta = threadIdx.x < DeltaIdx::size;
-            bool delta_inbounds = (k8 < Delta::K8 && q < Delta::Q);
-            delta_zfill = delta_inbounds ? 0 : sizeof(Delta::data_type);
-        }
+            smem_delta_store = smem_delta[idx].rebase();
+            auto q = block_idx.get<BLOCK_Q>().unfold() + idx.get<Q>();
+            auto k8 = block_idx.get<BLOCK_C>().fold<8>().cast<K>() + idx.get<K8>();
+            global_delta = Delta(deltas_ptr)[q][k8].rebase();
+            thread_loads_delta = threadIdx.x < DeltaIdx::size();
+            delta_inbounds = (k8 < Delta::size<K8>() && q < Delta::size<Q>());
+            return idx.get<N>();
+        }();
 
         // Load input-smem to register.
-        SmemInput smem_input_load(smem_input_buf);
+        SmemInput::base_cursor_type smem_input_load;
         {
             SmemInputLoadIdx idx(threadIdx.x);
-            int warp_s = idx.warp_s() * WARP_S;
-            smem_input_load = smem_input_load.x(idx.q() + warp_s + idx.s()).c8(idx.c8());
+            auto x = idx.get<Q>().cast<X>() + idx.get<WARP_S>().unfold().cast<X>() + idx.get<S>().cast<X>();
+            smem_input_load = smem_input[x][idx.get<C8>()].rebase();
         }
 
         // Load delta-smem to register.
-        SmemDelta smem_delta_load(smem_delta_buf);
-        {
-            SmemDeltaLoadIdx idx(threadIdx.x);
-            smem_delta_load = smem_delta_load.q(idx.q()).k8(idx.k8());
-        }
+        SmemDelta::base_cursor_type smem_delta_load = smem_delta[SmemDeltaLoadIdx(threadIdx.x)].rebase();
 
         //
         // Declare the accumulators.
         //
-        Acc acc_array[AccTensor::size];
+        AccTensor::data_type acc_array[AccTensor::storage_size()];
         AccTensor acc(acc_array);
-        for (int s2 = 0; s2 < WARP_S2_UP; ++s2)
-        {
-            for (int r = 0; r < R; ++r)
-            {
-                acc.s2(s2).r(r)->zero();
-            }
-        }
+        acc.zero();
 
         // Iterate over batches.
         for (int n_iter = 0; n_iter < BLOCK_N_ITERS; ++n_iter)
@@ -125,91 +101,86 @@ extern "C"
             Pipeline pipeline;
             constexpr unsigned STAGE_GLOBAL_DELTAS_LOAD = 1 << 0;
             constexpr unsigned STAGE_SMEM_DELTAS_LOAD = 1 << 1;
-            constexpr unsigned STAGE_GLOBAL_INPUT_LOAD = 1 << (R - 1);
-            constexpr unsigned STAGE_COMPUTE = 1 << R;
-            constexpr int NUM_ITERS = R + Block::h;
+            constexpr unsigned STAGE_GLOBAL_INPUT_LOAD = 1 << (R_Size - 1);
+            constexpr unsigned STAGE_COMPUTE = 1 << R_Size;
+            constexpr int NUM_ITERS = R_Size + BLOCK_Y(1).unfold().get();
 
             //
             // Define the input and delta (grad_output) pointers for the current batch iteration.
             //
-            int input_n_iter = block_n + input_n + n_iter * WARP_N;
-            bool input_n_inbounds = (input_n_iter < Input::N);
-            auto global_input_n_iter = global_input.n(input_n_iter);
+            auto input_n_iter = block_idx.get<BLOCK_N>().unfold() + input_n + n_iter * WARP_N_Size;
+            bool input_n_inbounds = (input_n_iter < Input::size<N>());
+            auto global_input_n_iter = global_input[input_n_iter].rebase();
 
-            int delta_n_iter = block_n + delta_n + n_iter * WARP_N;
-            bool delta_n_inbounds = (delta_n_iter < Delta::N);
-            auto global_delta_n_iter = global_delta.n(delta_n_iter);
+            auto delta_n_iter = block_idx.get<BLOCK_N>().unfold() + delta_n + n_iter * WARP_N_Size;
+            bool delta_n_inbounds = (delta_n_iter < Delta::size<N>());
+            auto global_delta_n_iter = global_delta[delta_n_iter].rebase();
 
-            int y = block_y;
+            int y = block_idx.get<BLOCK_Y>().unfold().get();
             int p = y - TRANSPOSE_PADDING_H;
             int ping_pong = 0;
 
             //
             // Define the deltas fragments.
             //
-            MMA_N8_K8_F16_B delta_array[DeltaFrag::size];
-            DeltaFrag deltas(delta_array);
+            DeltaTensor::data_type delta_array[DeltaTensor::storage_size()];
+            DeltaTensor deltas(delta_array);
 
             // Run the pipeline, unrolling it R times.
-            for (int iter = 0; iter < NUM_ITERS; iter += R)
+            for (int iter = 0; iter < NUM_ITERS; iter += R_Size)
             {
-                for (int phase = 0; phase < R && iter + phase < NUM_ITERS; ++phase)
+                for (int phase = 0; phase < R_Size && iter + phase < NUM_ITERS; ++phase)
                 {
-                    pipeline.step(iter + phase < Block::p);
-                    if (pipeline.active(STAGE_GLOBAL_INPUT_LOAD) && pipeline.active(STAGE_GLOBAL_DELTAS_LOAD))
+                    pipeline.step(iter + phase < BLOCK_P(1).unfold().get());
+                    if (pipeline.active(STAGE_GLOBAL_INPUT_LOAD, STAGE_GLOBAL_DELTAS_LOAD))
                     {
-                        bool y_inbounds = (y >= 0 && y < Input::Y);
-                        int ny_fill = (input_n_inbounds && y_inbounds) ? 0 : sizeof(Input::data_type);
                         if (thread_loads_input)
                         {
-                            __pipeline_memcpy_async(smem_input_store.ping_pong(ping_pong).get(),
-                                                    global_input_n_iter.y(y).get(),
-                                                    sizeof(Input::data_type),
-                                                    input_zfill | ny_fill);
+                            memcpy_async(
+                                smem_input_store[PING_PONG(ping_pong)].get(),
+                                global_input_n_iter[Y(y)].get(),
+                                input_inbounds && input_n_inbounds && (y >= 0 && y < Input::size<Y>().get()));
                         }
                         ++y;
                     }
                     if (pipeline.active(STAGE_GLOBAL_DELTAS_LOAD))
                     {
-                        bool p_inbounds = (p >= 0 && p < Delta::P);
-                        int np_fill = (p_inbounds && delta_n_inbounds) ? 0 : sizeof(Delta::data_type);
                         if (thread_loads_delta)
                         {
-
-                            __pipeline_memcpy_async(smem_delta_store.ping_pong(ping_pong).get(),
-                                                    global_delta_n_iter.p(p).get(),
-                                                    sizeof(Delta::data_type),
-                                                    delta_zfill | np_fill);
+                            memcpy_async(
+                                smem_delta_store[PING_PONG(ping_pong)].get(),
+                                global_delta_n_iter[P(p)].get(),
+                                delta_inbounds && delta_n_inbounds && (p >= 0 && p < Delta::size<P>().get()));
                         }
                         __pipeline_commit();
                         ++p;
                     }
-                    ping_pong = 1 - ping_pong;
+                    ping_pong ^= 1;
                     if (pipeline.active(STAGE_SMEM_DELTAS_LOAD))
                     {
                         __pipeline_wait_prior(pipeline.active(STAGE_GLOBAL_DELTAS_LOAD) ? 1 : 0);
                         __syncthreads();
-                        for (int warp_n = 0; warp_n < WARP_N; ++warp_n)
+                        for (auto warp_n : range(deltas.size<N>()))
                         {
-                            int r_idx = (R - 1 + phase) % R;
-                            deltas.n(warp_n).r(r_idx)->reg() = ldmatrix_x1_trans(smem_delta_load.ping_pong(ping_pong).n(warp_n).get());
+                            auto r_idx = R((R_Size - 1 + phase) % R_Size);
+                            deltas[warp_n][r_idx]->load_trans(smem_delta_load[PING_PONG(ping_pong)][warp_n].get());
                         }
                     }
                     if (pipeline.active(STAGE_COMPUTE))
                     {
-                        for (int warp_n = 0; warp_n < WARP_N; ++warp_n)
+                        for (auto warp_n : range(deltas.size<N>()))
                         {
-                            MMA_M16_K8_F16_A input[WARP_S2_UP];
-                            for (int s2 = 0; s2 < WARP_S2_UP; ++s2)
+                            InputTensor::data_type input_array[InputTensor::storage_size()];
+                            InputTensor input(input_array);
+                            for (auto s2 : range(input.size<S2>()))
                             {
-                                input[s2].vector() = ldmatrix_x2_trans(smem_input_load.ping_pong(ping_pong).n(warp_n).x(s2 * 2).get());
+                                input[s2]->load_trans(smem_input_load[PING_PONG(ping_pong)][warp_n][s2.unfold().cast<X>()].get());
                             }
-                            for (int s2 = 0; s2 < WARP_S2_UP; ++s2)
+                            for (auto s2 : range(input.size<S2>()))
                             {
-                                for (int r = 0; r < R; ++r)
+                                for (auto r : range(acc.size<R>()))
                                 {
-                                    int r_idx = (r + phase) % R;
-                                    mma_m16_n8_k8(acc.s2(s2).r(r)->vec4(), input[s2].reg2(), deltas.n(warp_n).r(r_idx)->reg(), acc.s2(s2).r(r)->vec4());
+                                    mma_trans(*acc[s2][r], *input[s2], *deltas[warp_n][(r + phase) % R_Size], *acc[s2][r]);
                                 }
                             }
                         }
@@ -222,55 +193,59 @@ extern "C"
             }
         }
 
+        smem_delta.deallocate(smem_alloc);
+        smem_input.deallocate(smem_alloc);
+        auto smem_wgrad = SmemWgrad::allocate(smem_alloc);
+
         // Store accumulator to wgrad-smem.
-        auto global_wgrad = Wgrad(wgrad_ptr).k(block_c);
-        SmemWgrad smem_wgrad_store(smem_wgrad_buf);
-        int warp_s;
+        auto global_wgrad = Wgrad(wgrad_ptr)[block_idx.get<BLOCK_C>().unfold().cast<K>()].rebase();
+        SmemWgrad::base_cursor_type smem_wgrad_store;
+        auto warp_s = [&]()
         {
             SmemWgradStoreIdx idx(threadIdx.x);
-            warp_s = idx.warp_s() * WARP_S;
-            int lane_c = Acc::c(idx.lane(), 0);
-            int lane_k2 = Acc::k2(idx.lane());
-            smem_wgrad_store = smem_wgrad_store.k8(idx.k8()).k2(lane_k2).s(warp_s).c(lane_c);
-        }
+            auto _warp_s = idx.get<WARP_S>().unfold();
+            Acc::Index acc_idx(idx.get<LANE>().get());
+            smem_wgrad_store = smem_wgrad[idx.get<K8>()][acc_idx.get<K2>()][_warp_s][acc_idx.get<C>()].rebase();
+            return _warp_s;
+        }();
 
-#pragma unroll R
-        for (int r = 0; r < R; ++r)
+        // Note: Out-of-resources CUDA error when coded as a range-based loop (auto r : acc.R)
+#pragma unroll R_Size
+        for (int r = 0; r < R_Size; ++r)
         {
             if (r > 0)
             {
                 __syncthreads();
             }
-            for (int s = 0; s < WARP_S; ++s)
+            for (auto s : range(WARP_S::stride))
             {
-                if (warp_s + s >= S)
+                if (warp_s + s >= S_Size)
                 {
                     break;
                 }
-                int sd2 = s / 2;
-                int sm2 = s % 2;
-                *smem_wgrad_store.s(s) = acc.s2(sd2).r(r)->fragment(sm2);
+                auto sd2 = s.fold<2>();
+                auto sm2 = s % 2;
+                *smem_wgrad_store[s] = acc[sd2][R(r)]->fragment(sm2.get());
             }
             __syncthreads();
 
             // Add wgrad to the global result.
-            SmemWgrad smem_wgrad_load(smem_wgrad_buf);
 #pragma unroll 1
-            for (int iter = threadIdx.x; iter < WgradStoreIdx::size; iter += Block::threads)
+            for (int iter = threadIdx.x; iter < WgradStoreIdx::size(); iter += Block::threads)
             {
                 // Flip r-dimension.
                 WgradStoreIdx idx(iter);
-                auto smem_wgrad_load_iter = smem_wgrad_load.k8(idx.k8()).s(idx.s()).c(idx.c());
-                auto wgrad_iter = global_wgrad.k(idx.k8() * 8).r(R - 1 - r).s(idx.s()).c(idx.c());
-                int k = block_c + idx.k8() * 8;
+                auto smem_wgrad_load_iter = smem_wgrad[idx].rebase();
+                auto wgrad_iter = global_wgrad[idx.get<K8>().unfold()][acc.size<R>() - 1 - r][idx.get<S>()][idx.get<C>()];
+                auto k = block_idx.get<BLOCK_C>().unfold().cast<K>() + idx.get<K8>().unfold();
 #pragma unroll 4
                 for (int k2 = 0; k2 < 4; ++k2)
                 {
-                    if (k + k2 * 2 < Wgrad::K)
+                    if (k + k2 * 2 < Wgrad::size<K>().get())
                     {
-                        float2 wgrad_f2 = *smem_wgrad_load_iter.k2(k2);
-                        atomicAdd(wgrad_iter.k(k2 * 2 + 0).get(), wgrad_f2.x);
-                        atomicAdd(wgrad_iter.k(k2 * 2 + 1).get(), wgrad_f2.y);
+                        float2 wgrad_f2 = *smem_wgrad_load_iter[K2(k2)];
+                        atomicAdd(wgrad_iter[K(k2 * 2 + 0)].get(), wgrad_f2.x);
+                        atomicAdd(wgrad_iter[K(k2 * 2 + 1)].get(), wgrad_f2.y);
                     }
                 }
             }

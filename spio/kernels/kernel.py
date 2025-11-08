@@ -1,12 +1,32 @@
 """A class that encapsulates the a CUDA kernel."""
 
+from dataclasses import dataclass
+from typing import List, Optional
+
 import torch
 
 from .. import primary_context_guard
-from ..generators import generate
+from ..generators import generate, GenSpecs
 from ..compiler import compile_kernel, load_kernel
+from ..util import check_channels_last
+from ..cuda.driver import FunctionAttributes
 from .kernel_util import get_first_device_in_args
 from .launch_params import LaunchParams
+
+
+@dataclass
+class KernelSpec:
+    """Container for all kernel specifications and parameters.
+    
+    Attributes:
+        gen_specs: List[GenSpecs]: A list of specification for generated CUDA code.
+        launch_params: LaunchParams: Grid, block, and dynamic smem parameters.
+        function_attributes: Optional[FunctionAttributes]: Smem carveout and max dynamic smem.
+    """
+
+    gen_specs: List[GenSpecs]
+    launch_params: LaunchParams
+    function_attributes: Optional[FunctionAttributes] = None
 
 
 class Kernel:
@@ -36,31 +56,32 @@ class Kernel:
     def __init__(
         self,
         kernel_name: str,
-        launch_params: LaunchParams,
+        kernel_spec: KernelSpec,
         kernel_source_file=None,
-        specs=None,
         params=None,
         config=None,
         src_module="spio.src",
         includes_module="spio.include",
+        args_checker=check_channels_last,
     ):
         """Initialize the Kernel object.
-        
+
         Use KernelFactory instead of creating Kernel instances directly.
         """
-        if specs is None:
-            specs = []
+        if kernel_spec.gen_specs is None:
+            kernel_spec.specs = []
         self._kernel_source_file = kernel_source_file
         self.kernel_name = kernel_name
-        self.launch_params = launch_params
+        self.kernel_spec = kernel_spec
         self.params = params
         self.config = config
         self.module = None
         self.function = None
-        self.parameters_header = generate(specs)
+        self.parameters_header = generate(kernel_spec.gen_specs)
         self.cubin = None
         self.src_module = src_module
         self.includes_module = includes_module
+        self.args_checker = args_checker
 
     def compile(self):
         """Compile the kernel."""
@@ -80,6 +101,8 @@ class Kernel:
             cubin=self.cubin,
             device_ordinal=device_ordinal,
         )
+        if self.kernel_spec.function_attributes is not None:
+            self.function.set_attributes(self.kernel_spec.function_attributes)
         if clear_cubin:
             self.cubin = None
         self.parameters_header = None
@@ -98,13 +121,17 @@ class Kernel:
     def launch(self, *args):
         """Launch the kernel with the given arguments."""
         try:
-            _check_channels_last(args)
+            if self.args_checker is not None:
+                self.args_checker(args)
             device = get_first_device_in_args(args)
             _check_device(args, device)
             kernel_args = _kernel_args(args)
             primary_context_guard.set_device(device.index)
             self.function.launch(
-                self.launch_params.grid, self.launch_params.block, kernel_args
+                self.kernel_spec.launch_params.grid,
+                self.kernel_spec.launch_params.block,
+                kernel_args,
+                self.kernel_spec.launch_params.shared_mem_bytes,
             )
         except Exception as e:
             raise ValueError(f"Error in kernel {self}") from e
@@ -120,14 +147,6 @@ def get_full_kernel_name(kernel_name, params) -> str:
     """Return the full kernel name including the parameters."""
     details = params.encode()
     return f"{kernel_name}__{details}"
-
-
-def _check_channels_last(args):
-    for arg in args:
-        if isinstance(arg, torch.Tensor) and len(arg.shape) == 4:
-            assert arg.is_contiguous(
-                memory_format=torch.channels_last
-            ), f"Tensor is not channels_last: {arg}"
 
 
 def _check_device(args, device):

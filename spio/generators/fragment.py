@@ -1,22 +1,26 @@
 """Code generator for matrix fragment with named dimensions."""
 
 from dataclasses import dataclass
+from typing import Tuple
+
+from .fragment_type import FragmentType
 
 
 @dataclass
-class FragmentSpec:
+class Fragment:
     """Fragment code generator.
 
     Example:
 
-        Define a FragmentSpec in your kernel factory's specs like this:
-            FragmentSpec("Acc", "MMA_M16_N8_F32_C", "qn", "k")
+        Define a Fragment spec in your kernel factory's specs like this:
+            Fragment("Acc", gen.MMA_M16_N8_F32_C, "qn", "k2")
 
         Use the generated class in your CUDA kernel like this:
             # Get element coordinates for this thread.
-            auto lane_k2 = Acc::k2(idx.lane());
-            auto lane_qn_0 = Acc::qn(idx.lane(), 0);
-            auto lane_qn_8 = Acc::qn(idx.lane(), 1);
+            int lane = threadIdx.x % 32;
+            Acc:Index acc_idx(lane);
+            auto qn_val = acc_idx.get<QN>();
+            auto k2_val = acc_idx.get<K2>();
 
             # Define an accumulator and initialize it to zero.
             Acc acc;
@@ -30,36 +34,25 @@ class FragmentSpec:
     """
 
     class_name: str
-    fragment_type: str
+    fragment_type: FragmentType
     row: str
     col: str
 
     def generate(self) -> str:
-        """Generate the fragment class code."""
-        return f"""
-class {self.class_name} : public spio::{self.fragment_type} {{
-    public:
-        DEVICE static constexpr int {self.row}(unsigned lane_id, int idx) {{ return row(lane_id, idx); }}
-        DEVICE static constexpr int {self.col}2(unsigned lane_id) {{ return col2(lane_id); }}
-        DEVICE static constexpr int {self.col}(unsigned lane_id) {{ return col(lane_id); }}
-}};
-"""
+        """Generate the fragment class code as a type alias."""
+        row_dim = self.row.upper()
+        col_dim = self.col.upper()
+        fragment_class = f"spio::{self.fragment_type.value}<{row_dim}, {col_dim}>"
+        return f"using {self.class_name} = {fragment_class};\n"
+
+    @property
+    def dim_names(self) -> Tuple[str, str]:
+        """Return the names of the dimensions."""
+        return (self.row, self.col)
 
 
-def _fragment_header() -> str:
+def header() -> str:
+    """Return the header file for the fragment classes."""
     return """
-#include "spio/mma.cuh"
-"""
-
-
-def _start_namespace(namespace: str) -> str:
-    return f"""
-
-namespace {namespace} {{
-"""
-
-
-def _end_namespace() -> str:
-    return """
-}
+#include "spio/fragment.cuh"
 """

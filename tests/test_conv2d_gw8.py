@@ -19,6 +19,8 @@ from spio.kernels import (
     conv2d_gw8_kernel_factory,
     conv2d_gw8_wgrad_kernel_factory,
     Conv2dGw8Params,
+    Conv2dGw8Config,
+    Conv2dGw8WgradConfig,
 )
 from spio.functional import conv2d_gw8
 from spio.layers import Conv2dGw8
@@ -113,10 +115,60 @@ def test_kernel_conv2d_gw8_sanity():
     run_kernel_test(conv2d_gw8_kernel_factory, params)
 
 
+def test_kernel_conv2d_gw8_sanity_2():
+    """Second sanity test for the Conv2dGw8 kernel."""
+    config = Conv2dGw8Config(groups=6, block_p=8, block_n=2)
+    params = Conv2dGw8Params(
+        n=4,
+        c=48,
+        h=32,
+        w=32,
+        padding=1,
+        r=3,
+        s=3,
+        has_bias=False,
+        group_width=8,
+        stride=1,
+    )
+    run_kernel_test(conv2d_gw8_kernel_factory, params, configs=[config])
+
+
+def test_kernel_conv2d_gw8_sanity_3():
+    """Third sanity test for the Conv2dGw8 kernel."""
+    params = Conv2dGw8Params(n=1, c=64, h=8, w=16, padding=1, r=3, s=3, has_bias=False)
+    config = Conv2dGw8Config(groups=8, block_p=8, block_n=1)
+    run_kernel_test(conv2d_gw8_kernel_factory, params, configs=[config])
+
+
 def test_kernel_conv2d_gw8_wgrad_sanity():
     """Sanity test for the Conv2dGw8 wgrad kernel."""
     params = Conv2dGw8Params(n=4, c=64, h=16, w=32, padding=1, r=3, s=3)
     run_grad_kernel_test(conv2d_gw8_wgrad_kernel_factory, params)
+
+
+def test_kernel_conv2d_gw8_wgrad_range_base_loop_failure_case():
+    """This test failed when using a range-based loop over kernel-rows r.
+
+    It was fixed by reverting to a classical for loop.
+
+    CUDA error: too many resources requested for launch
+    """
+    params = Conv2dGw8Params(
+        n=64,
+        c=1632,
+        h=10,
+        w=10,
+        padding=(2, 2),
+        r=5,
+        s=5,
+        has_bias=True,
+        group_width=8,
+        stride=1,
+    )
+    config = Conv2dGw8WgradConfig(
+        groups=4, block_h=8, block_n_iters=1, warp_n=4, warp_s=1
+    )
+    run_grad_kernel_test(conv2d_gw8_wgrad_kernel_factory, params, configs=[config])
 
 
 def test_functional_conv2d_gw8_grad_sanity():

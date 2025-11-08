@@ -24,7 +24,9 @@ from spio.util.parse_dataclass import parse_dataclass
 from spio.reflection import get_kernel_reflection
 
 
-PARAMS_CLASSES = {"Conv2dGw8Params": Conv2dGw8Params}
+PARAMS_CLASSES = {
+    "Conv2dGw8Params": Conv2dGw8Params,
+}
 CONFIG_CLASSES = {
     "Conv2dGw8Config": Conv2dGw8Config,
     "Conv2dGw8WgradConfig": Conv2dGw8WgradConfig,
@@ -32,7 +34,8 @@ CONFIG_CLASSES = {
 
 device_arch_table = {
     "nvidia_a100-pcie-40gb": "sm_80",
-    "nvidia_a100-sxm4-80gb" : "sm_80",
+    "nvidia_a100-sxm4-40gb": "sm_80",
+    "nvidia_a100-sxm4-80gb": "sm_80",
     "nvidia_geforce_rtx_3090": "sm_86",
     "nvidia_geforce_rtx_4090": "sm_89",
 }
@@ -335,7 +338,7 @@ def get_device_name_from_data_dir(dir_name: str) -> str:
         if parts[0] != "bench":
             raise ValueError(
                 f"Invalid model benchmark directory name: {dir_name}: "
-                "Expected 'modelbench__<device_name> or bench_<device_name>..."
+                "Expected 'modelbench___<device_name> or bench_<device_name>..."
             )
     device_name = parts[1]
     return device_name

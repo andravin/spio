@@ -7,7 +7,8 @@ import torch
 from .. import primary_context_guard
 
 from ..compiler import compile_kernel_configs
-from ..util import logger_enabled
+from ..util import logger_enabled, get_device_ordinal
+from ..cuda.driver import get_device_attributes
 
 from .kernel_key import KernelKey
 from .performance_model_cache import PerformanceModelCache
@@ -74,7 +75,9 @@ class KernelCache:
                     # So we just use the first configuration.
                     # Be careful to clear the cache when you are done logging params so
                     # that the first config is not used for performance.
-                    configs = kernel_factory.configs(params, **kernel_kwargs)
+                    device_idx = get_device_ordinal(device)
+                    device_attr = get_device_attributes(device_idx)
+                    configs = kernel_factory.configs(params, device_attr, **kernel_kwargs)
                     best_config = next(configs)
                 else:
                     best_config = perf_model_cache.predict_best_kernel(
@@ -96,11 +99,15 @@ def _compile_and_load_kernel(
 ) -> Kernel:
     with torch.device(device) as device_obj:
         device_ordinal = device_obj.index if device_obj.index is not None else 0
-        arch = torch.cuda.get_device_capability(device=device_obj)
+        device_attr = get_device_attributes(device_ordinal)
         primary_context_guard.set_device(device_ordinal)
         configs = [config]
         kernels = compile_kernel_configs(
-            kernel_factory, params, configs=configs, arch=arch, **kernel_kwargs
+            kernel_factory,
+            params,
+            configs=configs,
+            device_attr=device_attr,
+            **kernel_kwargs,
         )
         best_kernel = kernels[0]
         device_ordinal = device_obj.index if device_obj.index is not None else 0

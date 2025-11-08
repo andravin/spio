@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class MacroSpec:
+class Macro:
     """Code generator for macros in CUDA kernel source code.
 
     This class is used to generate macro definitions for the CUDA kernel source code.

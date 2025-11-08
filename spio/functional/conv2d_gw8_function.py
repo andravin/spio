@@ -1,6 +1,6 @@
 """Custom conv2d_gw8 operator for PyTorch."""
 
-from typing import List, Tuple, Any
+from typing import Tuple
 
 import torch
 import torch.amp
@@ -10,6 +10,8 @@ from ..kernels import (
     conv2d_gw8_wgrad_kernel_factory,
     Conv2dGw8Params,
 )
+
+from ..util import to_channels_last
 
 
 @torch.library.custom_op("spio::conv2d_gw8", mutates_args=())
@@ -55,7 +57,7 @@ def conv2d_gw8(
         memory_format=torch.channels_last,
     )
     args = (output, inputs, weight, bias)
-    args = _to_channels_last(*args)
+    args = to_channels_last(*args)
     kernel = conv2d_gw8_kernel_factory.get_kernel(params, inputs.device)
     kernel(*args)
     return output
@@ -115,7 +117,7 @@ def conv2d_gw8_backward_op(
     assert inputs.dtype == torch.float16
     assert weight.dtype == torch.float16
 
-    grad_output, inputs, weight = _to_channels_last(grad_output, inputs, weight)
+    grad_output, inputs, weight = to_channels_last(grad_output, inputs, weight)
 
     params = Conv2dGw8Params.from_tensors(
         inputs, weight, bias, padding=(padding_y, padding_x)
@@ -235,15 +237,3 @@ conv2d_gw8.register_autograd(
 # See discussion at https://github.com/pytorch/pytorch/issues/137033
 m = torch.library.Library("spio", "FRAGMENT")
 m.impl("conv2d_gw8", conv2d_gw8_autocast, "AutocastCUDA", with_keyset=True)
-
-
-def _to_channels_last(*args) -> List[Any]:
-    """ "Convert all 4-D tensors to channels_last memory format."""
-    return tuple(
-        (
-            t.contiguous(memory_format=torch.channels_last)
-            if isinstance(t, torch.Tensor) and len(t.shape) == 4
-            else t
-        )
-        for t in args
-    )

@@ -1,67 +1,112 @@
 #include "utest.h"
 #include "spio/index.h"
 
-UTEST(Index2D, offset_from_index)
+using namespace spio;
+
+class I_Dim : public Dim<I_Dim>
 {
-    constexpr int D1 = 16;
-    using Idx = spio::Index2D<D1>;
-    EXPECT_EQ(static_cast<int>(Idx()._d1(10)), 10);
-    EXPECT_EQ(static_cast<int>(Idx()._d0(9)._d1(10)), 9 * D1 + 10);
+public:
+    using Dim<I_Dim>::Dim;
+};
+
+class J_Dim : public Dim<J_Dim>
+{
+public:
+    using Dim<J_Dim>::Dim;
+};
+
+class K_Dim : public Dim<K_Dim>
+{
+public:
+    using Dim<K_Dim>::Dim;
+};
+
+template <>
+struct utest_type_deducer<I_Dim>
+{
+    static void _(const I_Dim d)
+    {
+        UTEST_PRINTF("%d", d.get());
+    }
+};
+
+template <>
+struct utest_type_deducer<J_Dim>
+{
+    static void _(const J_Dim d)
+    {
+        UTEST_PRINTF("%d", d.get());
+    }
+};
+
+template <>
+struct utest_type_deducer<K_Dim>
+{
+    static void _(const K_Dim d)
+    {
+        UTEST_PRINTF("%d", d.get());
+    }
+};
+
+UTEST(Index1D, get)
+{
+    using Idx = Index<DimInfo<I_Dim, 16, 1>>;
+    for (unsigned offset = 0; offset < 16; ++offset)
+    {
+        Idx idx(offset);
+        EXPECT_EQ(idx.get<I_Dim>(), offset);
+    }
 }
 
-UTEST(Index2D, index_from_offset)
+UTEST(Index2D, get)
 {
-    constexpr int D1 = 16;
-    using Idx = spio::Index2D<D1>;
-    EXPECT_EQ(Idx(53)._d0(), 53 / D1);
-    EXPECT_EQ(Idx(53)._d1(), 53 % D1);
+    // I x J matrix with size 32 x 8.
+    using Idx = Index<DimInfo<I_Dim, 32, 8>, DimInfo<J_Dim, 8, 1>>;
+    for (unsigned offset = 0; offset < 256; ++offset)
+    {
+        Idx idx(offset);
+        EXPECT_EQ(idx.get<I_Dim>(), offset / 8);
+        EXPECT_EQ(idx.get<J_Dim>(), offset % 8);
+    }
 }
 
-UTEST(Index3D, offset_from_index)
+UTEST(Index3D, get)
 {
-    constexpr int D1 = 12;
-    constexpr int D2 = 13;
-    using Idx = spio::Index3D<D1, D2>;
-    EXPECT_EQ(static_cast<int>(Idx()._d2(7)), 7);
-    EXPECT_EQ(static_cast<int>(Idx()._d1(6)), 6 * D2);
-    EXPECT_EQ(static_cast<int>(Idx()._d0(5)), 5 * D1 * D2);
-    EXPECT_EQ(static_cast<int>(Idx()._d0(3)._d1(4)._d2(5)), 3 * (D1 * D2) + 4 * D2 + 5);
+    // I x J x K tensor with size 16 x 8 x 4
+    // Stride for K is 1
+    // Stride for J is 4 (= size of K)
+    // Stride for I is 32 (= size of J * stride of J)
+    using Idx = Index<
+        DimInfo<I_Dim, 16, 32>,
+        DimInfo<J_Dim, 8, 4>,
+        DimInfo<K_Dim, 4, 1>>;
+
+    for (unsigned offset = 0; offset < 16 * 8 * 4; ++offset)
+    {
+        Idx idx(offset);
+        EXPECT_EQ(idx.get<I_Dim>(), offset / (8 * 4));
+        EXPECT_EQ(idx.get<J_Dim>(), (offset / 4) % 8);
+        EXPECT_EQ(idx.get<K_Dim>(), offset % 4);
+    }
 }
 
-UTEST(Index3D, index_from_offset)
+UTEST(IndexSize, total_size)
 {
-    constexpr int D1 = 23;
-    constexpr int D2 = 47;
-    using Idx = spio::Index3D<D1, D2>;
-    constexpr int Offset = 2049;
-    Idx idx(Offset);
-    EXPECT_EQ(idx._d2(), Offset % D2);
-    EXPECT_EQ(idx._d1(), (Offset / D2) % D1);
-    EXPECT_EQ(idx._d0(), Offset / (D1 * D2));
-}
+    // 1D index
+    using Idx1D = Index<DimInfo<I_Dim, 16, 1>>;
+    EXPECT_EQ(Idx1D::total_size, 16);
+    EXPECT_EQ(Idx1D::size(), 16);
 
-UTEST(Index4D, offset_from_index)
-{
-    constexpr int D1 = 77;
-    constexpr int D2 = 88;
-    constexpr int D3 = 99;
-    using Idx = spio::Index4D<D1, D2, D3>;
-    EXPECT_EQ(static_cast<int>(Idx()._d3(4)), 4);
-    EXPECT_EQ(static_cast<int>(Idx()._d0(7)._d1(8)._d2(9)._d3(10)), 7 * (D1 * D2 * D3) + 8 * (D2 * D3) + 9 * D3 + 10);
-}
+    // 2D index
+    using Idx2D = Index<DimInfo<I_Dim, 32, 8>, DimInfo<J_Dim, 8, 1>>;
+    EXPECT_EQ(Idx2D::total_size, 32 * 8);
+    EXPECT_EQ(Idx2D::size(), 32 * 8);
 
-UTEST(Index4D, index_from_offset)
-{
-    constexpr int D1 = 45;
-    constexpr int D2 = 56;
-    constexpr int D3 = 67;
-    using Idx = spio::Index4D<D1, D2, D3>;
-    constexpr int Offset = 867539;
-    Idx idx(Offset);
-    EXPECT_EQ(idx._d3(), Offset % D3);
-    EXPECT_EQ(idx._d2(), (Offset / D3) % D2);
-    EXPECT_EQ(idx._d1(), (Offset / (D2 * D3)) % D1);
-    EXPECT_EQ(idx._d0(), Offset / (D1 * D2 * D3));
+    // 3D index
+    using Idx3D = Index<
+        DimInfo<I_Dim, 16, 32>,
+        DimInfo<J_Dim, 8, 4>,
+        DimInfo<K_Dim, 4, 1>>;
+    EXPECT_EQ(Idx3D::total_size, 16 * 8 * 4);
+    EXPECT_EQ(Idx3D::size(), 16 * 8 * 4);
 }
-
-UTEST_MAIN()
