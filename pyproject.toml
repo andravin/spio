@@ -26,13 +26,16 @@ dependencies = [
 authors = [{ name = "Andrew Lavin", email = "alavin@acm.org" }]
 description = "Efficient CUDA kernels for training convolutional neural networks with PyTorch."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = [
-  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "License :: OSI Approved :: Apache Software License",
-  "Operating System :: OS Independent",
+  "Operating System :: POSIX :: Linux",
 ]
-
 [project.urls]
 Homepage = "https://github.com/andravin/spio"
 Issues = "https://github.com/andravin/spio/issues"
