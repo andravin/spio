@@ -92,30 +92,29 @@ cdef extern from "cuda.h":
     ctypedef CUstream_st* CUstream
     ctypedef CUdeviceptr_v2 CUdeviceptr
 
-    CUresult cuInit(unsigned int Flags)
-    CUresult cuDeviceGet(CUdevice *device, int ordinal)
-    CUresult cuDeviceGetAttribute(int *pi, int attrib, CUdevice dev)
-    CUresult cuDeviceGetName(char* name, int  len, CUdevice dev)
-    CUresult cuDevicePrimaryCtxRetain(CUcontext *pctx, CUdevice dev)
-    CUresult cuDevicePrimaryCtxRelease(CUdevice dev)
+ctypedef CUresult (*cuInit_fn)(unsigned int Flags)
+ctypedef CUresult (*cuDeviceGet_fn)(CUdevice *device, int ordinal)
+ctypedef CUresult (*cuDeviceGetAttribute_fn)(int *pi, int attrib, CUdevice dev)
+ctypedef CUresult (*cuDeviceGetName_fn)(char* name, int  len, CUdevice dev)
+ctypedef CUresult (*cuDevicePrimaryCtxRetain_fn)(CUcontext *pctx, CUdevice dev)
+ctypedef CUresult (*cuDevicePrimaryCtxRelease_fn)(CUdevice dev)
 
-    CUresult cuStreamCreate(CUstream *pStream, unsigned int Flags)
-    CUresult cuStreamDestroy(CUstream hStream)
+ctypedef CUresult (*cuStreamCreate_fn)(CUstream *pStream, unsigned int Flags)
+ctypedef CUresult (*cuStreamDestroy_fn)(CUstream hStream)
+ctypedef CUresult (*cuGetErrorString_fn)(CUresult error, const char **pStr)
 
-    CUresult cuGetErrorString(CUresult error, const char **pStr)    
+ctypedef CUresult (*cuModuleLoad_fn)(CUmodule *module, const char *fname)
+ctypedef CUresult (*cuModuleLoadData_fn)(CUmodule *module, const void *image)
+ctypedef CUresult (*cuModuleGetFunction_fn)(CUfunction *hfunc, CUmodule hmod, const char *name)
+ctypedef CUresult (*cuModuleUnload_fn)(CUmodule hmod)
 
-    CUresult cuModuleLoad(CUmodule *module, const char *fname)
-    CUresult cuModuleLoadData(CUmodule *module, const void *image)
-    CUresult cuModuleGetFunction(CUfunction *hfunc, CUmodule hmod, const char *name)
-    CUresult cuModuleUnload(CUmodule hmod)
+ctypedef CUresult (*cuFuncLoad_fn)(CUfunction function)
+ctypedef CUresult (*cuFuncSetAttribute_fn)(CUfunction function, int attrib, int value)
+ctypedef CUresult (*cuFuncGetAttribute_fn)(int *pi, int attrib, CUfunction function)
+ctypedef CUresult (*cuLaunchKernel_fn)(CUfunction f, unsigned int gridDimX, unsigned int gridDimY, unsigned int gridDimZ, unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ, unsigned int sharedMemBytes, CUstream hStream, void **kernelParams, void **extra)
 
-    CUresult cuFuncLoad(CUfunction function)
-    CUresult cuFuncSetAttribute(CUfunction function, int attrib, int value)
-    CUresult cuFuncGetAttribute(int *pi, int attrib, CUfunction function)
-    CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX, unsigned int gridDimY, unsigned int gridDimZ, unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ, unsigned int sharedMemBytes, CUstream hStream, void **kernelParams, void **extra)
-    
-    CUresult cuCtxSynchronize()
-    CUresult cuCtxGetApiVersion(CUcontext ctx, unsigned int *version)
-    CUresult cuDriverGetVersion(int *driverVersion)
+ctypedef CUresult (*cuCtxSynchronize_fn)()
+ctypedef CUresult (*cuCtxGetApiVersion_fn)(CUcontext ctx, unsigned int *version)
+ctypedef CUresult (*cuDriverGetVersion_fn)(int *driverVersion)
 
-    CUresult cuPointerGetAttribute ( void* data, CUpointer_attribute attribute, CUdeviceptr ptr )
+ctypedef CUresult (*cuPointerGetAttribute_fn)(void* data, CUpointer_attribute attribute, CUdeviceptr ptr)

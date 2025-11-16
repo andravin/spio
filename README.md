@@ -31,7 +31,9 @@ In practice, the generated tensor classes overload the indexing operator (e.g., 
 
 ### ⚡ Just-in-Time Kernel Generation
 
-Kernels are compiled at runtime using NVIDIA's NVRTC (libnvrtc), automatically optimized for your specific GPU architecture. No CUDA toolkit installation required—Spio uses the same NVIDIA libraries that PyTorch already depends on.
+Spio compiles kernels at runtime with NVIDIA’s NVRTC (libnvrtc) and tunes them for your GPU. No CUDA toolkit install is needed because Spio relies on the CUDA headers and NVRTC shared libraries that NVIDIA distributes as Python packages (the same infrastructure PyTorch depends on). And there’s no host C compiler involved at runtime—Spio invokes kernels directly through the CUDA driver API, so no generated launcher wrappers are required.
+
+This contrasts with packages like Triton Language that require a C compiler at runtime.
 
 ### 🎯 Performance Models
 
@@ -73,17 +75,14 @@ Benchmarks use realistic workloads with layers embedded in ConvFirst or MBConv b
 
 ### Installation
 
-First install a C compiler. On Ubuntu,
-
-```bash
-sudo apt update && sudo apt install -y build-essential
-```
-
 Create and activate a virtual environment (recommended):
 
 ```bash
 python3 -m venv spio_env
 source spio_env/bin/activate
+
+# Upgrade pip.
+python -m pip install --upgrade pip
 ```
 
 Then install Spio from PyPI using pip:
@@ -97,7 +96,13 @@ Notes:
 - PyTorch (torch>=2.4.0) is an explicit dependency and will be installed automatically when you install Spio; no separate install step is required.
 - CUDA toolkit installation is not required. Spio relies on NVIDIA's CUDA runtime and NVRTC libraries that are pulled in via wheels and are the same libraries PyTorch uses.
 
-Alternatively, clone the Spio repository and install from source.
+Alternatively, install Spio from source. For this, you will need a C compiler. On Ubuntu:
+
+```bash
+sudo apt update && sudo apt install -y build-essential
+```
+
+Then clone the Spio repository and install:
 
 ```bash
 git clone https://github.com/andravin/spio.git
@@ -166,6 +171,7 @@ global_load_index = gen.Index("GlobalLoadIndex", gen.Dims(x16=block_x16, x=16, k
 ```
 
 Define thread-block tiles in Python:
+
 ```python
 # Dimension 'block_i' folds dimension 'i' with stride block_x.
 gen.Fold("block_i", "i", block_x)
