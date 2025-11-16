@@ -128,6 +128,7 @@ cdef class Function:
     cdef cdriver.CUfunction _c_function
 
     def __cinit__(self):
+        _load_cuda_driver()
         self._c_function = NULL
 
     cdef set_c_function(self, cdriver.CUfunction c_function):
@@ -211,6 +212,7 @@ cdef class Module:
     cdef cdriver.CUmodule _c_module
 
     def __cinit__(self):
+        _load_cuda_driver()
         self._c_module = NULL
 
     def __del__(self):
@@ -222,7 +224,7 @@ cdef class Module:
 
     def unload(self):
         """Unload the CUDA module."""
-        if self._c_module is not NULL:
+        if driver_loaded and self._c_module is not NULL:
             _check(_driver_fns.cuModuleUnload(self._c_module))
             self._c_module = NULL
 
@@ -250,6 +252,7 @@ cdef class PrimaryContextGuard:
     cdef cdriver.CUdevice _c_device
 
     def __cinit__(self, device_ordinal=0):
+        _load_cuda_driver()
         _check(_driver_fns.cuDeviceGet(&self._c_device, device_ordinal))
         _check(_driver_fns.cuDevicePrimaryCtxRetain(&self._c_context, self._c_device))
 
@@ -275,12 +278,12 @@ def init():
     _load_cuda_driver()
     if _driver_fns.cuInit == NULL:
         raise RuntimeError("cuInit symbol was not resolved")
-    status = _driver_fns.cuInit(0)
-    _check(status)
+    _check(_driver_fns.cuInit(0))
 
 
 def ctx_synchronize():
     """Synchronize the current CUDA context."""
+    _load_cuda_driver()
     _check(_driver_fns.cuCtxSynchronize())
 
 
@@ -295,6 +298,7 @@ def get_ctx_api_version():
 def get_driver_version():
     """Get the CUDA driver version."""
     cdef int version
+    _load_cuda_driver()
     _check(_driver_fns.cuDriverGetVersion(&version))
     return version
 
