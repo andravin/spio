@@ -68,7 +68,7 @@ namespace spio
     namespace detail
     {
         /// @brief Check if a dimension exists in the tensor.
-        /// @tparap DimType the dimension type to check
+        /// @tparam DimType the dimension type to check
         /// @tparam DimInfos the dimension infos
         template <typename DimType, typename... DimInfos>
         struct has_dim;
