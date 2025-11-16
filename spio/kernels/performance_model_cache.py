@@ -318,9 +318,9 @@ def _get_release_info():
     if _release_info is None:
         _release_info = _load_release_info()
         # If the release info is not up-to-date, download it.
-        if (
-            _release_info is not None and version.parse(_release_info["tag_name"])
-        ) != version.parse(__version__):
+        if _release_info is not None and version.parse(
+            _release_info["tag_name"]
+        ) != version.parse(_get_release_series_tag()):
             _clear_cache()
             _release_info = None
         if _release_info is None:
@@ -328,6 +328,15 @@ def _get_release_info():
             _clear_cache()
             _save_release_info(_release_info)
     return _release_info
+
+
+def _get_release_series_tag() -> str:
+    """Ignore the PATCH number in the software version.
+
+    Fetch release models using only the MAJOR.MINOR portion of the Spio package version.
+    """
+    v = version.Version(__version__)
+    return f"{v.major}.{v.minor}.0"
 
 
 @_download_lock
@@ -353,7 +362,9 @@ def _download_release_info():
 
     # We are only interested in the release for the current software version.
     for release in releases:
-        if version.parse(release["tag_name"]) == version.parse(__version__):
+        if version.parse(release["tag_name"]) == version.parse(
+            _get_release_series_tag()
+        ):
             return release
 
     raise ValueError(f"No GitHub release found for software version {__version__}.")
