@@ -38,7 +38,7 @@ cdef struct _DriverFns:
     cdriver.cuPointerGetAttribute_fn cuPointerGetAttribute
 
 
-cdef _DriverFns _driver_fns = _DriverFns()
+cdef _DriverFns _driver_fns
 
 
 cdef void* _load_symbol(void* handle, const char* name):
