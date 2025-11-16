@@ -1,4 +1,4 @@
-"""A module for the Conv2dGw8Params class."""
+"""Define the parameters class for the Conv2dGw8 kernel."""
 
 from dataclasses import dataclass
 import re

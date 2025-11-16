@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Generator
 
-from .. import generators as gen
+from ..generators import *
 from ..cuda.driver import DeviceAttributes
 
 from ..util import divup, next_relative_prime
@@ -112,63 +112,61 @@ def _get_kernel_spec(
     smem_x_stride = next_relative_prime(block_n * block_c8, num_smem_banks)
 
     gen_specs = [
-        gen.Macro({"SPIO_CONV_KERNEL": full_kernel_name}),
-        gen.Fold("block_n", "n", block_n),
-        gen.Fold("block_p", "p", block_p),
-        gen.Fold("block_q", "q", block_q),
-        gen.Fold("block_c", "c", block_c),
-        gen.ParamsSpec(
+        Macro({"SPIO_CONV_KERNEL": full_kernel_name}),
+        Fold("block_n", "n", block_n),
+        Fold("block_p", "p", block_p),
+        Fold("block_q", "q", block_q),
+        Fold("block_c", "c", block_c),
+        ParamsSpec(
             "Block",
             {
                 "threads": threads,
             },
         ),
-        gen.ParamsSpec(
+        ParamsSpec(
             "Padding",
             {
                 "h": padding_h,
                 "w": padding_w,
             },
         ),
-        gen.ParamsSpec("Mode", {"igrad": igrad, "has_bias": kernel_has_bias}),
-        gen.Index(
+        ParamsSpec("Mode", {"igrad": igrad, "has_bias": kernel_has_bias}),
+        Index(
             "BlockIdx",
-            gen.Dims(
+            Dims(
                 block_n=blocks_n,
                 block_p=blocks_p,
                 block_q=blocks_q,
                 block_c=blocks_c,
             ),
         ),
-        gen.Index("InputIdx", gen.Dims(n=block_n, x=block_w, c8=block_c8)),
-        gen.Tensor(
-            "Input", gen.dtype.uint4, gen.Dims(n=n, y=h, x=w, c8=c8), constant=True
-        ),
-        gen.Tensor("Bias", gen.dtype.float2, gen.Dims(k8=c8, k2=4), constant=True),
-        gen.Index("BiasIdx", gen.Dims(k8=block_c8, lane=32)),
-        gen.Tensor("Output", gen.dtype.uint4, gen.Dims(n=n, p=p, q=q, k8=c8)),
-        gen.Tensor("Weights", gen.dtype.uint4, gen.Dims(k=c, r=r, s=s), constant=True),
-        gen.Tensor("SmemWeights", gen.dtype.uint4, gen.Dims(k=block_c, r=r, s=s)),
-        gen.Tensor(
+        Index("InputIdx", Dims(n=block_n, x=block_w, c8=block_c8)),
+        Tensor("Input", dtype.uint4, Dims(n=n, y=h, x=w, c8=c8), constant=True),
+        Tensor("Bias", dtype.float2, Dims(k8=c8, k2=4), constant=True),
+        Index("BiasIdx", Dims(k8=block_c8, lane=32)),
+        Tensor("Output", dtype.uint4, Dims(n=n, p=p, q=q, k8=c8)),
+        Tensor("Weights", dtype.uint4, Dims(k=c, r=r, s=s), constant=True),
+        Tensor("SmemWeights", dtype.uint4, Dims(k=block_c, r=r, s=s)),
+        Tensor(
             "ConstSmemWeights",
-            gen.dtype.uint4,
-            gen.Dims(k8=block_c8, k=8, r=r, s=s),
+            dtype.uint4,
+            Dims(k8=block_c8, k=8, r=r, s=s),
             constant=True,
         ),
-        gen.Index(
+        Index(
             "SmemWeightsLoadIdx",
-            gen.Dims(k8=block_c8, repeat=4, k=8),
+            Dims(k8=block_c8, repeat=4, k=8),
             dummies=["repeat"],
         ),
-        gen.Tensor(
+        Tensor(
             "SmemInput",
-            gen.dtype.uint4,
-            gen.Dims(ping_pong=2, x=block_w, n=block_n, c8=block_c8),
-            strides=gen.Strides(x=smem_x_stride),
+            dtype.uint4,
+            Dims(ping_pong=2, x=block_w, n=block_n, c8=block_c8),
+            strides=Strides(x=smem_x_stride),
         ),
-        gen.Index(
+        Index(
             "SmemInputLoadIdx",
-            gen.Dims(
+            Dims(
                 c8=block_c8,
                 repeat=32 // (block_q * block_n),
                 x=block_q,
@@ -176,25 +174,25 @@ def _get_kernel_spec(
             ),
             dummies=["repeat"],
         ),
-        gen.Index("SmemOutputStoreIdx", gen.Dims(k8=block_c8, lane=32)),
-        gen.Tensor(
+        Index("SmemOutputStoreIdx", Dims(k8=block_c8, lane=32)),
+        Tensor(
             "SmemOutput",
-            gen.dtype.half2,
-            gen.Dims(q=block_q, n=block_n, k8=block_c8 + 1, k2=4),
+            dtype.half2,
+            Dims(q=block_q, n=block_n, k8=block_c8 + 1, k2=4),
         ),
-        gen.Tensor(
+        Tensor(
             "ConstSmemOutput",
-            gen.dtype.uint4,
-            gen.Dims(q=block_q, n=block_n, k8=block_c8 + 1),
+            dtype.uint4,
+            Dims(q=block_q, n=block_n, k8=block_c8 + 1),
             constant=True,
         ),
-        gen.Index("OutputStoreIdx", gen.Dims(n=block_n, q=block_q, k8=block_c8)),
-        gen.Index("BlockQNIdx", gen.Dims(q=block_q, n=block_n)),
-        gen.Fragment("Acc", gen.FragmentType.M16_N8_F32_C, "qn", "k"),
-        gen.Fragment("In", gen.FragmentType.M16_K8_F16_A, "qn", "c"),
-        gen.Fragment("Wgts", gen.FragmentType.N8_K8_F16_B, "c", "k"),
-        gen.Tensor("WeightsReg", "Wgts", gen.Dims(r=r, s=s)),
-        gen.Tensor("AccReg", "Acc", gen.Dims(p=r)),
+        Index("OutputStoreIdx", Dims(n=block_n, q=block_q, k8=block_c8)),
+        Index("BlockQNIdx", Dims(q=block_q, n=block_n)),
+        Fragment("Acc", FragmentType.M16_N8_F32_C, "qn", "k"),
+        Fragment("In", FragmentType.M16_K8_F16_A, "qn", "c"),
+        Fragment("Wgts", FragmentType.N8_K8_F16_B, "c", "k"),
+        Tensor("WeightsReg", "Wgts", Dims(r=r, s=s)),
+        Tensor("AccReg", "Acc", Dims(p=r)),
     ]
     return KernelSpec(gen_specs=gen_specs, launch_params=launch_params)
 

@@ -27,7 +27,7 @@ Unlike “Named Tensors,” which attach string names to dimensions and validate
 
 When the same dimension type appears in different tensors, it represents the same logical dimension; each tensor still defines its own size and stride for that dimension based on its layout. This enables position-free indexing—users don’t track index positions, sizes, or strides across tensors; the type system ensures correctness at compile time.
 
-In practice, the generated tensor classes overload the indexing operator (e.g., `operator[]` and helpers like `get&lt;Dim&gt;()`) to accept dimension types. For each dimension type present in a tensor’s layout, the overload applies that tensor’s stride for that type; if a dimension type not used by the tensor is provided, the expression fails to compile (static_assert), with zero run-time name lookups or checks.
+In practice, the generated tensor classes overload the indexing operator (e.g., operator[] and helpers like get&lt;Dim&gt;()) to accept dimension types. For each dimension type present in a tensor’s layout, the overload applies that tensor’s stride for that type; if a dimension type not used by the tensor is provided, the expression fails to compile (static_assert), with zero run-time name lookups or checks.
 
 ### ⚡ Just-in-Time Kernel Generation
 
@@ -120,18 +120,50 @@ Exit the virtual environment when finished.
 deactivate
 ```
 
+### Additional Requirements for `torch.compile()`
+
+Spio itself does not need a host C/C++ compiler or the CUDA developer toolkit. You can use Spio operations with PyTorch on a production system that does not have these.
+
+However, `torch.compile()` (Inductor/Triton) does, and missing pieces surface as errors like `nvrtc: file not found`, `error: unable to compile C wrapper`, `LLVM: external toolchain not found`, or `RuntimeError: codegen failed in Inductor`. These originate from PyTorch/Triton rather than Spio.
+
+If you intend to use `torch.compile()` with Spio operations, ensure your production environment provides:
+
+- gcc or clang (or a compatible toolchain)
+- CUDA driver development files (e.g., `libcuda.so` symlink or stubs)
+- Optional: CUDA toolkit runtime libraries (`libnvrtc.so`, `libnvjitlink.so`, CUDA “stubs”) when GPU compilation paths require them
+
+This recipe will add the requirements for `torch.compile()` on an Ubuntu system:
+
+```bash
+# Install development tools required by PyTorch Inductor + Triton
+sudo apt update
+sudo apt install -y build-essential
+
+# Ensure the CUDA driver library has the expected unversioned symlink
+# (Many cloud images only ship libcuda.so.1)
+sudo ln -sf /usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu/libcuda.so
+```
+
+Then test:
+
+```bash
+python3 -c "import torch; torch.cuda.is_available()"
+python3 -c "import torch; torch.compile(lambda x: x**2)(torch.randn(5, device='cuda'))"
+```
+
 ### Usage
 
 ```python
 import torch
-import spio
+import spio.functional
 
-# Replace PyTorch grouped convolution
+# Define input and weights for grouped convolution
 x = torch.randn(32, 64, 56, 56, device='cuda', dtype=torch.float16)
 weight = torch.randn(64, 8, 3, 3, device='cuda', dtype=torch.float16)
 
-# Automatic kernel selection and compilation
-output = spio.grouped_conv2d(x, weight, groups=8)
+# Call the Spio custom convolution op with registered autograd support.
+# Automatically selects optimal kernel configuration for your GPU. 
+output = spio.functional.conv2d_gw8(x, weight, groups=8)
 ```
 
 ## Typed Dimensions
@@ -146,25 +178,28 @@ Operator overloading details:
 Define tensor layouts for a matrix multiply kernel in the Python generator:
 
 ```python
+# Import Tensor, dtype, Index, Fold, Dims, etc.
+from spio.generators import *
+
 # Dimension 'i' represents the same logical dimension across all tensors
 # But each tensor defines its own size and stride for 'i' based on its layout
-tensor_a = gen.Tensor(
-    "A", gen.dtype.uint4, 
+tensor_a = Tensor(
+    "A", dtype.uint4, 
     # Dimension 'i' is at position 1 with size m
-    gen.Dims(k16=k16, i=m, k8=2),
+    Dims(k16=k16, i=m, k8=2),
     constant=True
 )
-smem_tensor_a = gen.Tensor(
-    "SmemA", gen.dtype.uint4,
+smem_tensor_a = Tensor(
+    "SmemA", dtype.uint4,
     # Fold dimension 'i' with stride 16 at position 2 with size block_x16
-    gen.Dims(ping=2, k16=config.chunk_k16, i16=block_x16, checkers=32)  
+    Dims(ping=2, k16=config.chunk_k16, i16=block_x16, checkers=32)  
 )
-tensor_c = gen.Tensor(
-    "C", gen.dtype.uint4,
+tensor_c = Tensor(
+    "C", dtype.uint4,
     # Dimension 'i' is at position 0 with size m 
-    gen.Dims(i=m, j8=n8)
+    Dims(i=m, j8=n8)
 )
-global_load_index = gen.Index("GlobalLoadIndex", gen.Dims(x16=block_x16, x=16, k8=2))
+global_load_index = Index("GlobalLoadIndex", Dims(x16=block_x16, x=16, k8=2))
 
 
 # Define additional tensors for the CUDA kernel...
@@ -174,10 +209,10 @@ Define thread-block tiles in Python:
 
 ```python
 # Dimension 'block_i' folds dimension 'i' with stride block_x.
-gen.Fold("block_i", "i", block_x)
+Fold("block_i", "i", block_x)
 
 # Dimension 'block_j' folds dimension 'j' with stride block_x.
-gen.Fold("block_j", "j", block_x)
+Fold("block_j", "j", block_x)
 ```
 
 In traditional CUDA code, you manually track array indices and remember that `A[k][i][k8]` corresponds to `C[i][j8]`. With Spio's operator overloading, the same dimension type automatically maps to the correct position and stride in each tensor:
