@@ -132,6 +132,25 @@ If you intend to use `torch.compile()` with Spio operations, ensure your product
 - CUDA driver development files (e.g., `libcuda.so` symlink or stubs)
 - Optional: CUDA toolkit runtime libraries (`libnvrtc.so`, `libnvjitlink.so`, CUDA “stubs”) when GPU compilation paths require them
 
+This recipe will add the requirements for `torch.compile()` on an Ubuntu system:
+
+```bash
+# Install development tools required by PyTorch Inductor + Triton
+sudo apt update
+sudo apt install -y build-essential
+
+# Ensure the CUDA driver library has the expected unversioned symlink
+# (Many cloud images only ship libcuda.so.1)
+sudo ln -sf /usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu/libcuda.so
+```
+
+Then test:
+
+```bash
+python3 -c "import torch; torch.cuda.is_available()"
+python3 -c "import torch; torch.compile(lambda x: x**2)(torch.randn(5, device='cuda'))"
+```
+
 ### Usage
 
 ```python
