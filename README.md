@@ -120,6 +120,18 @@ Exit the virtual environment when finished.
 deactivate
 ```
 
+### Additional Requirements for `torch.compile()`
+
+Spio itself does not need a host C/C++ compiler or the CUDA developer toolkit. You can use Spio operations with PyTorch on a production system that does not have these.
+
+However, `torch.compile()` (Inductor/Triton) does, and missing pieces surface as errors like `nvrtc: file not found`, `error: unable to compile C wrapper`, `LLVM: external toolchain not found`, or `RuntimeError: codegen failed in Inductor`. These originate from PyTorch/Triton rather than Spio.
+
+If you intend to use `torch.compile()` with Spio operations, ensure your production environment provides:
+
+- gcc or clang (or a compatible toolchain)
+- CUDA driver development files (e.g., `libcuda.so` symlink or stubs)
+- Optional: CUDA toolkit runtime libraries (`libnvrtc.so`, `libnvjitlink.so`, CUDA “stubs”) when GPU compilation paths require them
+
 ### Usage
 
 ```python
