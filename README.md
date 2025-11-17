@@ -155,14 +155,15 @@ python3 -c "import torch; torch.compile(lambda x: x**2)(torch.randn(5, device='c
 
 ```python
 import torch
-import spio
+import spio.functional
 
-# Replace PyTorch grouped convolution
+# Define input and weights for grouped convolution
 x = torch.randn(32, 64, 56, 56, device='cuda', dtype=torch.float16)
 weight = torch.randn(64, 8, 3, 3, device='cuda', dtype=torch.float16)
 
-# Automatic kernel selection and compilation
-output = spio.grouped_conv2d(x, weight, groups=8)
+# Call the Spio custom convolution op with registered autograd support.
+# Automatically selects optimal kernel configuration for your GPU. 
+output = spio.functional.conv2d_gw8(x, weight, groups=8)
 ```
 
 ## Typed Dimensions
