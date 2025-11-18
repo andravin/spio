@@ -13,7 +13,7 @@ class Fragment:
     Example:
 
         Define a Fragment spec in your kernel factory's specs like this:
-            Fragment("Acc", gen.MMA_M16_N8_F32_C, "qn", "k2")
+            Fragment("Acc", FragmentType.M16_N8_F32_C, "qn", "k2")
 
         Use the generated class in your CUDA kernel like this:
             # Get element coordinates for this thread.

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import torch
 
-import spio.generators as gen
+from spio.generators import *
 from spio.compiler import compile_and_load_kernel
 from spio.util import divup, assert_all_close_with_acc_depth, SixteenChannelsLast
 
@@ -39,7 +39,7 @@ def test_mma_checkerboard_16c_kernel():
     _, mma_kernel_16c = compile_and_load_kernel(
         kernel_name="mma_checkerboard_16c",
         source_file_name="mma_checkerboard_16c.cu",
-        header_dict={"parameters.h": gen.generate(specs)},
+        header_dict={"parameters.h": generate(specs)},
         src_module="spio.src_tests",
         lineinfo=True,
         max_registers=max_registers,
@@ -84,51 +84,47 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         k16 % double_chunk == 0
     ), f"Kernel requires K={k} to be a multiple of twice the chunk size {double_chunk}."
 
-    tensor_a = gen.Tensor(
-        "A", gen.dtype.uint4, gen.Dims(k16=k16, i=m, k8=2), constant=True
-    )
-    tensor_b = gen.Tensor(
-        "B", gen.dtype.uint4, gen.Dims(k16=k16, j=n, k8=2), constant=True
-    )
-    tensor_c = gen.Tensor("C", gen.dtype.uint4, gen.Dims(i=m, j8=n8))
+    tensor_a = Tensor("A", dtype.uint4, Dims(k16=k16, i=m, k8=2), constant=True)
+    tensor_b = Tensor("B", dtype.uint4, Dims(k16=k16, j=n, k8=2), constant=True)
+    tensor_c = Tensor("C", dtype.uint4, Dims(i=m, j8=n8))
 
-    smem_tensor_a = gen.Tensor(
+    smem_tensor_a = Tensor(
         "SmemA",
-        gen.dtype.uint4,
-        gen.Dims(
+        dtype.uint4,
+        Dims(
             ping=2,
             k16=config.chunk_k16,
             i16=block_x16,
             checkers=32,
         ),
     )
-    smem_tensor_b = gen.Tensor(
+    smem_tensor_b = Tensor(
         "SmemB",
-        gen.dtype.uint4,
-        gen.Dims(
+        dtype.uint4,
+        Dims(
             ping=2,
             k16=config.chunk_k16,
             j16=block_x16,
             checkers=32,
         ),
     )
-    a_tile = gen.Tensor("A_Tile", "_A", gen.Dims(k16=config.chunk_k16, i16=warp_m16))
-    b_tile = gen.Tensor("B_Tile", "_B", gen.Dims(k16=config.chunk_k16, j16=warp_n16))
-    c_tile = gen.Tensor("C_Tile", "_C", gen.Dims(i16=warp_m16, j16=warp_n16))
+    a_tile = Tensor("A_Tile", "_A", Dims(k16=config.chunk_k16, i16=warp_m16))
+    b_tile = Tensor("B_Tile", "_B", Dims(k16=config.chunk_k16, j16=warp_n16))
+    c_tile = Tensor("C_Tile", "_C", Dims(i16=warp_m16, j16=warp_n16))
 
     specs = [
-        gen.Fold("block_i", "i", block_x),
-        gen.Fold("block_j", "j", block_x),
-        gen.Fold("warp_i", "i", config.warp_m),
-        gen.Fold("warp_j", "j", config.warp_n),
+        Fold("block_i", "i", block_x),
+        Fold("block_j", "j", block_x),
+        Fold("warp_i", "i", config.warp_m),
+        Fold("warp_j", "j", config.warp_n),
         tensor_a,
         tensor_b,
         tensor_c,
-        gen.Index("GlobalLoadIndex", gen.Dims(x16=block_x16, x=16, k8=2)),
-        gen.Index("ComputeIndex", gen.Dims(warp_i=warps_m, warp_j=warps_n, lane=32)),
+        Index("GlobalLoadIndex", Dims(x16=block_x16, x=16, k8=2)),
+        Index("ComputeIndex", Dims(warp_i=warps_m, warp_j=warps_n, lane=32)),
         smem_tensor_a,
         smem_tensor_b,
-        gen.AsyncStripLoader(
+        AsyncStripLoader(
             "A_Loader",
             smem_tensor=smem_tensor_a,
             gmem_tensor=tensor_a,
@@ -137,7 +133,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
             minor_axis_size=config.chunk_k16,
             num_warps=warps,
         ),
-        gen.AsyncStripLoader(
+        AsyncStripLoader(
             "B_Loader",
             smem_tensor=smem_tensor_b,
             gmem_tensor=tensor_b,
@@ -146,28 +142,28 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
             minor_axis_size=config.chunk_k16,
             num_warps=warps,
         ),
-        gen.Fragment("_A", gen.FragmentType.M16_K16_F16_A, "i", "k"),
-        gen.Fragment("_B", gen.FragmentType.N16_K16_F16_B, "k", "j"),
-        gen.Fragment("_C", gen.FragmentType.M16_N16_F32_C, "i", "j"),
+        Fragment("_A", FragmentType.M16_K16_F16_A, "i", "k"),
+        Fragment("_B", FragmentType.N16_K16_F16_B, "k", "j"),
+        Fragment("_C", FragmentType.M16_N16_F32_C, "i", "j"),
         a_tile,
         b_tile,
         c_tile,
-        gen.Matmul(a_tile, b_tile, c_tile, c_tile, function_name="mma"),
-        gen.Index("SmemCLoadIndex", gen.Dims(i=32, j8=8)),
-        gen.Checkerboard("Smem_Checkers", "x", "k8", "checkers"),
-        gen.Checkerboard("SmemA_Checkers", "i", "k8", "checkers"),
-        gen.Checkerboard("SmemB_Checkers", "j", "k8", "checkers"),
-        gen.Tensor(
+        Matmul(a_tile, b_tile, c_tile, c_tile, function_name="mma"),
+        Index("SmemCLoadIndex", Dims(i=32, j8=8)),
+        Checkerboard("Smem_Checkers", "x", "k8", "checkers"),
+        Checkerboard("SmemA_Checkers", "i", "k8", "checkers"),
+        Checkerboard("SmemB_Checkers", "j", "k8", "checkers"),
+        Tensor(
             "SmemCStore",
-            gen.dtype.half2,
-            gen.Dims(warp_i=warps_m, j8=block_x8, i16=warp_m16, i=16, j2=4),
-            strides=gen.Strides(j8=(32 + 1) * 4),
+            dtype.half2,
+            Dims(warp_i=warps_m, j8=block_x8, i16=warp_m16, i=16, j2=4),
+            strides=Strides(j8=(32 + 1) * 4),
         ),
-        gen.Tensor(
+        Tensor(
             "SmemCLoad",
-            gen.dtype.uint4,
-            gen.Dims(warp_i=warps_m, j8=block_x8, i=32),
-            gen.Strides(j8=32 + 1),
+            dtype.uint4,
+            Dims(warp_i=warps_m, j8=block_x8, i=32),
+            Strides(j8=32 + 1),
             constant=True,
         ),
     ]

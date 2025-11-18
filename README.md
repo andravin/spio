@@ -178,25 +178,28 @@ Operator overloading details:
 Define tensor layouts for a matrix multiply kernel in the Python generator:
 
 ```python
+# Import Tensor, dtype, Index, Fold, Dims, etc.
+from spio.generators import *
+
 # Dimension 'i' represents the same logical dimension across all tensors
 # But each tensor defines its own size and stride for 'i' based on its layout
-tensor_a = gen.Tensor(
-    "A", gen.dtype.uint4, 
+tensor_a = Tensor(
+    "A", dtype.uint4, 
     # Dimension 'i' is at position 1 with size m
-    gen.Dims(k16=k16, i=m, k8=2),
+    Dims(k16=k16, i=m, k8=2),
     constant=True
 )
-smem_tensor_a = gen.Tensor(
-    "SmemA", gen.dtype.uint4,
+smem_tensor_a = Tensor(
+    "SmemA", dtype.uint4,
     # Fold dimension 'i' with stride 16 at position 2 with size block_x16
-    gen.Dims(ping=2, k16=config.chunk_k16, i16=block_x16, checkers=32)  
+    Dims(ping=2, k16=config.chunk_k16, i16=block_x16, checkers=32)  
 )
-tensor_c = gen.Tensor(
-    "C", gen.dtype.uint4,
+tensor_c = Tensor(
+    "C", dtype.uint4,
     # Dimension 'i' is at position 0 with size m 
-    gen.Dims(i=m, j8=n8)
+    Dims(i=m, j8=n8)
 )
-global_load_index = gen.Index("GlobalLoadIndex", gen.Dims(x16=block_x16, x=16, k8=2))
+global_load_index = Index("GlobalLoadIndex", Dims(x16=block_x16, x=16, k8=2))
 
 
 # Define additional tensors for the CUDA kernel...
@@ -206,10 +209,10 @@ Define thread-block tiles in Python:
 
 ```python
 # Dimension 'block_i' folds dimension 'i' with stride block_x.
-gen.Fold("block_i", "i", block_x)
+Fold("block_i", "i", block_x)
 
 # Dimension 'block_j' folds dimension 'j' with stride block_x.
-gen.Fold("block_j", "j", block_x)
+Fold("block_j", "j", block_x)
 ```
 
 In traditional CUDA code, you manually track array indices and remember that `A[k][i][k8]` corresponds to `C[i][j8]`. With Spio's operator overloading, the same dimension type automatically maps to the correct position and stride in each tensor:

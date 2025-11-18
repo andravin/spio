@@ -2,7 +2,7 @@
 
 import torch
 
-import spio.generators as gen
+from spio.generators import *
 from spio.compiler import compile_and_load_kernel
 from spio.util import divup, assert_all_close_with_acc_depth
 
@@ -42,9 +42,9 @@ def test_memcpy_kernel():
     X = N * C * H * W
     BLOCKS = divup(X, BLOCK_X)
 
-    my_params_header = gen.generate(
+    my_params_header = generate(
         [
-            gen.ParamsSpec(
+            ParamsSpec(
                 "MyParams",
                 {"ITERS": ITERS, "BLOCK_X4": BLOCK_X4, "X": X, "THREADS": THREADS},
             ),
@@ -134,59 +134,51 @@ def test_row_memcpy_kernel():
 
     # Generate code specifications
     specs = [
-            # Fold dimensions
-            gen.Fold("block_p", "p", BLOCK_P),
-            gen.Fold("block_q", "q", BLOCK_Q),
-            gen.Fold("block_c", "c", BLOCK_C),
-            
-            # Parameters
-            gen.ParamsSpec("Block", {"padding": 1, "c4": BLOCK_C4}),
-            
-            # Index types
-            gen.Index(
-                "BlockIdx",
-                gen.Dims(
-                    n=BLOCKS_N,
-                    block_p=BLOCKS_P, 
-                    block_q=BLOCKS_Q, 
-                    block_c=BLOCKS_C4
-                ),
-            ),
-            gen.Index("InputIdx", gen.Dims(x=BLOCK_W, c4=BLOCK_C4)),
-            
-            # Tensor types
-            gen.Tensor(
-                "Input",
-                gen.dtype.float4,
-                gen.Dims(n=N, y=H, x=W, c4=C4),
-                constant=True,
-            ),
-            gen.Tensor("Output", gen.dtype.float4, gen.Dims(n=N, p=H, q=W, c4=C4)),
-            gen.Tensor(
-                "SmemInput",
-                gen.dtype.float4,
-                gen.Dims(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1),
-            ),
-            gen.Tensor(
-                "ConstSmemInput",
-                gen.dtype.float2,
-                gen.Dims(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1, c2=2),
-                constant=True,
-            ),
-            gen.Index("SmemInputLoadIdx", gen.Dims(c4=BLOCK_C4, q=BLOCK_Q, c2=2)),
-            gen.Tensor(
-                "SmemOutput",
-                gen.dtype.float2,
-                gen.Dims(q=BLOCK_Q, c4=BLOCK_C4 + 1, c2=2),
-            ),
-            gen.Tensor(
-                "ConstSmemOutput",
-                gen.dtype.float4,
-                gen.Dims(q=BLOCK_Q, c4=BLOCK_C4 + 1),
-                constant=True,
-            ),
-        ]
-    parameters_header = gen.generate(specs)
+        # Fold dimensions
+        Fold("block_p", "p", BLOCK_P),
+        Fold("block_q", "q", BLOCK_Q),
+        Fold("block_c", "c", BLOCK_C),
+        # Parameters
+        ParamsSpec("Block", {"padding": 1, "c4": BLOCK_C4}),
+        # Index types
+        Index(
+            "BlockIdx",
+            Dims(n=BLOCKS_N, block_p=BLOCKS_P, block_q=BLOCKS_Q, block_c=BLOCKS_C4),
+        ),
+        Index("InputIdx", Dims(x=BLOCK_W, c4=BLOCK_C4)),
+        # Tensor types
+        Tensor(
+            "Input",
+            dtype.float4,
+            Dims(n=N, y=H, x=W, c4=C4),
+            constant=True,
+        ),
+        Tensor("Output", dtype.float4, Dims(n=N, p=H, q=W, c4=C4)),
+        Tensor(
+            "SmemInput",
+            dtype.float4,
+            Dims(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1),
+        ),
+        Tensor(
+            "ConstSmemInput",
+            dtype.float2,
+            Dims(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1, c2=2),
+            constant=True,
+        ),
+        Index("SmemInputLoadIdx", Dims(c4=BLOCK_C4, q=BLOCK_Q, c2=2)),
+        Tensor(
+            "SmemOutput",
+            dtype.float2,
+            Dims(q=BLOCK_Q, c4=BLOCK_C4 + 1, c2=2),
+        ),
+        Tensor(
+            "ConstSmemOutput",
+            dtype.float4,
+            Dims(q=BLOCK_Q, c4=BLOCK_C4 + 1),
+            constant=True,
+        ),
+    ]
+    parameters_header = generate(specs)
 
     # Compile the kernel with our generated headers
     _, kernel = compile_and_load_kernel(
