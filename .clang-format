@@ -1,0 +1,39 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+ColumnLimit: 100
+
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortBlocksOnASingleLine: Always
+AllowShortIfStatementsOnASingleLine: true
+
+BraceWrapping:
+  AfterNamespace: false
+  AfterClass: false
+  AfterStruct: false
+  AfterFunction: false
+  AfterControlStatement: false
+  AfterExternBlock: false   # keep brace on same line
+
+AccessModifierOffset: -4
+
+IndentAccessModifiers: false
+AlignAfterOpenBracket: Align
+PointerAlignment: Left
+
+SortIncludes: false
+
+NamespaceIndentation: All
+BreakTemplateDeclarations: false
+FixNamespaceComments: false
+
+SeparateDefinitionBlocks: Always
+MaxEmptyLinesToKeep: 1
+
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+AllowAllConstructorInitializersOnNextLine: false
+
+IndentExternBlock: Indent

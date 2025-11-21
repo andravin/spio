@@ -29,12 +29,15 @@ def test_sixteen_channels_last_2d():
     """Test the SixteenChannelsLast memory format with 2d tensors."""
     K, C = (256, 64)
     a = torch.randn(K, C)
-    b = SixteenChannelsLast.format(a)
-    assert b.shape == (C // 16, K, 16)
+    a_16c = SixteenChannelsLast.format(a)
+    assert a_16c.shape == (C // 16, K, 16)
     for k, c in product(range(K), range(C)):
         cd16 = c // 16
         cm16 = c % 16
-        assert a[k, c] == b[cd16, k, cm16]
+        assert a[k, c] == a_16c[cd16, k, cm16]
+
+    b = SixteenChannelsLast.unformat(a_16c)
+    assert torch.equal(a, b)
 
 
 def test_sixtenn_channels_last_4d():

@@ -131,7 +131,7 @@ def _get_kernel_spec(
             },
         ),
         ParamsSpec("Mode", {"igrad": igrad, "has_bias": kernel_has_bias}),
-        Index(
+        CompoundIndex(
             "BlockIdx",
             Dims(
                 block_n=blocks_n,
@@ -140,10 +140,10 @@ def _get_kernel_spec(
                 block_c=blocks_c,
             ),
         ),
-        Index("InputIdx", Dims(n=block_n, x=block_w, c8=block_c8)),
+        CompoundIndex("InputIdx", Dims(n=block_n, x=block_w, c8=block_c8)),
         Tensor("Input", dtype.uint4, Dims(n=n, y=h, x=w, c8=c8), constant=True),
         Tensor("Bias", dtype.float2, Dims(k8=c8, k2=4), constant=True),
-        Index("BiasIdx", Dims(k8=block_c8, lane=32)),
+        CompoundIndex("BiasIdx", Dims(k8=block_c8, lane=32)),
         Tensor("Output", dtype.uint4, Dims(n=n, p=p, q=q, k8=c8)),
         Tensor("Weights", dtype.uint4, Dims(k=c, r=r, s=s), constant=True),
         Tensor("SmemWeights", dtype.uint4, Dims(k=block_c, r=r, s=s)),
@@ -153,7 +153,7 @@ def _get_kernel_spec(
             Dims(k8=block_c8, k=8, r=r, s=s),
             constant=True,
         ),
-        Index(
+        CompoundIndex(
             "SmemWeightsLoadIdx",
             Dims(k8=block_c8, repeat=4, k=8),
             dummies=["repeat"],
@@ -164,7 +164,7 @@ def _get_kernel_spec(
             Dims(ping_pong=2, x=block_w, n=block_n, c8=block_c8),
             strides=Strides(x=smem_x_stride),
         ),
-        Index(
+        CompoundIndex(
             "SmemInputLoadIdx",
             Dims(
                 c8=block_c8,
@@ -174,7 +174,7 @@ def _get_kernel_spec(
             ),
             dummies=["repeat"],
         ),
-        Index("SmemOutputStoreIdx", Dims(k8=block_c8, lane=32)),
+        CompoundIndex("SmemOutputStoreIdx", Dims(k8=block_c8, lane=32)),
         Tensor(
             "SmemOutput",
             dtype.half2,
@@ -186,8 +186,8 @@ def _get_kernel_spec(
             Dims(q=block_q, n=block_n, k8=block_c8 + 1),
             constant=True,
         ),
-        Index("OutputStoreIdx", Dims(n=block_n, q=block_q, k8=block_c8)),
-        Index("BlockQNIdx", Dims(q=block_q, n=block_n)),
+        CompoundIndex("OutputStoreIdx", Dims(n=block_n, q=block_q, k8=block_c8)),
+        CompoundIndex("BlockQNIdx", Dims(q=block_q, n=block_n)),
         Fragment("Acc", FragmentType.M16_N8_F32_C, "qn", "k"),
         Fragment("In", FragmentType.M16_K8_F16_A, "qn", "c"),
         Fragment("Wgts", FragmentType.N8_K8_F16_B, "c", "k"),

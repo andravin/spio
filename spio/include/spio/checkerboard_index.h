@@ -3,16 +3,15 @@
 
 #include "spio/macros.h"
 #include "spio/dim.h"
-#include "spio/index_base.h"
+#include "spio/compound_index_base.h"
 
-namespace spio
-{
+namespace spio {
     /// @brief An index class for checkerboard memory layout.
     ///
     /// Arrange an N x 2 matrix into a checkerboard grid with the given number
     /// of banks (i.e., grid columns).
     ///
-    /// Index (x, color) is the x and color index of the element in the grid.
+    /// CompoundIndex (x, color) is the x and color index of the element in the grid.
     ///
     /// Notice that cells with the same color are never adjacent to each other. This structure
     /// is useful for storing a matrix that can be accessed both row-wise (i.e., color-wise) and
@@ -59,22 +58,25 @@ namespace spio
     /// @tparam PairDim the dimension type for the pair index
     /// @tparam ColorDim the dimension type for the color index
     template <int ranks, typename PairDim, typename ColorDim, typename OffsetDim>
-    class CheckerboardIndex : public IndexBase
-    {
+    class CheckerboardIndex : public CompoundIndexBase {
     public:
-        using IndexBase::IndexBase;
+        using CompoundIndexBase::CompoundIndexBase;
 
         /// @brief Construct index from pair and color dimensions
         /// @param pair_dim The pair dimension value
         /// @param color_dim The color dimension value
         DEVICE inline constexpr CheckerboardIndex(PairDim pair_dim, ColorDim color_dim)
-            : IndexBase(compute_offset(pair_dim.get(), color_dim.get())) {}
-        
+            : CompoundIndexBase(compute_offset(pair_dim.get(), color_dim.get())) {}
+
+        template <typename IndexType>
+        DEVICE inline constexpr CheckerboardIndex(IndexType idx)
+            : CompoundIndexBase(compute_offset(idx.template get<PairDim>().get(),
+                                               idx.template get<ColorDim>().get())) {}
+
         /// @brief Get dimension value by type
         /// @tparam Dim The dimension type to retrieve
         /// @return The dimension value with the proper type
-        template <typename Dim>
-        DEVICE constexpr auto get() const {
+        template <typename Dim> DEVICE constexpr auto get() const {
             if constexpr (std::is_same_v<Dim, PairDim>) {
                 return PairDim(offset() >> 1);
             } else if constexpr (std::is_same_v<Dim, ColorDim>) {
@@ -83,11 +85,8 @@ namespace spio
             } else if constexpr (std::is_same_v<Dim, OffsetDim>) {
                 return OffsetDim(offset());
             } else {
-                static_assert(
-                    std::is_same_v<Dim, PairDim> || 
-                    std::is_same_v<Dim, ColorDim>,
-                    "Invalid dimension type for CheckerboardIndex"
-                );
+                static_assert(std::is_same_v<Dim, PairDim> || std::is_same_v<Dim, ColorDim>,
+                              "Invalid dimension type for CheckerboardIndex");
                 return Dim(0);
             }
         }
@@ -105,19 +104,22 @@ namespace spio
         /// @param pair the index of a pair of grid elements.
         /// @param color the black (0) or white (1) grid element in the pair.
         /// @return Offset into the checkeboard grid.
-        DEVICE inline static constexpr int compute_offset(int pair, int color)
-        {
+        DEVICE inline static constexpr int compute_offset(int pair, int color) {
             int row = static_cast<unsigned>(pair) / (static_cast<unsigned>(ranks) >> 1);
             return (pair << 1 | color) ^ (row & 1);
         }
-        
+
         /// @brief Calculate offset from typed pair and color dimensions
         /// @param pair_dim The pair dimension
         /// @param color_dim The color dimension
         /// @return Offset into the checkerboard grid
-        DEVICE inline static constexpr int compute_offset(PairDim pair_dim, ColorDim color_dim)
-        {
+        DEVICE inline static constexpr int compute_offset(PairDim pair_dim, ColorDim color_dim) {
             return compute_offset(pair_dim.get(), color_dim.get());
+        }
+
+        template <typename TensorOrCursor>
+        DEVICE constexpr auto apply_to(TensorOrCursor tensor) const {
+            return tensor.apply_index_if_found(get<OffsetDim>());
         }
     };
 }

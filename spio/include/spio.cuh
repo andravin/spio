@@ -12,5 +12,6 @@
 #include "spio/strip_loader_params.h"
 #include "spio/mathutil.h"
 #include "spio/allocator.h"
+#include "spio/coordinates.h"
 
 #endif

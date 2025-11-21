@@ -2,7 +2,7 @@
 
 from .generators import generate
 from .gen_specs import GenSpecs
-from .index import Index
+from .index import CompoundIndex
 from .tensor import Tensor
 from .fragment_type import FragmentType
 from .data_type import dtype
@@ -20,7 +20,7 @@ from .matmul import Matmul
 __all__ = [
     "generate",
     "GenSpecs",
-    "Index",
+    "CompoundIndex",
     "Tensor",
     "FragmentType",
     "dtype",

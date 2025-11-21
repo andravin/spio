@@ -3,16 +3,12 @@
 #include "spio/pipeline.h"
 #include "spio/mathutil.h"
 
-#include "parameters.h"
+#include "types.h"
 
 using namespace spio;
 
-extern "C"
-{
-    __global__ void row_memcpy(
-        float4 *__restrict__ dst,
-        const float4 *__restrict__ src)
-    {
+extern "C" {
+    __global__ void row_memcpy(float4* __restrict__ dst, const float4* __restrict__ src) {
         //
         // Define the shared memory buffers.
         //
@@ -55,8 +51,10 @@ extern "C"
         auto c4_dim = smem_input_idx.get<C4>();
         auto c2_dim = smem_input_idx.get<C2>();
 
-        auto smem_input_load = ConstSmemInput(reinterpret_cast<const float2 *>(smem_input_buf))[q_dim.cast<X>() + Block::padding][c4_dim][c2_dim];
-        auto smem_output_store = SmemOutput(reinterpret_cast<float2 *>(smem_output_buf))[q_dim][c4_dim][c2_dim];
+        auto smem_input_load = ConstSmemInput(reinterpret_cast<const float2*>(
+            smem_input_buf))[q_dim.cast<X>() + Block::padding][c4_dim][c2_dim];
+        auto smem_output_store =
+            SmemOutput(reinterpret_cast<float2*>(smem_output_buf))[q_dim][c4_dim][c2_dim];
 
         // Smem to output.
         bool thread_stores_output;
@@ -65,11 +63,11 @@ extern "C"
         auto q = block_q.unfold() + smem_out_idx.get<Q>();
         auto c4_out = block_c.fold<4>() + smem_out_idx.get<C4>();
 
-        auto smem_output_load = ConstSmemOutput(smem_output_buf)[smem_out_idx.get<Q>()][smem_out_idx.get<C4>()];
+        auto smem_output_load =
+            ConstSmemOutput(smem_output_buf)[smem_out_idx.get<Q>()][smem_out_idx.get<C4>()];
         auto output = Output(dst)[block_n][block_p.unfold()][q][c4_out];
 
-        thread_stores_output = q.cast<X>() < Input::size<X>() &&
-                               c4_out < Block::c4 &&
+        thread_stores_output = q.cast<X>() < Input::size<X>() && c4_out < C4(Block::c4) &&
                                threadIdx.x < ConstSmemOutput::size();
 
         //
@@ -88,33 +86,23 @@ extern "C"
         //
         // Run the pipeline.
         //
-        for (int iter = 0; iter < num_iters; ++iter)
-        {
+        for (int iter = 0; iter < num_iters; ++iter) {
             pipeline.step(iter < num_p.get());
-            if (pipeline.active(LOAD_INPUT_STAGE))
-            {
-                if (thread_loads_input)
-                {
-                    __pipeline_memcpy_async(
-                        smem_input_store[PING_PONG(ping_pong)].get(),
-                        input.get(),
-                        sizeof(Input::data_type),
-                        zfill);
+            if (pipeline.active(LOAD_INPUT_STAGE)) {
+                if (thread_loads_input) {
+                    __pipeline_memcpy_async(smem_input_store[PING_PONG(ping_pong)].get(),
+                                            input.get(), sizeof(Input::data_type), zfill);
                 }
                 __pipeline_commit();
                 input.step<Y>();
             }
             ping_pong = 1 - ping_pong;
-            if (pipeline.active(COPY_STAGE))
-            {
+            if (pipeline.active(COPY_STAGE)) {
                 __pipeline_wait_prior(pipeline.active(LOAD_INPUT_STAGE) ? 1 : 0);
                 __syncthreads();
                 *smem_output_store = *smem_input_load[PING_PONG(ping_pong)];
                 __syncthreads();
-                if (thread_stores_output)
-                {
-                    *output = *smem_output_load;
-                }
+                if (thread_stores_output) { *output = *smem_output_load; }
                 output.step<P>();
             }
         }

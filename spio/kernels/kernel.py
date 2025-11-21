@@ -17,7 +17,7 @@ from .launch_params import LaunchParams
 @dataclass
 class KernelSpec:
     """Container for all kernel specifications and parameters.
-    
+
     Attributes:
         gen_specs: List[GenSpecs]: A list of specification for generated CUDA code.
         launch_params: LaunchParams: Grid, block, and dynamic smem parameters.
@@ -48,7 +48,7 @@ class Kernel:
         """Return the arguments for the kernel compiler."""
         return (
             self.kernel_source_file,
-            {"parameters.h": self.parameters_header},
+            {"types.h": self.parameters_header},
             self.src_module,
             self.includes_module,
         )

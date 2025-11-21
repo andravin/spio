@@ -4,9 +4,9 @@
 #include "spio/macros.h"
 #include "spio/memory.cuh"
 
-namespace spio
-{
-    /// @brief Class that encapsulates the logic for loading a strip of data from global to shared memory asynchronously.
+namespace spio {
+    /// @brief Class that encapsulates the logic for loading a strip of data from global to shared
+    /// memory asynchronously.
     /// @tparam smem_stride The stride in shared memory.
     /// @tparam global_stride The stride in global memory.
     /// @tparam num_loads The number of loads to perform.
@@ -46,25 +46,20 @@ namespace spio
     /// axis   0 | 4 | 5 | 6 | 7 |
     ///          +---+---+---+---+
     ///
-    template <int smem_stride, int global_stride, int num_loads>
-    class AsyncStripLoader
-    {
+    template <int smem_stride, int global_stride, int num_loads> class AsyncStripLoader {
     public:
         /// @brief Construct AynscStripLoader and optionally mask-to-zero the current thread.
-        /// @param mask Zero-fill the destination and skip the copy for the current thread with zeros if true.
-        __device__ AsyncStripLoader(bool mask = true)
-            : _mask(mask)
-        {
-        }
+        /// @param mask Zero-fill the destination and skip the copy for the current thread with
+        /// zeros if true.
+        __device__ AsyncStripLoader(bool mask = true) : _mask(mask) {}
 
+        /// @brief Copy data asynchronously from global to shared memory.
         /// @param smem_ptr Pointer to the shared memory destination for the current thread.
         /// @param global_ptr Pointer to the global memory source for the current thread.
         /// @tparam data_type The type of the data to load.
-        template<typename data_type>
-        __device__ void load(data_type *smem_ptr, const data_type *global_ptr)
-        {
-            for (int i = 0; i < num_loads; ++i)
-            {
+        template <typename data_type>
+        __device__ void copy_async(data_type* smem_ptr, const data_type* global_ptr) {
+            for (int i = 0; i < num_loads; ++i) {
                 memcpy_async(smem_ptr + i * smem_stride, global_ptr + i * global_stride, _mask);
             }
         }
