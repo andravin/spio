@@ -1,25 +1,21 @@
-#include <spio/index.h>
+#include <spio/compound_index.h>
 #include <spio/tensor.h>
 
 using namespace spio;
 
-extern "C"
-{
-    __global__ void index(float *outputs, float *inputs)
-    {
-        class I : public Dim<I>
-        {
+extern "C" {
+    __global__ void index(float* outputs, float* inputs) {
+        class I : public Dim<I> {
         public:
             using Dim<I>::Dim;
         };
 
-        class J : public Dim<J>
-        {
+        class J : public Dim<J> {
         public:
             using Dim<J>::Dim;
         };
 
-        using Idx = Index<DimInfo<I, 64, 4>, DimInfo<J, 4, 1>>;
+        using Idx = CompoundIndex<DimInfo<I, 64, 4>, DimInfo<J, 4, 1>>;
         using T = Tensor<float, DimInfo<J, 4, 64>, DimInfo<I, 64, 1>>;
 
         T output_tensor(outputs);

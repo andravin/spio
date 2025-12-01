@@ -8,7 +8,7 @@ from .dim import dim_name_to_dim_or_fold_class_name
 
 
 @dataclass
-class Index:
+class CompoundIndex:
     """CUDA Code generator for custom index classes.
 
     This class is used to generate custom index classes that map linear offsets
@@ -64,7 +64,7 @@ def header() -> str:
     The header implements the C++ base template classes from which the
     custom index classes inherit.
     """
-    return '#include "spio/index.h"'
+    return '#include "spio/compound_index.h"'
 
 
 def _generate_index(
@@ -73,7 +73,7 @@ def _generate_index(
     strides: Strides,
     dummy_dims: List[str] = None,
 ) -> str:
-    """Generate a using statement for an Index template instantiation."""
+    """Generate a using statement for an CompoundIndex template instantiation."""
     dim_infos = []
     specializations = []
 
@@ -90,10 +90,10 @@ def _generate_index(
 
         # Add the DimInfo parameter
         dim_infos.append(f"spio::DimInfo<{dim_class}, {size_str}, {stride}>")
-        
+
         # If this is a dummy dimension, generate a specialization
         if name in (dummy_dims or []):
-            dim_info = f'spio::DimInfo<{dim_class}, {size_str}, {stride}>'
+            dim_info = f"spio::DimInfo<{dim_class}, {size_str}, {stride}>"
             specializations.append(
                 f"namespace spio {{ namespace detail {{\n"
                 f"    template<> struct is_dummy_dimension<{dim_info}> {{\n"
@@ -103,7 +103,7 @@ def _generate_index(
             )
 
     # Generate the index type using statement
-    index_using = f"using {class_name} = spio::Index<{', '.join(dim_infos)}>;\n"
+    index_using = f"using {class_name} = spio::CompoundIndex<{', '.join(dim_infos)}>;\n"
 
     # Combine the using statement with any specializations
     return index_using + "\n".join(specializations)

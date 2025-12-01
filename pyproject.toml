@@ -9,6 +9,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
+description = "Experimental CUDA kernel framework unifying typed dimensions, NVRTC JIT specialization, and ML‑guided tuning."
 name = "spio"
 version = "0.4.2"
 dependencies = [
@@ -24,7 +25,6 @@ dependencies = [
   "importlib_resources>=6.0.0",
 ]
 authors = [{ name = "Andrew Lavin", email = "alavin@acm.org" }]
-description = "Efficient CUDA kernels for training convolutional neural networks with PyTorch."
 readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [

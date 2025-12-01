@@ -6,7 +6,7 @@ from .gen_specs import GenSpecs
 from .dim import Dim, _get_dim_name_and_stride
 from .fold import Fold
 from .tensor import Tensor
-from .index import Index
+from .index import CompoundIndex
 from .fragment import Fragment
 
 
@@ -94,7 +94,7 @@ def generate(
             fragments.append(spec)
         elif isinstance(spec, Tensor):
             tensors.append(spec)
-        elif isinstance(spec, Index):
+        elif isinstance(spec, CompoundIndex):
             indices.append(spec)
         else:
             others.append(spec)
@@ -115,7 +115,7 @@ def generate(
 
     # Generate indices
     if indices:
-        code += "// Index types\n"
+        code += "// CompoundIndex types\n"
         for index in indices:
             code += index.generate_with_context(user_data_types=user_data_types)
         code += "\n"
@@ -151,7 +151,7 @@ def _get_user_defined_data_types(gen_specs: List[GenSpecs]) -> List[str]:
 def _include_files():
     return """
 #include "spio/allocator.h"
-#include "spio/index.h"
+#include "spio/compound_index.h"
 #include "spio/tensor.h"
 #include "spio/dim.h"
 """

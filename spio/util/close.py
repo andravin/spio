@@ -49,7 +49,8 @@ def assert_all_close(
     absdiff = torch.abs(actual - expected)
     absdiff_tol = atol + rtol * expected.abs()
     if not torch.all(absdiff <= absdiff_tol):
-        baddies = torch.nonzero(absdiff > absdiff_tol, as_tuple=True)
+        all_baddies = torch.nonzero(absdiff > absdiff_tol, as_tuple=True)
+        baddies = tuple(b[:max_errors] for b in all_baddies)
         bad_absdiff = absdiff[baddies]
         bad_expected = expected[baddies]
         bad_actual = actual[baddies]
@@ -57,11 +58,11 @@ def assert_all_close(
         m = f"Tensors not close: atol={atol}, rtol={rtol}\n"
         bad_indices = [tuple(int(x) for x in v) for v in zip(*baddies)]
         for a, e, ad, adt, idx in zip(
-            bad_actual[:max_errors],
-            bad_expected[:max_errors],
-            bad_absdiff[:max_errors],
-            bad_absdiff_tol[:max_errors],
-            bad_indices[:max_errors],
+            bad_actual,
+            bad_expected,
+            bad_absdiff,
+            bad_absdiff_tol,
+            bad_indices,
         ):
             m += (
                 f"{list(idx)} actual ={a:>10.6f} expected ={e:>10.6f} |diff| = {ad:>10.6f} > "

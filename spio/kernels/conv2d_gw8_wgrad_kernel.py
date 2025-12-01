@@ -200,7 +200,7 @@ def _get_kernel_spec(
         #
         # Block indices.
         #
-        Index(
+        CompoundIndex(
             "BlockIdx",
             {
                 "block_n": blocks_n,
@@ -212,9 +212,9 @@ def _get_kernel_spec(
         #
         # Input loading.
         #
-        Index("InputIdx", {"n": config.warp_n, "x": block_w, "c8": block_c8}),
+        CompoundIndex("InputIdx", {"n": config.warp_n, "x": block_w, "c8": block_c8}),
         Tensor("Input", dtype.uint4, {"n": n, "y": h, "x": w, "c8": c8}, constant=True),
-        Index(
+        CompoundIndex(
             "SmemInputLoadIdx",
             {
                 "c8": warps_c8,
@@ -228,9 +228,9 @@ def _get_kernel_spec(
         #
         # Delta loading
         #
-        Index("DeltaIdx", {"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}),
+        CompoundIndex("DeltaIdx", {"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}),
         Tensor("Delta", dtype.uint4, {"n": n, "p": p, "q": q, "k8": c8}, constant=True),
-        Index(
+        CompoundIndex(
             "SmemDeltaLoadIdx",
             {
                 "k8": warps_c8,
@@ -254,9 +254,11 @@ def _get_kernel_spec(
         #
         # Weights storing.
         #
-        Index("SmemWgradStoreIdx", {"k8": warps_c8, "warp_s": warps_s, "lane": 32}),
+        CompoundIndex(
+            "SmemWgradStoreIdx", {"k8": warps_c8, "warp_s": warps_s, "lane": 32}
+        ),
         # Each thread stores 8k for a particular (k8, r, s, c).
-        Index("WgradStoreIdx", {"k8": warps_c8, "s": s, "c": 8}),
+        CompoundIndex("WgradStoreIdx", {"k8": warps_c8, "s": s, "c": 8}),
         # Reduce Wgrad through global memory using float32 precision.
         Tensor("Wgrad", dtype.float, {"k": c, "r": r, "s": s, "c": 8}),
     ] + smem_tensors

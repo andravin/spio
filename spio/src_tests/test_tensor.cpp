@@ -1,72 +1,56 @@
 #include "utest.h"
 #include "spio/tensor.h"
 #include "spio/dim.h"
-#include "spio/index.h"
+#include "spio/compound_index.h"
 
 using namespace spio;
 
-class H : public Dim<H>
-{
+class H : public Dim<H> {
 public:
     using Dim<H>::Dim;
 };
 
-class W : public Dim<W>
-{
+class W : public Dim<W> {
 public:
     using Dim<W>::Dim;
 };
 
-template <>
-struct utest_type_deducer<H>
-{
-    static void _(const H d)
-    {
+template <> struct utest_type_deducer<H> {
+    static void _(const H d) {
         UTEST_PRINTF("%d", d.get());
     }
 };
 
-template <>
-struct utest_type_deducer<W>
-{
-    static void _(const W d)
-    {
+template <> struct utest_type_deducer<W> {
+    static void _(const W d) {
         UTEST_PRINTF("%d", d.get());
     }
 };
 
 // 2D tensor creation helper
-template <typename DataType, typename HeightDimType, typename WidthDimType,
-          int HeightSize, int WidthSize>
-DEVICE constexpr auto make_tensor(DataType *data = nullptr)
-{
-    return Tensor<
-        DataType,
-        DimInfo<HeightDimType, HeightSize, WidthSize>, // Height folded by width
-        DimInfo<WidthDimType, WidthSize, 1>            // Width with unit stride
-        >(data);
+template <typename DataType, typename HeightDimType, typename WidthDimType, int HeightSize,
+          int WidthSize>
+DEVICE constexpr auto make_tensor(DataType* data = nullptr) {
+    return Tensor<DataType, DimInfo<HeightDimType, HeightSize, WidthSize>, // Height folded by width
+                  DimInfo<WidthDimType, WidthSize, 1>                      // Width with unit stride
+                  >(data);
 }
 
 // Version with custom strides
-template <typename DataType, typename HeightDimType, typename WidthDimType,
-          int HeightSize, int WidthSize, int HeightStride, int WidthStride>
-DEVICE constexpr auto make_tensor_with_strides(DataType *data = nullptr)
-{
-    return Tensor<
-        DataType,
-        DimInfo<HeightDimType, HeightSize, HeightStride>,
-        DimInfo<WidthDimType, WidthSize, WidthStride>>(data);
+template <typename DataType, typename HeightDimType, typename WidthDimType, int HeightSize,
+          int WidthSize, int HeightStride, int WidthStride>
+DEVICE constexpr auto make_tensor_with_strides(DataType* data = nullptr) {
+    return Tensor<DataType, DimInfo<HeightDimType, HeightSize, HeightStride>,
+                  DimInfo<WidthDimType, WidthSize, WidthStride>>(data);
 }
 
-UTEST(Tensor, tensor_2d_small)
-{
+UTEST(Tensor, tensor_2d_small) {
     constexpr H Height = 4;
     constexpr W Width = 8;
     constexpr int Size = Height.get() * Width.get();
 
     float tensor_data[Size];
-    for (int i = 0; i < Size; ++i)
-    {
+    for (int i = 0; i < Size; ++i) {
         tensor_data[i] = static_cast<float>(i);
     }
 
@@ -83,15 +67,13 @@ UTEST(Tensor, tensor_2d_small)
     EXPECT_EQ(*tensor[W(3)].rebase()[H(2)], tensor_data[3 + 2 * Width.get()]);
 }
 
-UTEST(Tensor, tensor_2d)
-{
+UTEST(Tensor, tensor_2d) {
     constexpr H Height = 480;
     constexpr W Width = 640;
     constexpr int Size = Height.get() * Width.get();
 
     float tensor_data[Size];
-    for (int i = 0; i < Size; ++i)
-    {
+    for (int i = 0; i < Size; ++i) {
         tensor_data[i] = static_cast<float>(i);
     }
 
@@ -113,27 +95,22 @@ UTEST(Tensor, tensor_2d)
     EXPECT_EQ(*wslice[H(20)][W(10)], tensor_data[20 * Width.get() + 20]);
 }
 
-UTEST(Tensor, tensor_2d_custom_stride)
-{
+UTEST(Tensor, tensor_2d_custom_stride) {
     constexpr int Height = 480;
     constexpr int Width = 640;
     constexpr int Stride = 1024;
 
     float tensor_data[Height * Stride];
-    for (int h = 0; h < Height; ++h)
-    {
-        for (int w = 0; w < Width; ++w)
-        {
+    for (int h = 0; h < Height; ++h) {
+        for (int w = 0; w < Width; ++w) {
             tensor_data[h * Stride + w] = static_cast<float>(h * Width + w);
         }
     }
 
     auto tensor = make_tensor_with_strides<float, H, W, Height, Width, Stride, 1>(tensor_data);
 
-    for (auto h : range(tensor.size<H>()))
-    {
-        for (auto w : range(tensor.size<W>()))
-        {
+    for (auto h : range(tensor.size<H>())) {
+        for (auto w : range(tensor.size<W>())) {
             EXPECT_EQ(*tensor[h][w], tensor_data[h.get() * Stride + w.get()]);
         }
     }
@@ -155,46 +132,36 @@ UTEST(Tensor, tensor_2d_custom_stride)
 }
 
 // Test the tensor[index] subscript operator
-UTEST(Tensor, IndexSubscript)
-{
+UTEST(Tensor, IndexSubscript) {
     // 2D Test
     // Create a 3x4 tensor
     constexpr int HEIGHT = 3;
     constexpr int WIDTH = 4;
-    float data2d[HEIGHT * WIDTH] = {
-        0, 1, 2, 3,
-        4, 5, 6, 7,
-        8, 9, 10, 11};
+    float data2d[HEIGHT * WIDTH] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 
     // Define dimension types
-    class I : public Dim<I>
-    {
+    class I : public Dim<I> {
     public:
         using Dim<I>::Dim;
     };
-    class J : public Dim<J>
-    {
+
+    class J : public Dim<J> {
     public:
         using Dim<J>::Dim;
     };
-    class K : public Dim<K>
-    {
+
+    class K : public Dim<K> {
     public:
         using Dim<K>::Dim;
     };
 
     // Create a 2D tensor
-    auto tensor2d = Tensor<float,
-                           DimInfo<I, HEIGHT, WIDTH>,
-                           DimInfo<J, WIDTH, 1>>(data2d);
+    auto tensor2d = Tensor<float, DimInfo<I, HEIGHT, WIDTH>, DimInfo<J, WIDTH, 1>>(data2d);
 
-    // Create a matching Index type
-    using Idx2D = Index<
-        DimInfo<I, HEIGHT, WIDTH>,
-        DimInfo<J, WIDTH, 1>>;
+    // Create a matching CompoundIndex type
+    using Idx2D = CompoundIndex<DimInfo<I, HEIGHT, WIDTH>, DimInfo<J, WIDTH, 1>>;
 
-    for (int offset = 0; offset < HEIGHT * WIDTH; ++offset)
-    {
+    for (int offset = 0; offset < HEIGHT * WIDTH; ++offset) {
         // Create index from coordinates
         auto idx = Idx2D(offset);
 
@@ -212,30 +179,20 @@ UTEST(Tensor, IndexSubscript)
     // 3D Test
     // Create a 2x3x4 tensor
     constexpr int DEPTH = 2;
-    float data3d[DEPTH * HEIGHT * WIDTH] = {
-        // Layer 0
-        0, 1, 2, 3,
-        4, 5, 6, 7,
-        8, 9, 10, 11,
-        // Layer 1
-        12, 13, 14, 15,
-        16, 17, 18, 19,
-        20, 21, 22, 23};
+    float data3d[DEPTH * HEIGHT * WIDTH] = {// Layer 0
+                                            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+                                            // Layer 1
+                                            12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23};
 
     // Create a 3D tensor
-    auto tensor3d = Tensor<float,
-                           DimInfo<I, DEPTH, HEIGHT * WIDTH>,
-                           DimInfo<J, HEIGHT, WIDTH>,
+    auto tensor3d = Tensor<float, DimInfo<I, DEPTH, HEIGHT * WIDTH>, DimInfo<J, HEIGHT, WIDTH>,
                            DimInfo<K, WIDTH, 1>>(data3d);
 
-    // Create a matching Index type
-    using Idx3D = Index<
-        DimInfo<I, DEPTH, HEIGHT * WIDTH>,
-        DimInfo<J, HEIGHT, WIDTH>,
-        DimInfo<K, WIDTH, 1>>;
+    // Create a matching CompoundIndex type
+    using Idx3D = CompoundIndex<DimInfo<I, DEPTH, HEIGHT * WIDTH>, DimInfo<J, HEIGHT, WIDTH>,
+                                DimInfo<K, WIDTH, 1>>;
 
-    for (int offset = 0; offset < DEPTH * HEIGHT * WIDTH; ++offset)
-    {
+    for (int offset = 0; offset < DEPTH * HEIGHT * WIDTH; ++offset) {
         // Create index from coordinates
         auto idx = Idx3D(offset);
 

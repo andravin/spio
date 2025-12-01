@@ -35,16 +35,18 @@ def test_mma_checkerboard_16c_kernel():
 
     A_16c = SixteenChannelsLast.format(A)
     B_16c = SixteenChannelsLast.format(B_trans)
+    C_16c = SixteenChannelsLast.format(C)
 
     _, mma_kernel_16c = compile_and_load_kernel(
         kernel_name="mma_checkerboard_16c",
         source_file_name="mma_checkerboard_16c.cu",
-        header_dict={"parameters.h": generate(specs)},
+        header_dict={"types.h": generate(specs)},
         src_module="spio.src_tests",
         lineinfo=True,
         max_registers=max_registers,
     )
-    mma_kernel_16c.launch(grid, block, (C, A_16c, B_16c))
+    mma_kernel_16c.launch(grid, block, (C_16c, A_16c, B_16c))
+    C = SixteenChannelsLast.unformat(C_16c)
 
     C_ref = torch.matmul(A, B_trans.transpose(0, 1))
     assert_all_close_with_acc_depth(C, C_ref, acc_depth=k)
@@ -74,10 +76,12 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     warp_n16 = config.warp_n // 16
 
     k16 = k // 16
-    n8 = n // 8
+    j16 = n // 16
 
     block_x8 = block_x // 8
     block_x16 = block_x // 16
+
+    warp_n8 = config.warp_n // 8
 
     double_chunk = 2 * config.chunk_k16
     assert (
@@ -86,7 +90,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
 
     tensor_a = Tensor("A", dtype.uint4, Dims(k16=k16, i=m, k8=2), constant=True)
     tensor_b = Tensor("B", dtype.uint4, Dims(k16=k16, j=n, k8=2), constant=True)
-    tensor_c = Tensor("C", dtype.uint4, Dims(i=m, j8=n8))
+    tensor_c = Tensor("C", dtype.uint4, Dims(j16=j16, i=m, j8=2))
 
     smem_tensor_a = Tensor(
         "SmemA",
@@ -120,8 +124,8 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         tensor_a,
         tensor_b,
         tensor_c,
-        Index("GlobalLoadIndex", Dims(x16=block_x16, x=16, k8=2)),
-        Index("ComputeIndex", Dims(warp_i=warps_m, warp_j=warps_n, lane=32)),
+        CompoundIndex("GlobalLoadIndex", Dims(x16=block_x16, x=16, k8=2)),
+        CompoundIndex("ComputeIndex", Dims(warp_i=warps_m, warp_j=warps_n, lane=32)),
         smem_tensor_a,
         smem_tensor_b,
         AsyncStripLoader(
@@ -149,23 +153,38 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         b_tile,
         c_tile,
         Matmul(a_tile, b_tile, c_tile, c_tile, function_name="mma"),
-        Index("SmemCLoadIndex", Dims(i=32, j8=8)),
         Checkerboard("Smem_Checkers", "x", "k8", "checkers"),
         Checkerboard("SmemA_Checkers", "i", "k8", "checkers"),
         Checkerboard("SmemB_Checkers", "j", "k8", "checkers"),
+        #
+        # Each warp transposes its output tile through shared memory
+        # and then writes it to global memory. Because there is no inter-warp
+        # transfer, no synchronization is needed.
+        #
+        # Store outputs C to shared memory using 32-bit (2 x fp16) writes.
         Tensor(
             "SmemCStore",
             dtype.half2,
             Dims(warp_i=warps_m, j8=block_x8, i16=warp_m16, i=16, j2=4),
-            strides=Strides(j8=(32 + 1) * 4),
+            strides=Strides(j8=(config.warp_m + 1) * 4),
         ),
+        #
+        # Load outputs from shared memory using 128-bit (8 x fp16) loads.
         Tensor(
             "SmemCLoad",
             dtype.uint4,
-            Dims(warp_i=warps_m, j8=block_x8, i=32),
-            Strides(j8=32 + 1),
+            Dims(warp_i=warps_m, j8=block_x8, i=config.warp_m),
+            Strides(j8=(config.warp_m + 1)),
             constant=True,
         ),
+        #
+        #
+        CompoundIndex("SmemCLoadIndex", Dims(i=config.warp_m, j8=warp_n8)),
+        #
+        # Full unrolling of the main loop improves arithmetic utilization.
+        # Empty string expands to "#pragma unroll" (full unroll).
+        # For partial unroll, use e.g. "4" or "8". Use "1" to disable.
+        Macro(dict(MAIN_LOOP_UNROLL_DEPTH="")),
     ]
 
     if warps == 8:

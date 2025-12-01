@@ -140,12 +140,12 @@ def test_row_memcpy_kernel():
         Fold("block_c", "c", BLOCK_C),
         # Parameters
         ParamsSpec("Block", {"padding": 1, "c4": BLOCK_C4}),
-        # Index types
-        Index(
+        # CompoundIndex types
+        CompoundIndex(
             "BlockIdx",
             Dims(n=BLOCKS_N, block_p=BLOCKS_P, block_q=BLOCKS_Q, block_c=BLOCKS_C4),
         ),
-        Index("InputIdx", Dims(x=BLOCK_W, c4=BLOCK_C4)),
+        CompoundIndex("InputIdx", Dims(x=BLOCK_W, c4=BLOCK_C4)),
         # Tensor types
         Tensor(
             "Input",
@@ -165,7 +165,7 @@ def test_row_memcpy_kernel():
             Dims(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1, c2=2),
             constant=True,
         ),
-        Index("SmemInputLoadIdx", Dims(c4=BLOCK_C4, q=BLOCK_Q, c2=2)),
+        CompoundIndex("SmemInputLoadIdx", Dims(c4=BLOCK_C4, q=BLOCK_Q, c2=2)),
         Tensor(
             "SmemOutput",
             dtype.float2,
@@ -185,7 +185,7 @@ def test_row_memcpy_kernel():
         kernel_name="row_memcpy",
         debug=debug,
         lineinfo=lineinfo,
-        header_dict={"parameters.h": parameters_header},
+        header_dict={"types.h": parameters_header},
         src_module="spio.src_tests",
     )
 

@@ -18,7 +18,7 @@ class Fragment:
         Use the generated class in your CUDA kernel like this:
             # Get element coordinates for this thread.
             int lane = threadIdx.x % 32;
-            Acc:Index acc_idx(lane);
+            Acc:CompoundIndex acc_idx(lane);
             auto qn_val = acc_idx.get<QN>();
             auto k2_val = acc_idx.get<K2>();
 
