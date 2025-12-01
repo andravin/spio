@@ -24,7 +24,7 @@ ENABLE_CPP_TESTS = os.environ.get("SPIO_ENABLE_CPP_TESTS", "false").lower() in T
 UTEST_HEADER = '#include "utest.h"'
 
 TEST_MODULES = [
-    gen.index,
+    gen.compound_index,
     gen.tensor,
     gen.checkerboard,
     gen.fragment_index,
@@ -46,6 +46,11 @@ CPP_SOURCES = [
 
 TEST_SOURCES = []
 
+CPP_TESTS_FILTER = None
+
+# Select specific C++ unit tests with a filter like this:
+# CPP_TESTS_FILTER = "Dim.*"
+
 
 @pytest.mark.skipif(
     not ENABLE_CPP_TESTS, reason="NVCC support not required by default."
@@ -63,9 +68,17 @@ def test_cpp_tests():
     with open(test_source_file.name, "w", encoding="utf-8") as f:
         f.write(code)
     try:
-        _compile_cpp_tests([test_source_file.name])
+        run_args = _format_utest_command_line(CPP_TESTS_FILTER)
+        _compile_cpp_tests([test_source_file.name], run_args=run_args)
     except CalledProcessError as e:
         assert False, f"{e.stdout} {e.stderr}"
+
+
+def _format_utest_command_line(test_filter: str = None) -> str:
+    """Format a UTEST command line argument to filter tests."""
+    if test_filter is None:
+        return None
+    return [f"--filter={test_filter}"]
 
 
 def _cpp_test(func: Callable[[], str]):
@@ -291,7 +304,6 @@ UTEST(ContiguousTensor, offset_from_tensor)
     // Test the use of a generated index class with the tensor subscript operator.
     for (int offset = 0; offset < size; ++offset) {{
         ContiguousTensor::index_type idx(offset);
-        EXPECT_EQ(*idx.apply_to(tensor), data[offset]);
         EXPECT_EQ(*tensor[idx], data[offset]);
     }}
 
@@ -532,7 +544,7 @@ UTEST(FragmentLoadIndex, MMA_M16_K16_F16_A)
     return test_code
 
 
-def _compile_cpp_tests(extra_cpp_test_files=None):
+def _compile_cpp_tests(extra_cpp_test_files=None, run_args=None):
     """Compile C++ tests with NVCC."""
     if extra_cpp_test_files is None:
         extra_cpp_test_files = []
@@ -544,4 +556,6 @@ def _compile_cpp_tests(extra_cpp_test_files=None):
         importlib_resources_files("spio.src_tests") / src for src in CPP_SOURCES
     ] + extra_cpp_test_files
     includes = [str(include) for include in includes]
-    return spio.compiler.compile_with_nvcc(sources=sources, includes=includes, run=True)
+    return spio.compiler.compile_with_nvcc(
+        sources=sources, includes=includes, run=True, run_args=run_args
+    )

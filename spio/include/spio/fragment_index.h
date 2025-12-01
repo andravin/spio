@@ -4,6 +4,7 @@
 #include "spio/macros.h"
 #include "spio/compound_index_base.h"
 #include "spio/dim.h"
+#include "spio/coordinates.h"
 
 // Add basic type trait support if not available
 namespace spio_internal {
@@ -28,37 +29,6 @@ namespace std {
 }
 
 namespace spio {
-    /// @brief Helper class representing a compound index with constant row and column dimensions.
-    /// @details Used as return type for get_fragment(int idx) methods. Can be used as argument to
-    /// the Tensor index operator.
-    template <typename RowDim, typename ColDim> class _ConstantRowColIndex {
-    public:
-        DEVICE constexpr _ConstantRowColIndex(const RowDim row, const ColDim col)
-            : _row(row),
-              _col(col) {}
-
-        template <typename Dim> DEVICE constexpr auto get() const {
-            if constexpr (std::is_same_v<Dim, RowDim>) {
-                return _row;
-            } else if constexpr (std::is_same_v<Dim, ColDim>) {
-                return _col;
-            } else {
-                static_assert(std::is_same_v<Dim, RowDim> || std::is_same_v<Dim, ColDim>,
-                              "Invalid dimension type for ConstantRowColIndex");
-                return Dim(0); // Unreachable but needed for compilation
-            }
-        }
-
-        /// @brief  Apply the index to a tensor or cursor.
-        template <typename TensorOrCursor>
-        DEVICE constexpr auto apply_to(TensorOrCursor tensor) const {
-            return tensor.apply_index_if_found(_row).apply_index_if_found(_col);
-        }
-
-    private:
-        const RowDim _row;
-        const ColDim _col;
-    };
 
     /// @brief Base class for all MMA indices that use 8x8 fragments.
     class _MMA_88_Index : public CompoundIndexBase {
@@ -250,8 +220,7 @@ namespace spio {
         // Return a compound index that points to the given fragment.
         // @param idx The fragment index
         auto DEVICE constexpr fragment_coord(int idx = 0) const {
-            return _ConstantRowColIndex<RowDim, Fold<ColDim, 8>>(get<RowDim>(idx),
-                                                                 get<Fold<ColDim, 8>>(idx));
+            return make_coordinates(get<RowDim>(idx), get<Fold<ColDim, 8>>(idx));
         }
 
         // Return the coordinate that is independent of fragment index.

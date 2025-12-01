@@ -1,4 +1,4 @@
-#include "utest.h"
+#include "dim_test_common.h"
 #include "spio/tensor.h"
 #include "spio/dim.h"
 #include "spio/compound_index.h"

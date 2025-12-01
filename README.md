@@ -7,33 +7,272 @@ Experimental CUDA kernel framework unifying typed dimensions, NVRTC JIT speciali
 
 ## Overview
 
-Spio is an experimental CUDA research playground that packages several forward-looking ideas for building next-generation GPU kernels: strongly typed tensor dimensions, pipeline-oriented code generation, and machine-learned performance models that steer NVRTC-compiled kernels at runtime.
+Spio is an experimental CUDA research playground that packages several forward-looking ideas for building next-generation GPU kernels: strongly typed tensor dimensions, machine-learned performance models, and direct-driver execution.
 
-## Key Features
+Spio compiles kernels just-in-time with NVRTC and launches them directly from Python via the CUDA Driver API. No intermediate C++ glue code, no CUDA Toolkit (`nvcc`), no host compiler (`gcc`) required.
 
-### 🔧 Typed Dimension System
+## The Typed Dimension System
 
-Unlike “Named Tensors,” which attach string names to dimensions and validate them at run time, Spio uses Typed Dimensions: each dimension is a distinct C++ type generated at build time and checked at compile time.
+In high-performance GPU computing, memory layouts are rarely simple. We deal with swizzled shared memory, interleaved vector loads, and opaque tensor core fragments. Standard libraries try to manage this using positional indexing (e.g., `tensor(i, j, k)`), placing the cognitive load on the developer to track exactly which argument corresponds to which physical dimension.
 
-- Named Tensors (strings, run-time):
-  - Dimension identity is a string evaluated at run time
-  - Errors surface during execution
-  - Requires lookups and checks in hot paths
+Spio introduces a strongly typed, projective indexing system that decouples the logical description of your data from its physical layout. At its core, Spio uses a compound index to map a linear offset to logical dimensions, enabling complex geometries like tiling and swizzling to be handled transparently.
 
-- Typed Dimensions (types, compile-time):
-  - Each logical dimension is a unique C++ type (e.g., I, J, K8)
-  - Misuses fail to compile (zero run-time overhead)
-  - Operator overloading maps types to per-tensor positions/strides
+Spio implements typed dimensions in a header-only, CUDA-aware C++ library using template metaprogramming. In the following examples, the comment blocks marked with the `@spio` tag instruct Spio's code generator to pre-include header files that define the requested dimension, tensor, and compound index classes.
 
-When the same dimension type appears in different tensors, it represents the same logical dimension; each tensor still defines its own size and stride for that dimension based on its layout. This enables position-free indexing—users don’t track index positions, sizes, or strides across tensors; the type system ensures correctness at compile time.
+### 1\. Safety and Commutativity
 
-In practice, the generated tensor classes overload the subscript operator (e.g., operator[] and helpers like get&lt;Dim&gt;()) to accept dimension types. For each dimension type present in a tensor’s layout, the overload applies that tensor’s stride for that type; if a dimension type not used by the tensor is provided, the expression fails to compile (static_assert), with zero run-time name lookups or checks.
+Spio dimensions behave like integers. Because dimensions are types, it is not possible to accidentally mix different dimensions.
+
+**File:** [01\_commutativity.cpp](spio/src_tests/tutorial/01_commutativity.cpp)
+
+```cpp
+// Define dimension types I and J.
+//
+/*@spio
+[
+Dim("i"), Dim("j")
+]
+@spio*/
+
+UTEST(Lesson1, TypeSafety) {
+
+    // Dimensions work like integers.
+    EXPECT_EQ(I(2) + I(4), I(6));
+    EXPECT_LT(I(8), I(10));
+
+    // Each dimension is a different CUDA / C++ type.
+    static_assert(!std::is_same_v<I, J>, "I and J are different types");
+
+    // This would fail to compile:
+    //
+    // EXPECT_EQ(I(5), J(5));
+    // error: no match for ‘operator==’ (operand types are ‘I’ and ‘J’)
+    //
+    // and so would this:
+    //
+    // auto sum = I(3) + J(4);
+    // error: invalid operands to binary expression ('I' and 'J')
+    //
+    // This prevents accidental mixing of dimensions.
+}
+```
+
+Spio never asks for a dimension's position in the tensor's dimensions list. Instead, Spio uses the dimension variable's static type to determine operator behavior.
+
+For example, many frameworks implement tensor subscripting such that the position of a subscript determines its behavior. In other words, `x(i, j, k) != x(k, i, j)`. Spio enables **position-free subscripting** where `x[i][j][k] == x[k][i][j]`. The compiler determines the effect of subscripts `i`, `j`, and `k` using their static types only.
+
+Typed dimensions also enable something we call **dimensional projection**: a coordinate list comprising many dimensions can be used as a subscript, and only dimensions supported by the tensor will have an effect, while others are ignored.
+
+```cpp
+// Define tensors A and B using dimensions I(16) × K(32) and K(32) × J(64).
+//
+/*@spio
+[
+Tensor("A", dtype.float, Dims(i=16, k=32)),
+Tensor("B", dtype.float, Dims(k=32, j=64))
+]
+@spio*/
+UTEST(Lesson1, Commutativity) {
+
+    // Create storage for the matrices.
+    A::data_type a_data[A::storage_size()];
+    B::data_type b_data[B::storage_size()];
+
+    // Create matrices a and b.
+    auto a = A(a_data);
+    auto b = B(b_data);
+
+    // Verify matrix sizes.
+    EXPECT_EQ(A::size<I>(), I(16));
+    EXPECT_EQ(A::size<K>(), K(32));
+    EXPECT_EQ(B::size<K>(), K(32));
+    EXPECT_EQ(B::size<J>(), J(64));
+
+    // Define coordinates
+    auto i = I(2);
+    auto j = J(3);
+    auto k = K(4);
+
+    // Position-free subscripting:
+    // Subscript order does not affect the result.
+    EXPECT_EQ(a[i][k].get(), a[k][i].get());
+    EXPECT_EQ(b[k][j].get(), b[j][k].get());
+
+    // Dimensional projection:
+    // Coordinates project onto the tensor's supported dimensions.
+    auto coords = make_coordinates(i, j, k);
+    EXPECT_EQ(a[coords].get(), a[k][i].get());
+    EXPECT_EQ(b[coords].get(), b[j][k].get());
+}
+```
+
+### 2\. The Unbounded Cursor
+
+Spio uses Cursors: lightweight, unbounded pointers that traverse multiple dimensions.
+
+**File:** [02\_cursor\_movement.cpp](spio/src_tests/tutorial/02_cursor_movement.cpp)
+
+```cpp
+/*@spio
+[
+Tensor("A", dtype.float, Dims(i=10, j=10))
+]
+@spio*/
+
+UTEST(Lesson2, AccumulationLoop) {
+
+    // Create matrix A.
+    A::data_type a_data[A::storage_size()];
+    auto a = A(a_data);
+
+    // Create cursor at (i=2, j=4).
+    auto b = a[I(2)][J(4)];
+
+    for (int step = 0; step < 5; ++step) {
+
+        // Verify the current position.
+        EXPECT_EQ(b.get(), a_data + (2 + step) * 10 + 4);
+
+        // Step by 1 in the I dimension.
+        b.step(I(1));
+    }
+}
+```
+
+### 3\. Folded Dimensions
+
+The generator `Dims(k8=4, i=4, k=8)` creates a tensor with physical layout $K_8(4) \times I(4) \times K(8)$. Here, $K_8$ and $K$ together address the full logical range $K(0) \ldots K(31)$: $K_8$ selects which chunk of 8 (the quotient), and $K$ selects within that chunk (the remainder). This decomposition enables interleaved and vectorized memory layouts while letting you write loops over the logical dimension $K$.
+
+**File:** [03\_folding.cpp](spio/src_tests/tutorial/03_folding.cpp)
+
+```cpp
+// Define a Tensor with a folded dimension K and interleaved layout.
+// Layout: K8(4) x I(4) x K(8)
+
+/*@spio
+[
+Tensor("A", dtype.float, Dims(k8=4, i=4, k=8))
+]
+@spio*/
+
+UTEST(Lesson3, AutomaticNormalization) {
+
+    // Create tensor a.
+    A::data_type data[A::storage_size()];
+    auto a = A(data);
+
+    // Folded dimension K8 is dimension K folded by stride 8.
+
+    // Dimensions are compatible with their folds:
+    EXPECT_EQ(K8(3), K(3 * 8));
+    EXPECT_EQ(K8(3) + K(4), K(3 * 8 + 4));
+
+    // Use constant I ..
+    auto i = I(2);
+
+    // .. and loop over K in range [0 .. 31] inclusive.
+    for (auto k : range(K(32))) {
+
+        // The loop variable has type K.
+        static_assert(std::is_same_v<decltype(k), K>, "k should be of type K");
+
+        // Spio accepts logical dimension K
+        // and folds it into the tensor's K8 and K dimensions automatically ..
+        auto b = a[i][k];
+
+        // .. saving the user from folding it manually.
+        auto k8 = K8(k.get() / 8);
+        auto km8 = K(k.get() % 8);
+        auto c = a[i][k8][km8];
+
+        EXPECT_EQ(b.get(), c.get());
+    }
+}
+```
+
+### 4\. Dimensional Projection
+
+A Spio tensor acts as a filter. It accepts a world state (a superset of coordinates) and automatically projects onto the supported dimensions.
+
+This allows you to create a single coordinates variable that includes all relevant dimensions. Each tensor projects the coordinates onto its supported dimensions, and arithmetic and comparison operators follow the same projection rules.
+
+With dimensional projection, individual dimensions disappear from the program. Tensor definitions carry all the information about how dimensions are used, and dimensional projection automatically harvests the relevant dimensions from world coordinates.
+
+**File:** [04\_projection.cpp](spio/src_tests/tutorial/04_projection.cpp)
+
+```cpp
+#include <numeric>
+
+// Define tensors A, B, C, and C_tile
+/*@spio
+[
+Tensor("A", dtype.float, Dims(i=16, k=32)),
+Tensor("B", dtype.float, Dims(k=32, j=64)),
+Tensor("C", dtype.float, Dims(i=16, j=64)),
+Tensor("C_tile", dtype.float, Dims(i=8, j=32), Strides(i=64))
+]
+@spio*/
+UTEST(Lesson4, DimensionalProjection) {
+
+    // ... create tensors a, b, and c with types A, B, and C.
+
+    // Select coordinates (I, J) for the tiles.
+    //
+    auto origin = spio::make_coordinates(I(12), J(60));
+
+    // Operations on coordinates use a technique we call dimensional projection:
+    // - arithmetic applies to pairs of matching dimensions and passes through others
+    // - comparison tests all pairs of matching dimensions
+    // - subscript applies matching dimensions and ignores others
+
+    // For matrix a ~ I × K, subscript I matches, and J is ignored.
+    auto a_tile = a[origin];
+
+    // For matrix b ~ K × J, subscript J matches, and I is ignored.
+    auto b_tile = b[origin];
+
+    // For matrix c ~ I × J, both I and J match.
+    auto c_tile = C_tile(c[origin].get());
+
+    // Iterate over the range I(8) × J(32).
+    for (auto idx : spio::range(c_tile)) {
+
+        // Iterate over the range K(32).
+        for (auto k : spio::range(a.size<K>())) {
+
+            // local and world have dimensions (I, J, K)
+            auto local = idx + k;
+            auto world = origin + local;
+
+            // Check that world coordinates I and K are less than a's sizes.
+            // Ignore world coordinate J in the comparison and subscript operations.
+            if (world < a.sizes()) { EXPECT_EQ(*a_tile[local], *a[world]); }
+
+            // Check that world coordinates J and K are less than b's sizes.
+            // Ignore world coordinate I in the comparison and subscript operations.
+            if (world < b.sizes()) { EXPECT_EQ(*b_tile[local], *b[world]); }
+        }
+
+        // Check that world coordinates I and J are less than c's sizes.
+        if (origin + idx < c.sizes()) { EXPECT_EQ(*c_tile[idx], *c[origin + idx]); }
+    }
+}
+```
+
+### 5. Matrix Multiply Kernel
+
+For a full example of high-performance matrix multiply kernel using typed dimensions and just-in-time compilation, see:
+
+- CUDA Source: [mma_checkerboard_16c.cu](spio/src_tests/mma_checkerboard_16c.cu)
+- Python Generators: [test_mma_checkerboard.py](tests/matmul/test_mma_checkerboard.py)
+
+This example demonstrates how dimensional projection manages the complexity of mapping global memory, shared memory tiles, and register matrix fragments within a single kernel.
+
+## Additional Features
 
 ### ⚡ Just-in-Time Kernel Generation
 
-Spio compiles kernels at runtime with NVIDIA’s NVRTC (libnvrtc) and tunes them for your GPU. No CUDA toolkit install is needed because Spio relies on the CUDA headers and NVRTC shared libraries that NVIDIA distributes as Python packages (the same infrastructure PyTorch depends on). And there’s no host C compiler involved at runtime—Spio invokes kernels directly through the CUDA driver API, so no generated launcher wrappers are required.
-
-This contrasts with packages like Triton Language that require a C compiler at runtime.
+Spio compiles kernels at runtime with NVIDIA’s NVRTC (libnvrtc) and uses a trained performance model to select the fastest kernel configuration for your GPU and workload. No CUDA toolkit install is needed because Spio relies on the CUDA headers and NVRTC shared libraries that NVIDIA distributes as Python packages (the same infrastructure PyTorch depends on). Spio launches kernels directly through the CUDA driver API, so no C/C++ launcher wrappers are required.
 
 ### 🎯 Performance Models
 
@@ -41,7 +280,7 @@ Machine learning models predict optimal kernel configurations based on layer par
 
 ### 🚀 PyTorch Integration
 
-Seamless integration with PyTorch through custom operators and `torch.compile` support. Drop-in replacement for existing operations with significant speedups.
+Seamless integration with PyTorch through custom operators and `torch.compile` support.
 
 ## Performance Results
 
@@ -58,18 +297,18 @@ The cuDNN Conv2d kernels use "implicit GEMM" with 1D horizontal tiling, causing 
 
 On NVIDIA GeForce RTX 3090, Spio approaches theoretical DRAM bandwidth limits for forward pass (FProp), input gradients (DGrad), and weight gradients (WGrad), while PyTorch/cuDNN implementations suffer from excess data transfers.
 
-On NVIDIA GeForce RTX 4090, Spio exceeds the effective DRAM bandwidth limit for small batch sizes by effectively utilizing the 72 MB L2 cache:
-
-![Benchmark Result on NVIDIA GeForce RTX 4090](figures/batch_size_vs_eff_bandwidth__nvidia_geforce_rtx_4090__convfirst_64c_3r_3s_8gw.png)
+On NVIDIA GeForce RTX 4090, Spio exceeds the effective DRAM bandwidth limit for small batch sizes. 2D tiling always reduces L2 traffic, and the advantage grows when inputs from the previous layer already reside in the 72 MB cache.
 
 Benchmarks use realistic workloads with layers embedded in ConvFirst or MBConv blocks to accurately reflect real-world performance.
+
+![Benchmark Result on NVIDIA GeForce RTX 4090](figures/batch_size_vs_eff_bandwidth__nvidia_geforce_rtx_4090__convfirst_64c_3r_3s_8gw.png)
 
 ## Quick Start
 
 ### Prerequisites
 
-- Linux x86_64
-- NVIDIA GPU: Ampere (sm_80/sm_86) or Ada (sm_89)
+- Linux x86\_64
+- NVIDIA GPU: Ampere (sm\_80/sm\_86) or Ada (sm\_89)
 - NVIDIA driver (compatible with CUDA 12 runtime)
 - Python 3.9+
 
@@ -93,7 +332,7 @@ pip install spio
 
 Notes:
 
-- PyTorch (torch>=2.4.0) is an explicit dependency and will be installed automatically when you install Spio; no separate install step is required.
+- PyTorch (torch\>=2.4.0) is an explicit dependency and will be installed automatically when you install Spio; no separate install step is required.
 - CUDA toolkit installation is not required. Spio relies on NVIDIA's CUDA runtime and NVRTC libraries that are pulled in via wheels and are the same libraries PyTorch uses.
 
 Alternatively, install Spio from source. For this, you will need a C compiler. On Ubuntu:
@@ -124,7 +363,7 @@ deactivate
 
 Spio itself does not need a host C/C++ compiler or the CUDA developer toolkit. You can use Spio operations with PyTorch on a production system that does not have these.
 
-However, `torch.compile()` (Inductor/Triton) does, and missing pieces surface as errors like `nvrtc: file not found`, `error: unable to compile C wrapper`, `LLVM: external toolchain not found`, or `RuntimeError: codegen failed in Inductor`. These originate from PyTorch/Triton rather than Spio.
+However, `torch.compile()` (Inductor/Triton) does, and missing pieces cause errors like `nvrtc: file not found`, `error: unable to compile C wrapper`, `LLVM: external toolchain not found`, or `RuntimeError: codegen failed in Inductor`. These originate from PyTorch/Triton rather than Spio.
 
 If you intend to use `torch.compile()` with Spio operations, ensure your production environment provides:
 
@@ -164,124 +403,4 @@ weight = torch.randn(64, 8, 3, 3, device='cuda', dtype=torch.float16)
 # Call the Spio custom convolution op with registered autograd support.
 # Automatically selects optimal kernel configuration for your GPU. 
 output = spio.functional.conv2d_gw8(x, weight, groups=8)
-```
-
-## Typed Dimensions
-
-Spio’s typed dimensions system represents dimensions as distinct C++ types. The generator emits those types (e.g., I, J, K16, BLOCK_I), and operator overloading automatically applies dimensions subscripts with the correct stride and prevents accidental mixing of different dimensions.
-
-A dimension type denotes a logical axis that can be used across several tensors, while each tensor provides its own size/stride for each dimension it supports. Because dimension identity is a type, operations work on specific dimension types that are known at compile time. This enables position-free indexing and aggressive compile-time optimization (constexpr indexing, loop unrolling).
-
-The matrix multiply example first defines tensor layouts in a Python module:
-
-```python
-# Import Tensor, dtype, CompoundIndex, Fold, Dims, etc.
-from spio.generators import *
-
-# Dimension I represents the same logical dimension across all tensors that use it.
-# Each tensor defines its own strided layout containing that dimension.
-
-# Tensor A: format K16 x I x K8
-# K16 and K8 are folds of dimension K with strides 16 and 8.
-tensor_a = Tensor("A", dtype.uint4, Dims(k16=k16, i=m, k8=2), constant=True)
-
-# Tensor B: format K16 x J x K8
-tensor_b = Tensor("B", dtype.uint4, Dims(k16=k16, j=n, k8=2), constant=True)
-
-# Tensor C: format J16 x I x J8
-tensor_c = Tensor("C", dtype.uint4, Dims(j16=j16, i=m, j8=2))
-
-# SmemA: format PING x K16 x I16 x CHECKERS
-# I16 is a fold of dimension I with stride 16.
-smem_tensor_a = Tensor(
-    "SmemA",
-    dtype.uint4,
-    Dims(
-        ping=2,
-        k16=config.chunk_k16,
-        i16=block_x16,
-        checkers=32,
-    ),
-)
-```
-
-It also defines thread-block dimensions:
-
-```python
-# Dimension BLOCK_I folds dimension I with stride block_x.
-Fold("block_i", "i", block_x),
-
-# Dimension BLOCK_J folds dimension J with stride block_x.
-Fold("block_j", "j", block_x),
-```
-
-Code generation defines CUDA/C++ classes for these types, and the CUDA kernel includes them from generated file "types.h".
-
-```c++
-// Include generated code.
-#include "types.h"
-
-// Dimension 'i' and folds 'block_i' and 'block_j' generate types I, BLOCK_I, and BLOCK_J
-// that you use in the CUDA kernel.
-
-// Get the tile coordinates for this thread-block.
-auto block_idx = make_coordinates(BLOCK_I(blockIdx.y), BLOCK_J(blockIdx.x));
-
-// Map this thread to the global memory load index.
-GlobalLoadIndex global_load_idx(threadIdx.x);
-
-// Map global load index into A/B tensor coordinates. Replace base dims X with I/J.
-auto global_load_a_idx = global_load_idx.cast<X, I>();
-auto global_load_b_idx = global_load_idx.cast<X, J>();
-auto a = A(a_ptr)[block_idx][global_load_a_idx].rebase();
-auto b = B(b_ptr)[block_idx][global_load_b_idx].rebase();
-```
-
-The main computation loop demonstrates how typed dimensions provide compile-time safety by preventing incompatible dimension types from being used with tensors that don't support them. The tensor implementations use `constexpr` with known tile sizes so that tensor indexing arithmetic is greatly simplified at compile-time and loops with constant bounds are unrolled. This produces highly optimized code that runs at near full utilization on NVIDIA GeForce RTX 4090 (Ada) GPUs:
-
-```c++
-// Aggressive unrolling of the main loop improves arithmetic utilization.
-#pragma unroll MAIN_LOOP_UNROLL_DEPTH
-for (int iter = 0; iter < size.get(); iter += 2 * step_size.get()) {
-
-    // Double-buffer loads and compute.
-    for (auto phase : range(PING(2))) {
-
-        // If not the last iteration, copy the next tile from global
-        // memory to shared memory asynchronously.
-        if (iter + (phase.get() + 1) * step_size.get() < size.get()) {
-            // Copy into the back-buffer.
-            loader_a.copy_async(smem_a_store[(phase + 1) % 2].get(), a.get());
-            loader_b.copy_async(smem_b_store[(phase + 1) % 2].get(), b.get());
-        }
-
-        // Advance the global memory tiles.
-        a.step(step_size);
-        b.step(step_size);
-
-        // Synchronize on the previous iteration's global memory copy.
-        __pipeline_commit();
-        __pipeline_wait_prior(1);
-        __syncthreads();
-
-        // Load matrix tiles from shared memory into registers.
-        a_tile.load(smem_a_load[phase]);
-        b_tile.load(smem_b_load[phase]);
-
-        // Matrix-multiply the tiles using Tensor Cores.
-        // Compile-time type checking ensures the compatibility of the tile dimensions.
-        mma(a_tile, b_tile, c_tile, c_tile);
-        __syncthreads();
-    }
-}
-__pipeline_wait_prior(0);
-```
-
-The output staging loop demonstrates range-based iteration over all dimensions of a tensor. When the coordinate is applied to a different tensor's indexing operator, the system performs automatic **dimension normalization** (unfolding coordinates to match the target tensor's strides) and **dimension projection** (applying only matching dimension types while ignoring those not used by the target tensor):
-
-```c++
-// Iterate over c_tile; coord auto-normalizes and projects when indexing smem_c_fragment
-for (auto coord : range(c_tile)) {
-    *smem_c_fragment[coord] = c_tile[coord]->to_half2(f);
-}
 ```

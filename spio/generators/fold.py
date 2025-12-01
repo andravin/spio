@@ -24,16 +24,23 @@ class Fold(GenSpecs):
     dim_name: str
     stride: int
 
+    def __post_init__(self):
+        """Normalize the fold and dimension names to upper-case."""
+        object.__setattr__(self, "fold_name", self.fold_name.upper())
+        object.__setattr__(self, "dim_name", self.dim_name.upper())
+
     def generate(self):
         dim_class_name = dim_name_to_dim_or_fold_class_name(self.dim_name)
-        fold_template_instance = _format_fold_template_instance(dim_class_name, self.stride)
-        fold_class_name = _format_dim_class_name(self.fold_name)       
+        fold_template_instance = _format_fold_template_instance(
+            dim_class_name, self.stride
+        )
+        fold_class_name = _format_dim_class_name(self.fold_name)
         return f"using {fold_class_name} = {fold_template_instance};\n"
 
     @property
     def dim_names(self) -> Tuple[str]:
         """Return the base dimension name, not the folded form.
-        
+
         This ensures we don't create redundant dimension classes for already folded dimensions.
         """
         base_name, _ = _get_dim_name_and_stride(self.dim_name)

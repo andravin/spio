@@ -6,13 +6,14 @@ from .gen_specs import GenSpecs
 from .dim import Dim, _get_dim_name_and_stride
 from .fold import Fold
 from .tensor import Tensor
-from .index import CompoundIndex
+from .compound_index import CompoundIndex
 from .fragment import Fragment
 
 
 def generate(
     gen_specs: List[GenSpecs],
     namespace: str = None,
+    utest_dim_printers: bool = False,
 ) -> str:
     """Generate CUDA code from generator specifications."""
     # 1. Find explicitly declared Fold specs
@@ -133,6 +134,13 @@ def generate(
     if namespace is not None:
         code += _end_namespace()
 
+    # Optionally dimension printers used by the utest.h unit testing framework.
+    if utest_dim_printers and base_dims:
+        code += "\n"
+        code += "// Dim printers for utest.h unit testing framework.\n"
+        for dim in sorted(base_dims, key=lambda x: x.dim_name):
+            code += f"UTEST_DIM_PRINTER({dim.dim_name});\n"
+
     return code
 
 
@@ -150,10 +158,7 @@ def _get_user_defined_data_types(gen_specs: List[GenSpecs]) -> List[str]:
 
 def _include_files():
     return """
-#include "spio/allocator.h"
-#include "spio/compound_index.h"
-#include "spio/tensor.h"
-#include "spio/dim.h"
+#include "spio/typed_dims.h"
 """
 
 

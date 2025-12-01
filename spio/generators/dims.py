@@ -16,7 +16,7 @@ class Dims:
                 is specified as a name-value pair, where the name is a string
                 and the value is an integer or a SubindexProtocol object.
         """
-        self._dims = dims
+        self._dims = {key.upper(): value for key, value in dims.items()}
 
     def items(self) -> Generator[Tuple[str, Union[int, SubindexProtocol]], None, None]:
         """Get the dimensions as a generator of (name, value) pairs."""
@@ -50,7 +50,7 @@ class Strides:
                 is specified as a name-value pair, where the name is a string
                 and the value is an integer.
         """
-        self._strides = strides
+        self._strides = {key.upper(): value for key, value in strides.items()}
 
     def items(self) -> Generator[Tuple[str, int], None, None]:
         """Get the strides as a generator of (name, value) pairs."""
@@ -89,4 +89,3 @@ def compute_full_strides(
         # Compute the default stride of the next dimension.
         stride *= value
     return all_strides
-

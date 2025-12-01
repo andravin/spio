@@ -35,6 +35,10 @@ class Tensor:
     constant: bool = False
 
     def __post_init__(self):
+        if isinstance(self.dims, dict):
+            self.dims = Dims(**self.dims)
+        if isinstance(self.strides, dict):
+            self.strides = Strides(**self.strides)
         self.strides = compute_full_strides(self.dims, self.strides)
 
     def generate_with_context(self, user_data_types: List[str] = None) -> str:
@@ -125,7 +129,9 @@ def _get_data_type_name(
         data_type = data_type.value.name
     elif isinstance(data_type, str):
         if user_data_types is None:
-            raise ValueError("user_data_types must be provided for user-defined data-types.")
+            raise ValueError(
+                "user_data_types must be provided for user-defined data-types."
+            )
         if not data_type in user_data_types:
             raise ValueError(f"Unknown user-defined data-type: {data_type}")
     else:

@@ -23,6 +23,10 @@ class AsyncStripLoader(GenSpecs):
     minor_axis_size: int
     num_warps: int
 
+    def __post_init__(self):
+        """Normalize the minor axis name to upper-case."""
+        self.minor_axis = self.minor_axis.upper()
+
     def generate(self) -> str:
         """Generate the C++ source code for the custom strip loader class."""
         smem_stride = self.smem_tensor.strides[self.minor_axis]

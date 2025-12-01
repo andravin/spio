@@ -36,6 +36,10 @@ class CompoundIndex:
 
     def __post_init__(self):
         # Ensure strides are calculated for each dimension
+        if isinstance(self.dims, dict):
+            self.dims = Dims(**self.dims)
+        if isinstance(self.strides, dict):
+            self.strides = Strides(**self.strides)
         self.strides = compute_full_strides(self.dims, self.strides)
         self.dummies = self.dummies or []
 
