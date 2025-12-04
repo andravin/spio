@@ -85,7 +85,8 @@ namespace spio {
             } else if constexpr (std::is_same_v<Dim, OffsetDim>) {
                 return OffsetDim(offset());
             } else {
-                static_assert(std::is_same_v<Dim, PairDim> || std::is_same_v<Dim, ColorDim>,
+                static_assert(std::is_same_v<Dim, PairDim> || std::is_same_v<Dim, ColorDim> ||
+                                  std::is_same_v<Dim, OffsetDim>,
                               "Invalid dimension type for CheckerboardIndex");
                 return Dim(0);
             }
@@ -117,9 +118,8 @@ namespace spio {
             return compute_offset(pair_dim.get(), color_dim.get());
         }
 
-        template <typename TensorOrCursor>
-        DEVICE constexpr auto apply_to(TensorOrCursor tensor) const {
-            return tensor.apply_index_if_found(get<OffsetDim>());
+        DEVICE constexpr auto coordinates() const {
+            return make_coordinates(get<OffsetDim>());
         }
     };
 }

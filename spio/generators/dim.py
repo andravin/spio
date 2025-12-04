@@ -23,6 +23,10 @@ class Dim(GenSpecs):
 
     dim_name: str
 
+    def __post_init__(self):
+        """Normalize the dimension name to upper-case."""
+        object.__setattr__(self, "dim_name", self.dim_name.upper())
+
     @property
     def class_name(self) -> str:
         """Convert the dimension name to a dimension class name."""
@@ -36,9 +40,7 @@ class Dim(GenSpecs):
     @property
     def dim_names(self) -> Tuple[str,]:
         """Return the name of the dimension."""
-        return tuple(
-            self.dim_name,
-        )
+        return (self.dim_name,)
 
 
 def dim_name_to_dim_or_fold_class_name(name: str) -> str:
@@ -68,7 +70,7 @@ def _get_dim_name_and_stride(name: str) -> Tuple[str, int]:
 
 def _format_dim_class_name(dim_name: str) -> str:
     """Convert a dimension name to a dimension class name."""
-    return f"{dim_name.upper()}"
+    return dim_name
 
 
 def _format_fold_template_instance(dim_class_name: str, stride: int) -> str:

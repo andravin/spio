@@ -84,8 +84,8 @@ class FragmentIndex:
         """
         self.class_name = class_name
         self.fragment_type = fragment_type
-        self.row_name = row_name
-        self.col_name = col_name
+        self.row_name = row_name.upper()
+        self.col_name = col_name.upper()
 
     def generate(self) -> str:
         """Return the CUDA / C++ source code for the fragment index type alias."""

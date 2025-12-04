@@ -14,6 +14,7 @@ namespace std {
 namespace spio {
     // Forward declaration needed for replace_base_dim specialization
     template <class DimType, int Stride> class Fold;
+    template <class DimType, int Size, int Stride> class Module;
 
     namespace detail {
 
@@ -150,6 +151,24 @@ namespace spio {
             : conditional_t<is_same<Target, Head>::value, true_type,
                             tuple_contains<Target, tuple<Tail...>>> {};
 
+        template <typename Target, typename Tuple>
+        inline constexpr bool tuple_contains_v = tuple_contains<Target, Tuple>::value;
+
+        // Get tuple element type by index
+        template <std::size_t I, typename Tuple> struct tuple_element;
+
+        template <typename Head, typename... Tail> struct tuple_element<0, tuple<Head, Tail...>> {
+            using type = Head;
+        };
+
+        template <std::size_t I, typename Head, typename... Tail>
+        struct tuple_element<I, tuple<Head, Tail...>> {
+            using type = typename tuple_element<I - 1, tuple<Tail...>>::type;
+        };
+
+        template <std::size_t I, typename Tuple>
+        using tuple_element_t = typename tuple_element<I, Tuple>::type;
+
         template <typename DimType> DEVICE constexpr DimType& tuple_get_by_type(tuple<>&) {
             static_assert(dependent_false<DimType>::value, "DimType not found in tuple.");
             return *reinterpret_cast<DimType*>(nullptr);
@@ -231,31 +250,65 @@ namespace spio {
         template <std::size_t N>
         using make_index_sequence = typename make_index_sequence_impl<N>::type;
 
-        // Extract the base dim_type from a Dim or Fold
+        // ========================================================================
+        // Dimension type traits - single definitions
+        // ========================================================================
+
+        // Extract the base dim_type from a Dim, Fold, or Module
         template <typename T, typename = void> struct get_base_dim_type {
             using type = T; // For plain Dim types, the type itself is the base
         };
 
         template <typename T> struct get_base_dim_type<T, void_t<typename T::dim_type>> {
-            using type = typename T::dim_type; // For Fold, extract dim_type
+            using type = typename T::dim_type; // For Fold and Module, extract dim_type
         };
 
         template <typename T> using get_base_dim_type_t = typename get_base_dim_type<T>::type;
 
-        // Check if a type has a dim_type member (i.e., is a Fold)
+        // Check if a type has a dim_type member (i.e., is a Fold or Module)
         template <typename T, typename = void> struct has_dim_type : false_type {};
 
         template <typename T> struct has_dim_type<T, void_t<typename T::dim_type>> : true_type {};
 
-        // Helper to get stride from a dimension type (1 for plain Dim, Stride for Fold)
+        template <typename T> inline constexpr bool has_dim_type_v = has_dim_type<T>::value;
+
+        // Helper to get stride from a dimension type (1 for plain Dim, Stride for Fold/Module)
         template <typename DimType, typename = void> struct get_dim_stride {
             static constexpr int value = 1;
         };
 
         template <typename DimType>
-        struct get_dim_stride<DimType, void_t<typename DimType::dim_type>> {
+        struct get_dim_stride<DimType, void_t<decltype(DimType::stride)>> {
             static constexpr int value = DimType::stride.get();
         };
+
+        template <typename T> inline constexpr int get_dim_stride_v = get_dim_stride<T>::value;
+
+        // Get the size of a dimension type
+        // For base Dims and Folds: unbounded (represented as max int)
+        // For Modules: actual compile-time size
+        template <typename T, typename = void> struct get_dim_size {
+            static constexpr int value = 0x7FFFFFFF; // Unbounded
+        };
+
+        template <typename T> struct get_dim_size<T, void_t<decltype(T::size)>> {
+            static constexpr int value = T::size.get();
+        };
+
+        template <typename T> inline constexpr int get_dim_size_v = get_dim_size<T>::value;
+
+        // Check if a dimension has bounded size (i.e., is a Module)
+        template <typename T>
+        inline constexpr bool is_bounded_v = get_dim_size<T>::value != 0x7FFFFFFF;
+
+        // Check if two dim-like types are compatible (same base dimension)
+        template <typename T, typename U>
+        inline constexpr bool dims_compatible_v =
+            is_same<get_base_dim_type_t<T>, get_base_dim_type_t<U>>::value;
+
+        // ========================================================================
+        // Tuple operations for dimension types
+        // ========================================================================
 
         // Check if tuple contains a type with matching base dim_type
         template <typename BaseDimType, typename Tuple> struct tuple_contains_base_dim;
@@ -378,6 +431,10 @@ namespace spio {
         template <typename T, typename Tuple>
         using tuple_prepend_t = typename tuple_prepend<T, Tuple>::type;
 
+        // ========================================================================
+        // Base dimension replacement
+        // ========================================================================
+
         // Replace the base dimension of a type while preserving fold structure
         // For plain Dim: X -> Y
         // For Fold<X, S>: Fold<X, S> -> Fold<Y, S>
@@ -395,10 +452,30 @@ namespace spio {
             using type = Fold<new_inner, Stride>;
         };
 
+        // Specialization for Module types
+        template <typename FromBaseDim, typename ToBaseDim, typename InnerDim, int Size, int Stride>
+        struct replace_base_dim<FromBaseDim, ToBaseDim, Module<InnerDim, Size, Stride>> {
+            using new_inner = typename replace_base_dim<FromBaseDim, ToBaseDim, InnerDim>::type;
+            using type = Module<new_inner, Size, Stride>;
+        };
+
         template <typename FromBaseDim, typename ToBaseDim, typename DimType>
         using replace_base_dim_t = typename replace_base_dim<FromBaseDim, ToBaseDim, DimType>::type;
 
+        // ========================================================================
+        // Dim-like detection
+        // ========================================================================
+
+        // Trait to detect if a type is dim-like (has a get() method returning int)
+        template <typename T, typename = void> struct is_dim_like : false_type {};
+
+        template <typename T>
+        struct is_dim_like<T, void_t<decltype(declval<T>().get())>> : true_type {};
+
+        template <typename T> inline constexpr bool is_dim_like_v = is_dim_like<T>::value;
+
     } // namespace detail
+
 } // namespace spio
 
 #endif

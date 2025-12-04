@@ -1,4 +1,4 @@
-#include "dim_test_common.h"
+#include "dim_test_types.h"
 
 #include "spio/coordinates.h"
 #include "spio/dim.h"
@@ -106,11 +106,13 @@ UTEST(Coordinates, less_than_same_dims_equal) {
     EXPECT_FALSE(a < b);
 }
 
-UTEST(Coordinates, less_than_disjoint_dims) {
-    auto a = spio::make_coordinates(I(100));
-    auto b = spio::make_coordinates(J(1));
-    EXPECT_TRUE(a < b); // No shared dims, vacuously true
-}
+// This test should fail to compile because it compares Coordinates
+// that have no dimensions in common.
+// UTEST(Coordinates, less_than_disjoint_dims) {
+//     auto a = spio::make_coordinates(I(100));
+//     auto b = spio::make_coordinates(J(1));
+//     EXPECT_TRUE(a < b); // No shared dims, vacuously true
+// }
 
 UTEST(Coordinates, less_than_partial_overlap_true) {
     auto a = spio::make_coordinates(I(1), J(2));
@@ -206,11 +208,13 @@ UTEST(Coordinates, equal_same_dims_false) {
     EXPECT_FALSE(a == b);
 }
 
-UTEST(Coordinates, equal_disjoint_dims) {
-    auto a = spio::make_coordinates(I(100));
-    auto b = spio::make_coordinates(J(1));
-    EXPECT_TRUE(a == b); // No shared dims, vacuously true
-}
+// This test should fail to compile because it compares coordinates
+// that have no dimensions in common:
+// UTEST(Coordinates, equal_disjoint_dims) {
+//     auto a = spio::make_coordinates(I(100));
+//     auto b = spio::make_coordinates(J(1));
+//     EXPECT_TRUE(a == b); // No shared dims, vacuously true
+// }
 
 UTEST(Coordinates, equal_partial_overlap_true) {
     auto a = spio::make_coordinates(I(1), J(20));
@@ -492,112 +496,21 @@ UTEST(Coordinates, comparison_partial_overlap_with_folds) {
     EXPECT_FALSE(a == b); // 5 != 8
 }
 
-UTEST(Coordinates, fold_like_simple_tensor) {
-    // Create a simple tensor type with plain dimensions
-    using TestTensor = spio::Tensor<float, spio::DimInfo<I, 4, 1>, spio::DimInfo<J, 8, 4>>;
-
-    auto coords = spio::make_coordinates(I(2), J(3));
-    auto folded = coords.fold_like<TestTensor>();
-
-    EXPECT_EQ(folded.get<I>(), I(2));
-    EXPECT_EQ(folded.get<J>(), J(3));
-}
-
-UTEST(Coordinates, fold_like_with_fold_dimension) {
-    using FoldI8 = spio::Fold<I, 8>;
-
-    // Tensor with a folded dimension
-    using TestTensor = spio::Tensor<float, spio::DimInfo<FoldI8, 4, 1>, spio::DimInfo<J, 8, 4>>;
-
-    // Coordinates with plain I dimension
-    auto coords = spio::make_coordinates(I(16), J(3));
-    auto folded = coords.fold_like<TestTensor>();
-
-    // I(16) should become FoldI8(2) since 16/8 = 2
-    EXPECT_EQ(folded.get<FoldI8>(), FoldI8(2));
-    EXPECT_EQ(folded.get<J>(), J(3));
-}
-
-UTEST(Coordinates, fold_like_unfold_to_plain_dim) {
-    using FoldI8 = spio::Fold<I, 8>;
-
-    // Tensor with plain I dimension
-    using TestTensor = spio::Tensor<float, spio::DimInfo<I, 32, 1>, spio::DimInfo<J, 8, 32>>;
-
-    // Coordinates with folded dimension
-    auto coords = spio::make_coordinates(FoldI8(2), J(3));
-    auto folded = coords.fold_like<TestTensor>();
-
-    // FoldI8(2) should become I(16) since 2*8 = 16
-    EXPECT_EQ(folded.get<I>(), I(16));
-    EXPECT_EQ(folded.get<J>(), J(3));
-}
-
-UTEST(Coordinates, fold_like_refold_to_different_stride) {
-    using FoldI4 = spio::Fold<I, 4>;
-    using FoldI8 = spio::Fold<I, 8>;
-
-    // Tensor with FoldI4 dimension
-    using TestTensor = spio::Tensor<float, spio::DimInfo<FoldI4, 8, 1>, spio::DimInfo<J, 4, 8>>;
-
-    // Coordinates with FoldI8
-    auto coords = spio::make_coordinates(FoldI8(2), J(3)); // 2*8 = 16
-    auto folded = coords.fold_like<TestTensor>();
-
-    // FoldI8(2) = 16 should become FoldI4(4) since 16/4 = 4
-    EXPECT_EQ(folded.get<FoldI4>(), FoldI4(4));
-    EXPECT_EQ(folded.get<J>(), J(3));
-}
-
-UTEST(Coordinates, fold_like_multiple_folds_same_base) {
-    using FoldI4 = spio::Fold<I, 4>;
-    using FoldI8 = spio::Fold<I, 8>;
-
-    // Tensor with multiple fold dimensions for same base type
-    using TestTensor = spio::Tensor<float, spio::DimInfo<FoldI8, 4, 1>, // Outer fold
-                                    spio::DimInfo<FoldI4, 2, 4>>;       // Inner fold
-
-    // Coordinates with plain I dimension
-    auto coords = spio::make_coordinates(I(24)); // 24 = 3*8 or 6*4
-    auto folded = coords.fold_like<TestTensor>();
-
-    // Should have both FoldI8(3) and FoldI4(6)
-    EXPECT_EQ(folded.get<FoldI8>(), FoldI8(3)); // (24/8)%4 = 3
-    EXPECT_EQ(folded.get<FoldI4>(), FoldI4(0)); // (24/4)%2 = 0
-    EXPECT_EQ(folded.num_dims(), 2);
-}
-
-UTEST(Coordinates, fold_like_partial_match) {
-    using FoldI8 = spio::Fold<I, 8>;
-
-    // Tensor with I and K dimensions (no J)
-    using TestTensor = spio::Tensor<float, spio::DimInfo<FoldI8, 4, 1>, spio::DimInfo<K, 8, 4>>;
-
-    float data[TestTensor::storage_size()];
-    TestTensor tensor(data);
-
-    // Coordinates with I and J (tensor has I and K)
-    auto coords = spio::make_coordinates(I(16), J(3));
-    auto cursor = coords.apply_to(tensor);
-
-    // Only I matches: I(16) folds to FoldI8(2), J(3) is ignored
-    // Offset: FoldI8(2) * 1 = 2
-    EXPECT_EQ(cursor.get(), data + 2);
-}
-
-UTEST(Coordinates, apply_to_no_matching_dims) {
-    using TestTensor = spio::Tensor<float, spio::DimInfo<K, 8, 1>>;
-
-    float data[TestTensor::storage_size()];
-    TestTensor tensor(data);
-
-    // Coordinates with I and J, tensor only has K
-    auto coords = spio::make_coordinates(I(5), J(3));
-    auto cursor = coords.apply_to(tensor);
-
-    // No matching dimensions, offset should be 0
-    EXPECT_EQ(cursor.get(), data);
-}
+// This will fail to compile because subscripting must match at least one tensor dimension.
+//
+// UTEST(Coordinates, apply_to_no_matching_dims) {
+//     using TestTensor = spio::Tensor<float, spio::DimInfo<K, 8, 1>>;
+//
+//     float data[TestTensor::storage_size()];
+//     TestTensor tensor(data);
+//
+//     // Coordinates with I and J, tensor only has K
+//     auto coords = spio::make_coordinates(I(5), J(3));
+//     auto cursor = tensor[coords];
+//
+//     // No matching dimensions, offset should be 0
+//     EXPECT_EQ(cursor.get(), data);
+// }
 
 UTEST(Coordinates, apply_to_normalized_coordinates) {
     using FoldI8 = spio::Fold<I, 8>;
@@ -608,7 +521,7 @@ UTEST(Coordinates, apply_to_normalized_coordinates) {
 
     // Unnormalized coordinates: I(1) + FoldI8(1) = 9
     auto coords = spio::make_coordinates(I(1), FoldI8(1));
-    auto cursor = coords.apply_to(tensor);
+    auto cursor = tensor[coords];
 
     // Normalized to I(9), then folded to FoldI8(1) (9/8 = 1)
     // Note: 9/8 = 1 with integer division
@@ -624,7 +537,7 @@ UTEST(Coordinates, apply_to_three_dimensions) {
     TestTensor tensor(data);
 
     auto coords = spio::make_coordinates(I(1), J(2), K(3));
-    auto cursor = coords.apply_to(tensor);
+    auto cursor = tensor[coords];
 
     // Offset: I(1) * 1 + J(2) * 4 + K(3) * 16 = 1 + 8 + 48 = 57
     EXPECT_EQ(cursor.get(), data + 57);
@@ -638,7 +551,7 @@ UTEST(Coordinates, less_than_index) {
     auto idx = TestIndex(20); // offset 20 = I(0) + J(5) -> I=20%4=0, J=20/4=5
 
     // coords: I=1, J=2
-    // idx.to_coordinates(): I=0, J=5
+    // idx.coordinates(): I=0, J=5
     // 1 < 0 is false, so not all shared dims satisfy <
     EXPECT_FALSE(coords < idx);
 }
@@ -776,12 +689,13 @@ UTEST(Coordinates, add_index_with_fold) {
 
 UTEST(CoordinatesRange, single_dimension) {
     using TestTensor = spio::Tensor<float, spio::DimInfo<I, 3, 1>>;
+    using ModuleI = spio::Module<I, 3, 1>;
     float data[TestTensor::storage_size()];
     TestTensor tensor(data);
 
     int count = 0;
     for (auto coord : spio::range(tensor)) {
-        EXPECT_EQ(coord.get<I>(), I(count));
+        EXPECT_EQ(coord.get<ModuleI>().get(), count);
         ++count;
     }
     EXPECT_EQ(count, 3);
@@ -789,16 +703,18 @@ UTEST(CoordinatesRange, single_dimension) {
 
 UTEST(CoordinatesRange, two_dimensions) {
     using TestTensor = spio::Tensor<float, spio::DimInfo<I, 2, 1>, spio::DimInfo<J, 3, 2>>;
+    using ModuleI = spio::Module<I, 2, 1>;
+    using ModuleJ = spio::Module<J, 3, 1>;
     float data[TestTensor::storage_size()];
     TestTensor tensor(data);
 
     int count = 0;
     for (auto coord : spio::range(tensor)) {
         // J varies fastest (stride 2 > stride 1)
-        I expected_i(count % 2);
-        J expected_j(count / 2);
-        EXPECT_EQ(coord.get<I>(), expected_i);
-        EXPECT_EQ(coord.get<J>(), expected_j);
+        int expected_i = count % 2;
+        int expected_j = count / 2;
+        EXPECT_EQ(coord.get<ModuleI>().get(), expected_i);
+        EXPECT_EQ(coord.get<ModuleJ>().get(), expected_j);
         ++count;
     }
     EXPECT_EQ(count, 6);
@@ -807,18 +723,21 @@ UTEST(CoordinatesRange, two_dimensions) {
 UTEST(CoordinatesRange, three_dimensions) {
     using TestTensor =
         spio::Tensor<float, spio::DimInfo<I, 2, 1>, spio::DimInfo<J, 2, 2>, spio::DimInfo<K, 2, 4>>;
+    using ModuleI = spio::Module<I, 2, 1>;
+    using ModuleJ = spio::Module<J, 2, 1>;
+    using ModuleK = spio::Module<K, 2, 1>;
     float data[TestTensor::storage_size()];
     TestTensor tensor(data);
 
     int count = 0;
     for (auto coord : spio::range(tensor)) {
         // Order by stride: I (1), J (2), K (4)
-        I expected_i(count % 2);
-        J expected_j((count / 2) % 2);
-        K expected_k(count / 4);
-        EXPECT_EQ(coord.get<I>(), expected_i);
-        EXPECT_EQ(coord.get<J>(), expected_j);
-        EXPECT_EQ(coord.get<K>(), expected_k);
+        int expected_i = count % 2;
+        int expected_j = (count / 2) % 2;
+        int expected_k = count / 4;
+        EXPECT_EQ(coord.get<ModuleI>().get(), expected_i);
+        EXPECT_EQ(coord.get<ModuleJ>().get(), expected_j);
+        EXPECT_EQ(coord.get<ModuleK>().get(), expected_k);
         ++count;
     }
     EXPECT_EQ(count, 8);
@@ -826,13 +745,15 @@ UTEST(CoordinatesRange, three_dimensions) {
 
 UTEST(CoordinatesRange, single_element) {
     using TestTensor = spio::Tensor<float, spio::DimInfo<I, 1, 1>, spio::DimInfo<J, 1, 1>>;
+    using ModuleI = spio::Module<I, 1, 1>;
+    using ModuleJ = spio::Module<J, 1, 1>;
     float data[TestTensor::storage_size()];
     TestTensor tensor(data);
 
     int count = 0;
     for (auto coord : spio::range(tensor)) {
-        EXPECT_EQ(coord.get<I>(), I(0));
-        EXPECT_EQ(coord.get<J>(), J(0));
+        EXPECT_EQ(coord.get<ModuleI>().get(), 0);
+        EXPECT_EQ(coord.get<ModuleJ>().get(), 0);
         ++count;
     }
     EXPECT_EQ(count, 1);
@@ -904,6 +825,8 @@ UTEST(CoordinatesRange, iterator_equality) {
 
 UTEST(CoordinatesRange, iterator_dereference) {
     using TestTensor = spio::Tensor<float, spio::DimInfo<I, 3, 1>, spio::DimInfo<J, 2, 3>>;
+    using ModuleI = spio::Module<I, 3, 1>;
+    using ModuleJ = spio::Module<J, 2, 1>;
     float data[TestTensor::storage_size()];
     TestTensor tensor(data);
 
@@ -912,30 +835,66 @@ UTEST(CoordinatesRange, iterator_dereference) {
 
     {
         auto coord = *it;
-        EXPECT_EQ(coord.get<I>(), I(0));
-        EXPECT_EQ(coord.get<J>(), J(0));
+        EXPECT_EQ(coord.get<ModuleI>().get(), 0);
+        EXPECT_EQ(coord.get<ModuleJ>().get(), 0);
     }
 
     ++it;
     {
         auto coord = *it;
-        EXPECT_EQ(coord.get<I>(), I(1));
-        EXPECT_EQ(coord.get<J>(), J(0));
+        EXPECT_EQ(coord.get<ModuleI>().get(), 1);
+        EXPECT_EQ(coord.get<ModuleJ>().get(), 0);
     }
 
     ++it;
     {
         auto coord = *it;
-        EXPECT_EQ(coord.get<I>(), I(2));
-        EXPECT_EQ(coord.get<J>(), J(0));
+        EXPECT_EQ(coord.get<ModuleI>().get(), 2);
+        EXPECT_EQ(coord.get<ModuleJ>().get(), 0);
     }
 
     ++it;
     {
         auto coord = *it;
-        EXPECT_EQ(coord.get<I>(), I(0));
-        EXPECT_EQ(coord.get<J>(), J(1));
+        EXPECT_EQ(coord.get<ModuleI>().get(), 0);
+        EXPECT_EQ(coord.get<ModuleJ>().get(), 1);
     }
+}
+
+UTEST(CoordinatesRange, asymmetric_dimensions) {
+    using TestTensor = spio::Tensor<float, spio::DimInfo<I, 1, 1>, spio::DimInfo<J, 5, 1>>;
+    using ModuleI = spio::Module<I, 1, 1>;
+    using ModuleJ = spio::Module<J, 5, 1>;
+    float data[TestTensor::storage_size()];
+    TestTensor tensor(data);
+
+    int count = 0;
+    for (auto coord : spio::range(tensor)) {
+        EXPECT_EQ(coord.get<ModuleI>().get(), 0);
+        EXPECT_EQ(coord.get<ModuleJ>().get(), count);
+        ++count;
+    }
+    EXPECT_EQ(count, 5);
+}
+
+UTEST(CoordinatesRange, large_iteration) {
+    using TestTensor = spio::Tensor<float, spio::DimInfo<I, 4, 1>, spio::DimInfo<J, 8, 4>,
+                                    spio::DimInfo<K, 16, 32>>;
+    using ModuleI = spio::Module<I, 4, 1>;
+    using ModuleJ = spio::Module<J, 8, 1>;
+    using ModuleK = spio::Module<K, 16, 1>;
+    float data[TestTensor::storage_size()];
+    TestTensor tensor(data);
+
+    int count = 0;
+    for (auto coord : spio::range(tensor)) {
+        // Order by stride: I (1), J (4), K (32)
+        EXPECT_EQ(coord.get<ModuleI>().get(), count % 4);
+        EXPECT_EQ(coord.get<ModuleJ>().get(), (count / 4) % 8);
+        EXPECT_EQ(coord.get<ModuleK>().get(), count / 32);
+        ++count;
+    }
+    EXPECT_EQ(count, 4 * 8 * 16);
 }
 
 UTEST(CoordinatesRange, accumulate_values) {
@@ -956,37 +915,6 @@ UTEST(CoordinatesRange, accumulate_values) {
     EXPECT_EQ(sum, 9);
 }
 
-UTEST(CoordinatesRange, asymmetric_dimensions) {
-    using TestTensor = spio::Tensor<float, spio::DimInfo<I, 1, 1>, spio::DimInfo<J, 5, 1>>;
-    float data[TestTensor::storage_size()];
-    TestTensor tensor(data);
-
-    int count = 0;
-    for (auto coord : spio::range(tensor)) {
-        EXPECT_EQ(coord.get<I>(), I(0));
-        EXPECT_EQ(coord.get<J>(), J(count));
-        ++count;
-    }
-    EXPECT_EQ(count, 5);
-}
-
-UTEST(CoordinatesRange, large_iteration) {
-    using TestTensor = spio::Tensor<float, spio::DimInfo<I, 4, 1>, spio::DimInfo<J, 8, 4>,
-                                    spio::DimInfo<K, 16, 32>>;
-    float data[TestTensor::storage_size()];
-    TestTensor tensor(data);
-
-    int count = 0;
-    for (auto coord : spio::range(tensor)) {
-        // Order by stride: I (1), J (4), K (32)
-        EXPECT_EQ(coord.get<I>(), I(count % 4));
-        EXPECT_EQ(coord.get<J>(), J((count / 4) % 8));
-        EXPECT_EQ(coord.get<K>(), K(count / 32));
-        ++count;
-    }
-    EXPECT_EQ(count, 4 * 8 * 16);
-}
-
 UTEST(CoordinatesRange, fold_dimensions) {
     using FoldI = spio::Fold<I, 8>;
     using FoldJ = spio::Fold<J, 4>;
@@ -1000,3 +928,193 @@ UTEST(CoordinatesRange, fold_dimensions) {
     }
     EXPECT_EQ(count, 6);
 }
+
+UTEST(CoordinatesRange, module_type_properties) {
+    using TestTensor = spio::Tensor<float, spio::DimInfo<I, 3, 1>, spio::DimInfo<J, 4, 3>>;
+    using TestIndex = spio::CompoundIndex<spio::DimInfo<I, 3, 1>, spio::DimInfo<J, 4, 3>>;
+
+    // Verify the Module types returned by coordinates() have correct size/stride
+    auto idx = TestIndex(0);
+    auto coord = idx.coordinates();
+
+    // Get the actual types from the coordinates
+    using CoordType = decltype(coord);
+    using ModuleI = decltype(coord.get<spio::Module<I, 3, 1>>());
+    using ModuleJ = decltype(coord.get<spio::Module<J, 4, 1>>());
+
+    // Verify compile-time size properties
+    static_assert(spio::detail::remove_reference_t<ModuleI>::size.get() == 3,
+                  "ModuleI should have size 3");
+    static_assert(spio::detail::remove_reference_t<ModuleJ>::size.get() == 4,
+                  "ModuleJ should have size 4");
+
+    // Verify compile-time stride properties
+    // Note: The stride in Module from CompoundIndex::get() is the dim_type stride (1 for base dims)
+    static_assert(spio::detail::remove_reference_t<ModuleI>::stride.get() == 1,
+                  "ModuleI should have stride 1");
+    static_assert(spio::detail::remove_reference_t<ModuleJ>::stride.get() == 1,
+                  "ModuleJ should have stride 1");
+}
+
+UTEST(CoordinatesRange, module_type_with_fold) {
+    using FoldI = spio::Fold<I, 8>;
+    using TestTensor = spio::Tensor<float, spio::DimInfo<FoldI, 2, 1>, spio::DimInfo<J, 3, 2>>;
+    using TestIndex = spio::CompoundIndex<spio::DimInfo<FoldI, 2, 1>, spio::DimInfo<J, 3, 2>>;
+
+    auto idx = TestIndex(0);
+    auto coord = idx.coordinates();
+
+    // CompoundIndex::get<FoldI>() returns Module<I, 2, 8> (base dim type with Fold's stride)
+    // NOT Module<FoldI, 2, 8>
+    using ModuleI = spio::Module<I, 2, 8>;
+    using ModuleJ = spio::Module<J, 3, 1>;
+
+    // Access using the actual types in the coordinates
+    using ActualModuleI = decltype(coord.get<ModuleI>());
+    using ActualModuleJ = decltype(coord.get<ModuleJ>());
+
+    static_assert(spio::detail::remove_reference_t<ActualModuleI>::size.get() == 2,
+                  "ModuleI should have size 2");
+    static_assert(spio::detail::remove_reference_t<ActualModuleI>::stride.get() == 8,
+                  "ModuleI should have stride 8 (from Fold)");
+
+    static_assert(spio::detail::remove_reference_t<ActualModuleJ>::size.get() == 3,
+                  "ModuleJ should have size 3");
+    static_assert(spio::detail::remove_reference_t<ActualModuleJ>::stride.get() == 1,
+                  "ModuleJ should have stride 1");
+}
+
+UTEST(Coordinates, add_single_dim_to_coords) {
+    auto coords = spio::make_coordinates(I(1), J(2));
+    auto result = coords + K(5);
+    EXPECT_EQ(result.get<I>(), I(1));
+    EXPECT_EQ(result.get<J>(), J(2));
+    EXPECT_EQ(result.get<K>(), K(5));
+}
+
+UTEST(Coordinates, add_single_dim_existing) {
+    auto coords = spio::make_coordinates(I(1), J(2));
+    auto result = coords + I(10);
+    EXPECT_EQ(result.get<I>(), I(11)); // 1 + 10
+    EXPECT_EQ(result.get<J>(), J(2));
+}
+
+UTEST(Coordinates, add_fold_to_coords) {
+    using FoldI8 = spio::Fold<I, 8>;
+    auto coords = spio::make_coordinates(I(3), J(2));
+    auto result = coords + FoldI8(1); // FoldI8(1) = 8
+    // I(3) + I(8) = I(11) after normalization
+    EXPECT_EQ(result.get<I>(), I(11));
+    EXPECT_EQ(result.get<J>(), J(2));
+}
+
+UTEST(Coordinates, add_single_dim_to_empty_coords) {
+    auto coords = spio::Coordinates<>();
+    auto result = coords + I(5);
+    EXPECT_EQ(result.get<I>(), I(5));
+}
+
+UTEST(Coordinates, add_module_to_coords) {
+    using ModI = spio::Module<I, 4, 1>;
+    auto coords = spio::make_coordinates(I(2), J(3));
+    auto result = coords + ModI(1);
+    EXPECT_EQ(result.get<I>(), I(3)); // 2 + 1
+    EXPECT_EQ(result.get<J>(), J(3));
+}
+
+UTEST(Coordinates, dim_plus_coordinates) {
+    auto coords = spio::make_coordinates(J(2), K(3));
+    auto result = I(5) + coords;
+    EXPECT_EQ(result.get<I>(), I(5));
+    EXPECT_EQ(result.get<J>(), J(2));
+    EXPECT_EQ(result.get<K>(), K(3));
+}
+
+UTEST(Coordinates, dim_plus_coordinates_existing_dim) {
+    auto coords = spio::make_coordinates(I(2), J(3));
+    auto result = I(10) + coords;
+    EXPECT_EQ(result.get<I>(), I(12)); // 10 + 2
+    EXPECT_EQ(result.get<J>(), J(3));
+}
+
+UTEST(Coordinates, compare_dim_with_coordinates) {
+    auto coords = spio::make_coordinates(I(5), J(3));
+
+    // Dim < Coordinates
+    EXPECT_TRUE(I(3) < coords);
+    EXPECT_FALSE(I(5) < coords);
+    EXPECT_FALSE(I(7) < coords);
+
+    // Dim <= Coordinates
+    EXPECT_TRUE(I(3) <= coords);
+    EXPECT_TRUE(I(5) <= coords);
+    EXPECT_FALSE(I(7) <= coords);
+
+    // Dim > Coordinates
+    EXPECT_FALSE(I(3) > coords);
+    EXPECT_FALSE(I(5) > coords);
+    EXPECT_TRUE(I(7) > coords);
+
+    // Dim >= Coordinates
+    EXPECT_FALSE(I(3) >= coords);
+    EXPECT_TRUE(I(5) >= coords);
+    EXPECT_TRUE(I(7) >= coords);
+
+    // Dim == Coordinates
+    EXPECT_FALSE(I(3) == coords);
+    EXPECT_TRUE(I(5) == coords);
+    EXPECT_FALSE(I(7) == coords);
+
+    // Dim != Coordinates
+    EXPECT_TRUE(I(3) != coords);
+    EXPECT_FALSE(I(5) != coords);
+    EXPECT_TRUE(I(7) != coords);
+}
+
+UTEST(Coordinates, compare_coordinates_with_dim) {
+    auto coords = spio::make_coordinates(I(5), J(3));
+
+    // Coordinates < Dim
+    EXPECT_FALSE(coords < I(3));
+    EXPECT_FALSE(coords < I(5));
+    EXPECT_TRUE(coords < I(7));
+
+    // Coordinates <= Dim
+    EXPECT_FALSE(coords <= I(3));
+    EXPECT_TRUE(coords <= I(5));
+    EXPECT_TRUE(coords <= I(7));
+
+    // Coordinates > Dim
+    EXPECT_TRUE(coords > I(3));
+    EXPECT_FALSE(coords > I(5));
+    EXPECT_FALSE(coords > I(7));
+
+    // Coordinates >= Dim
+    EXPECT_TRUE(coords >= I(3));
+    EXPECT_TRUE(coords >= I(5));
+    EXPECT_FALSE(coords >= I(7));
+
+    // Coordinates == Dim
+    EXPECT_FALSE(coords == I(3));
+    EXPECT_TRUE(coords == I(5));
+    EXPECT_FALSE(coords == I(7));
+
+    // Coordinates != Dim
+    EXPECT_TRUE(coords != I(3));
+    EXPECT_FALSE(coords != I(5));
+    EXPECT_TRUE(coords != I(7));
+}
+
+// This test should fail to compile because K is not in the Coordinates:
+//
+// static assertion failed: Coordinates have no base dimensions in common
+//
+// UTEST(Coordinates, compare_dim_not_in_coordinates) {
+//     auto coords = spio::make_coordinates(I(5), J(3));
+
+//     // K is not in coords, so comparison should be vacuously true
+//     EXPECT_TRUE(K(0) < coords);
+//     EXPECT_TRUE(K(100) < coords);
+//     EXPECT_TRUE(coords < K(0));
+//     EXPECT_TRUE(coords < K(100));
+// }

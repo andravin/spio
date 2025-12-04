@@ -6,7 +6,7 @@
 extern "C" {
     using namespace spio;
 
-    /// @brief Test matrix multiplication with checkerboard layout.
+    /// Test matrix multiplication with checkerboard layout.
     ///
     /// This kernel uses the checkerboard layout for shared memory when
     /// loading the A and B matrices.
@@ -14,9 +14,9 @@ extern "C" {
     /// The checkerboard is a 16x2 grid with a vector
     /// of 8 half2 elements per cell. See checkerboard_index.h for details.
     ///
-    /// @param c_ptr result matrix with float16 precision.
-    /// @param a_ptr operand A matrix with float16 precision and format K16 x I X 16K
-    /// @param b_ptr operand B matrix with float16 precision and format K16 x J X 16K
+    /// - c_ptr: result matrix with float16 precision.
+    /// - a_ptr: operand A matrix with float16 precision and format K16 x I X 16K
+    /// - b_ptr: operand B matrix with float16 precision and format K16 x J X 16K
     __global__ void mma_checkerboard_16c(uint4* __restrict__ c_ptr, const uint4* __restrict__ a_ptr,
                                          const uint4* __restrict__ b_ptr) {
         // Allocate sufficient shared memory for the kernel.

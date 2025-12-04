@@ -14,39 +14,71 @@ namespace spio {
     template <typename... Dims> DEVICE constexpr auto make_coordinates(Dims&&... dims);
 
     namespace detail {
-        // Empty coordinates marker type - used when no dimensions match
-        struct EmptyCoordinates {
-            DEVICE static constexpr int num_dims() {
-                return 0;
-            }
 
-            template <typename TensorOrCursor>
-            DEVICE constexpr TensorOrCursor apply_to(TensorOrCursor target) const {
-                return target;
-            }
+        // ========================================================================
+        // Helper to filter DimInfos by base dimension types
+        // ========================================================================
+
+        // Filter DimInfos keeping only those whose base dim is in BaseDims tuple
+        template <typename DimInfosTuple, typename BaseDimsTuple> struct keep_dim_infos_by_base;
+
+        // Base case: no more DimInfos to process
+        template <typename BaseDimsTuple> struct keep_dim_infos_by_base<tuple<>, BaseDimsTuple> {
+            using type = tuple<>;
         };
 
-        // Helper to apply folded coordinates to a target
-        template <typename FoldedCoords, typename TensorOrCursor>
-        DEVICE constexpr auto apply_folded_coords(const FoldedCoords& folded,
-                                                  TensorOrCursor target) {
-            if constexpr (is_same<FoldedCoords, EmptyCoordinates>::value) {
-                return target;
-            } else {
-                return folded.apply_folded_to(target);
-            }
-        }
+        // Recursive case: check if first DimInfo's base dim is in BaseDims
+        template <typename FirstInfo, typename... RestInfos, typename BaseDimsTuple>
+        struct keep_dim_infos_by_base<tuple<FirstInfo, RestInfos...>, BaseDimsTuple> {
+            using first_base_dim = get_base_dim_type_t<typename FirstInfo::dim_type>;
+            using rest_result =
+                typename keep_dim_infos_by_base<tuple<RestInfos...>, BaseDimsTuple>::type;
+
+            using type = conditional_t<tuple_contains_v<first_base_dim, BaseDimsTuple>,
+                                       tuple_prepend_t<FirstInfo, rest_result>, rest_result>;
+        };
+
+        template <typename DimInfosTuple, typename BaseDimsTuple>
+        using keep_dim_infos_by_base_t =
+            typename keep_dim_infos_by_base<DimInfosTuple, BaseDimsTuple>::type;
+
+        // ========================================================================
+        // Coordinates helpers - forward declarations for mutual dependencies
+        // ========================================================================
 
         // Get element from Coordinates by base dim type
         template <typename BaseDimType, typename... Dims>
-        DEVICE constexpr auto& coords_get_by_base_dim(Coordinates<Dims...>& coords) {
-            return tuple_get_by_base_dim<BaseDimType, tuple<Dims...>>::get(coords.values);
-        }
+        DEVICE constexpr auto& coords_get_by_base_dim(Coordinates<Dims...>& coords);
 
         template <typename BaseDimType, typename... Dims>
-        DEVICE constexpr const auto& coords_get_by_base_dim(const Coordinates<Dims...>& coords) {
-            return tuple_get_by_base_dim<BaseDimType, tuple<Dims...>>::get(coords.values);
-        }
+        DEVICE constexpr const auto& coords_get_by_base_dim(const Coordinates<Dims...>& coords);
+
+        // ========================================================================
+        // Validation helpers
+        // ========================================================================
+
+        // Check if two Coordinates have any base dimensions in common
+        template <typename CoordsTuple1, typename CoordsTuple2> struct coords_share_base_dim;
+
+        template <typename CoordsTuple2> struct coords_share_base_dim<tuple<>, CoordsTuple2> {
+            static constexpr bool value = false;
+        };
+
+        template <typename First, typename... Rest, typename CoordsTuple2>
+        struct coords_share_base_dim<tuple<First, Rest...>, CoordsTuple2> {
+            using first_base = get_base_dim_type_t<First>;
+            static constexpr bool value =
+                tuple_contains_base_dim<first_base, CoordsTuple2>::value ||
+                coords_share_base_dim<tuple<Rest...>, CoordsTuple2>::value;
+        };
+
+        template <typename CoordsTuple1, typename CoordsTuple2>
+        inline constexpr bool coords_share_base_dim_v =
+            coords_share_base_dim<CoordsTuple1, CoordsTuple2>::value;
+
+        // ========================================================================
+        // Comparison helpers
+        // ========================================================================
 
         // Compare a single dimension by base type: return true if not in b, or if comparison
         // succeeds
@@ -65,6 +97,8 @@ namespace spio {
         template <typename Compare, typename... ADims, typename... BDims>
         DEVICE constexpr bool compare_normalized_impl(const Coordinates<ADims...>& a,
                                                       const Coordinates<BDims...>& b, Compare cmp) {
+            static_assert(coords_share_base_dim_v<tuple<ADims...>, tuple<BDims...>>,
+                          "Coordinates have no base dimensions in common");
             return (compare_dim<ADims>(a, b, cmp) && ...);
         }
 
@@ -77,6 +111,10 @@ namespace spio {
             auto nb = b.normalize();
             return compare_normalized_impl(na, nb, cmp);
         }
+
+        // ========================================================================
+        // Normalization helpers
+        // ========================================================================
 
         // Sum dimensions matching a base type using fold expression
         // MatchingDims contains only dimensions that match BaseDimType
@@ -100,6 +138,10 @@ namespace spio {
                                                const Coordinates<OrigDims...>& coords) {
             return make_coordinates(sum_dims_by_base<BaseDims>(coords)...);
         }
+
+        // ========================================================================
+        // Addition helpers
+        // ========================================================================
 
         // Process dims from A: add if B has same base dim, otherwise copy from A
         template <typename DimType, typename... ADims, typename... BDims>
@@ -130,122 +172,71 @@ namespace spio {
             return add_normalized_coordinates_impl(a, b, b_only{});
         }
 
-        // Extract DimInfos tuple from a Tensor
-        template <typename T> struct get_tensor_dim_infos;
+        // ========================================================================
+        // coords_get_by_base_dim implementations
+        // ========================================================================
 
-        template <template <typename, typename...> class Container, typename DataType,
-                  typename... DimInfos>
-        struct get_tensor_dim_infos<Container<DataType, DimInfos...>> {
-            using type = tuple<DimInfos...>;
-            using dim_types = tuple<typename DimInfos::dim_type...>;
-        };
-
-        template <typename T> using get_tensor_dim_infos_t = typename get_tensor_dim_infos<T>::type;
-
-        template <typename T>
-        using get_tensor_dim_types_t = typename get_tensor_dim_infos<T>::dim_types;
-
-        // Filter DimInfos to keep only those with matching base dims
-        template <typename DimInfoTuple, typename BaseDimsTuple> struct keep_dim_infos_by_base;
-
-        template <typename BaseDimsTuple> struct keep_dim_infos_by_base<tuple<>, BaseDimsTuple> {
-            using type = tuple<>;
-        };
-
-        template <typename FirstDimInfo, typename... RestDimInfos, typename BaseDimsTuple>
-        struct keep_dim_infos_by_base<tuple<FirstDimInfo, RestDimInfos...>, BaseDimsTuple> {
-            using dim_type = typename FirstDimInfo::dim_type;
-            using base_dim = get_base_dim_type_t<dim_type>;
-            static constexpr bool keep = tuple_contains<base_dim, BaseDimsTuple>::value;
-
-            using rest =
-                typename keep_dim_infos_by_base<tuple<RestDimInfos...>, BaseDimsTuple>::type;
-            using type = conditional_t<keep, tuple_prepend_t<FirstDimInfo, rest>, rest>;
-        };
-
-        template <typename DimInfoTuple, typename BaseDimsTuple>
-        using keep_dim_infos_by_base_t =
-            typename keep_dim_infos_by_base<DimInfoTuple, BaseDimsTuple>::type;
-
-        // Get base dims from a Coordinates dims tuple
-        template <typename DimsTuple> struct get_coords_base_dims;
-
-        template <typename... Dims> struct get_coords_base_dims<tuple<Dims...>> {
-            using type = tuple<get_base_dim_type_t<Dims>...>;
-        };
-
-        template <typename DimsTuple>
-        using get_coords_base_dims_t = typename get_coords_base_dims<DimsTuple>::type;
-
-        // Convert a coordinate value to match a target DimInfo
-        // The dimension type's stride is used for folding (e.g., Fold<I, 8> has stride 8)
-        // The DimInfo's size is used for modulo (to keep within valid range)
-        template <typename TargetDimInfo, typename SourceDim>
-        DEVICE constexpr auto convert_to_dim_info(SourceDim source) {
-            using TargetDimType = typename TargetDimInfo::dim_type;
-            constexpr int source_stride = get_dim_stride<SourceDim>::value;
-            constexpr int target_stride = get_dim_stride<TargetDimType>::value;
-            constexpr int target_size = TargetDimInfo::module_type::size.get();
-
-            int base_value = source.get() * source_stride;
-            int refolded = (base_value / target_stride) % target_size;
-
-            return TargetDimType(refolded);
+        template <typename BaseDimType, typename... Dims>
+        DEVICE constexpr auto& coords_get_by_base_dim(Coordinates<Dims...>& coords) {
+            return tuple_get_by_base_dim<BaseDimType, tuple<Dims...>>::get(coords.values);
         }
 
-        // Get folded dim value using DimInfo
-        template <typename TargetDimInfo, typename NormalizedCoords>
-        DEVICE constexpr auto get_folded_dim_from_info(const NormalizedCoords& normalized) {
-            using TargetDimType = typename TargetDimInfo::dim_type;
-            using target_base = get_base_dim_type_t<TargetDimType>;
-            auto source_value = coords_get_by_base_dim<target_base>(normalized);
-            return convert_to_dim_info<TargetDimInfo>(source_value);
+        template <typename BaseDimType, typename... Dims>
+        DEVICE constexpr const auto& coords_get_by_base_dim(const Coordinates<Dims...>& coords) {
+            return tuple_get_by_base_dim<BaseDimType, tuple<Dims...>>::get(coords.values);
         }
 
-        // Build folded coordinates using DimInfos - empty case
-        template <typename NormalizedCoords>
-        DEVICE constexpr auto build_folded_from_dim_infos(tuple<>, const NormalizedCoords&) {
-            return EmptyCoordinates{};
+    } // end detail namespace
+
+    // ============================================================================
+    // Empty Coordinates specialization (for base case of sequential apply)
+    // ============================================================================
+    template <> struct Coordinates<> {
+        using dims_tuple = detail::tuple<>;
+        detail::tuple<> values;
+
+        DEVICE constexpr Coordinates() : values() {}
+
+        DEVICE constexpr auto normalize() const {
+            return *this;
         }
 
-        // Build folded coordinates using DimInfos - non-empty case
-        template <typename FirstDimInfo, typename... RestDimInfos, typename NormalizedCoords>
-        DEVICE constexpr auto build_folded_from_dim_infos(tuple<FirstDimInfo, RestDimInfos...>,
-                                                          const NormalizedCoords& normalized) {
-            return make_coordinates(get_folded_dim_from_info<FirstDimInfo>(normalized),
-                                    get_folded_dim_from_info<RestDimInfos>(normalized)...);
+        DEVICE static constexpr int num_dims() {
+            return 0;
         }
-    }
+
+        template <typename... OtherDims>
+        DEVICE constexpr auto operator+(const Coordinates<OtherDims...>& other) const {
+            return other;
+        }
+
+        /// @brief Add a single dimension to empty coordinates.
+        template <typename Dim> DEVICE constexpr auto operator+(Dim d) const {
+            static_assert(detail::is_dim_like_v<Dim>, "Argument must be a dimension type");
+            return make_coordinates(d);
+        }
+    };
 
     /// @brief represents a set of indices for multiple dimensions
     /// @tparam Dims The dimension types contained in these coordinates
-    /// @details Coordinates can hold multiple dimension values, each of a different
-    ///          dimension type. Coordinates support getting dimension values by type,
-    ///          normalizing to coalesce multiple dimensions with the same base type, adding
-    ///          coordinates together, and applying the coordinates to tensors or cursors.
-    ///         Coordinates can also be folded to match the dimension layout of a target tensor.
-    ///         Coordinates implement comparison and arithmetic operators. These use the concept
-    ///         of dimensional projection. When adding two Coordinates objects, dimensions with
-    ///         the same base type are added together, while dimensions unique to either object
-    ///         are carried over unchanged. When comparing two Coordinates objects, only shared
-    ///         dimensions are compared; unique dimensions are ignored.
     template <typename... Dims> struct Coordinates {
         static_assert(sizeof...(Dims) > 0, "Coordinates must have at least one dimension.");
 
-        // Type alias for the dimension types tuple
         using dims_tuple = detail::tuple<Dims...>;
 
         detail::tuple<Dims...> values;
 
         DEVICE constexpr Coordinates(Dims... dims) : values(dims...) {}
 
-        template <typename DimType> DEVICE constexpr DimType& get() {
+        /// @brief Get the value of a specific dimension by exact type.
+        template <typename DimType> DEVICE constexpr auto& get() {
             static_assert(detail::tuple_contains<DimType, detail::tuple<Dims...>>::value,
                           "Requested DimType is not part of these Coordinates.");
             return detail::tuple_get_by_type<DimType>(values);
         }
 
-        template <typename DimType> DEVICE constexpr const DimType& get() const {
+        /// @brief Get the value of a specific dimension by exact type (const version).
+        template <typename DimType> DEVICE constexpr const auto& get() const {
             static_assert(detail::tuple_contains<DimType, detail::tuple<Dims...>>::value,
                           "Requested DimType is not part of these Coordinates.");
             return detail::tuple_get_by_type<DimType>(values);
@@ -261,10 +252,46 @@ namespace spio {
             return detail::add_normalized_coordinates(normalize(), other.normalize());
         }
 
-        // Add Coordinates + CompoundIndex
         template <typename... DimInfos>
         DEVICE constexpr auto operator+(const CompoundIndex<DimInfos...>& idx) const {
-            return *this + idx.to_coordinates();
+            return *this + idx.coordinates();
+        }
+
+        /// @brief Add a single dimension to coordinates.
+        template <typename Dim> DEVICE constexpr auto operator+(Dim d) const {
+            static_assert(detail::is_dim_like_v<Dim>, "Argument must be a dimension type");
+            return *this + make_coordinates(d);
+        }
+
+        /// @brief Compare coordinates with a single dimension.
+        template <typename Dim, detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+        DEVICE constexpr bool operator<(Dim d) const {
+            return *this < make_coordinates(d);
+        }
+
+        template <typename Dim, detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+        DEVICE constexpr bool operator<=(Dim d) const {
+            return *this <= make_coordinates(d);
+        }
+
+        template <typename Dim, detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+        DEVICE constexpr bool operator>(Dim d) const {
+            return *this > make_coordinates(d);
+        }
+
+        template <typename Dim, detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+        DEVICE constexpr bool operator>=(Dim d) const {
+            return *this >= make_coordinates(d);
+        }
+
+        template <typename Dim, detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+        DEVICE constexpr bool operator==(Dim d) const {
+            return *this == make_coordinates(d);
+        }
+
+        template <typename Dim, detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+        DEVICE constexpr bool operator!=(Dim d) const {
+            return *this != make_coordinates(d);
         }
 
         template <typename... OtherDims>
@@ -302,100 +329,39 @@ namespace spio {
             return !(*this == other);
         }
 
-        // Comparison with CompoundIndex - converts CompoundIndex to Coordinates first
         template <typename... DimInfos>
         DEVICE constexpr bool operator<(const CompoundIndex<DimInfos...>& idx) const {
-            return *this < idx.to_coordinates();
+            return *this < idx.coordinates();
         }
 
         template <typename... DimInfos>
         DEVICE constexpr bool operator<=(const CompoundIndex<DimInfos...>& idx) const {
-            return *this <= idx.to_coordinates();
+            return *this <= idx.coordinates();
         }
 
         template <typename... DimInfos>
         DEVICE constexpr bool operator>(const CompoundIndex<DimInfos...>& idx) const {
-            return *this > idx.to_coordinates();
+            return *this > idx.coordinates();
         }
 
         template <typename... DimInfos>
         DEVICE constexpr bool operator>=(const CompoundIndex<DimInfos...>& idx) const {
-            return *this >= idx.to_coordinates();
+            return *this >= idx.coordinates();
         }
 
         template <typename... DimInfos>
         DEVICE constexpr bool operator==(const CompoundIndex<DimInfos...>& idx) const {
-            return *this == idx.to_coordinates();
+            return *this == idx.coordinates();
         }
 
         template <typename... DimInfos>
         DEVICE constexpr bool operator!=(const CompoundIndex<DimInfos...>& idx) const {
-            return *this != idx.to_coordinates();
-        }
-
-        /// @brief Apply the coordinates to a tensor or cursor.
-        /// @details First folds the coordinates to match the target's dimension layout,
-        ///          then applies every matching dimension to the tensor or cursor's
-        ///          apply_index_if_found method.
-        /// @tparam TensorOrCursor the type of the tensor or cursor to apply the coordinates to
-        /// @param target the tensor or cursor to apply the coordinates to
-        /// @return a new cursor with the coordinates applied
-        template <typename TensorOrCursor>
-        DEVICE constexpr auto apply_to(TensorOrCursor target) const {
-            auto folded = fold_like<TensorOrCursor>();
-            return detail::apply_folded_coords(folded, target);
+            return *this != idx.coordinates();
         }
 
         /// @brief Get the number of dimensions in these coordinates.
         DEVICE static constexpr int num_dims() {
             return sizeof...(Dims);
-        }
-
-        /// @brief Fold the coordinates to match the dimension layout of a tensor or cursor.
-        /// @details For each dimension in the target tensor/cursor that has a matching base
-        ///          dimension type in these coordinates, creates a new coordinate value
-        ///          folded to match the target's stride.
-        /// @tparam TensorOrCursor the type of the tensor or cursor to fold like
-        /// @param target the tensor or cursor whose dimension layout to match (used for type only)
-        /// @return a new Coordinates object with dimensions folded to match the target
-        template <typename TensorOrCursor>
-        DEVICE constexpr auto fold_like(const TensorOrCursor& target) const {
-            (void)target;
-            return fold_like<TensorOrCursor>();
-        }
-
-        template <typename TensorOrCursor> DEVICE constexpr auto fold_like() const {
-            // Get all DimInfos from the target tensor
-            using all_dim_infos = detail::get_tensor_dim_infos_t<TensorOrCursor>;
-            // Get base dims from our coordinates
-            using coords_base_dims = detail::get_coords_base_dims_t<dims_tuple>;
-            // Keep only DimInfos that match our base dims
-            using matching_dim_infos =
-                detail::keep_dim_infos_by_base_t<all_dim_infos, coords_base_dims>;
-
-            auto normalized = normalize();
-            return detail::build_folded_from_dim_infos(matching_dim_infos{}, normalized);
-        }
-
-        // Apply already-folded coordinates to a target
-        template <typename TensorOrCursor>
-        DEVICE constexpr auto apply_folded_to(TensorOrCursor target) const {
-            return apply_dimensions<TensorOrCursor, Dims...>(target);
-        }
-
-    private:
-        // Base case: no more dimensions to apply
-        template <typename TensorOrCursor>
-        DEVICE constexpr auto apply_dimensions(TensorOrCursor target) const {
-            return target;
-        }
-
-        // Recursive case: apply the first dimension, then recurse with the rest
-        template <typename TensorOrCursor, typename FirstDim, typename... RestDims>
-        DEVICE constexpr auto apply_dimensions(TensorOrCursor target) const {
-            auto dim_value = get<FirstDim>();
-            auto next_target = target.apply_index_if_found(dim_value);
-            return apply_dimensions<decltype(next_target), RestDims...>(next_target);
         }
     };
 
@@ -407,15 +373,68 @@ namespace spio {
         return make_coordinates(static_cast<Dims&&>(dims)...).normalize();
     }
 
+    // ============================================================================
+    // Free function operators for Dim + Coordinates and Dim <op> Coordinates
+    // ============================================================================
+
+    /// @brief Add a dimension to coordinates (Dim + Coordinates)
+    template <typename Dim, typename... CoordDims,
+              detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+    DEVICE constexpr auto operator+(Dim d, const Coordinates<CoordDims...>& coords) {
+        return make_coordinates(d) + coords;
+    }
+
+    /// @brief Compare dimension with coordinates (Dim < Coordinates)
+    template <typename Dim, typename... CoordDims,
+              detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+    DEVICE constexpr bool operator<(Dim d, const Coordinates<CoordDims...>& coords) {
+        return make_coordinates(d) < coords;
+    }
+
+    /// @brief Compare dimension with coordinates (Dim <= Coordinates)
+    template <typename Dim, typename... CoordDims,
+              detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+    DEVICE constexpr bool operator<=(Dim d, const Coordinates<CoordDims...>& coords) {
+        return make_coordinates(d) <= coords;
+    }
+
+    /// @brief Compare dimension with coordinates (Dim > Coordinates)
+    template <typename Dim, typename... CoordDims,
+              detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+    DEVICE constexpr bool operator>(Dim d, const Coordinates<CoordDims...>& coords) {
+        return make_coordinates(d) > coords;
+    }
+
+    /// @brief Compare dimension with coordinates (Dim >= Coordinates)
+    template <typename Dim, typename... CoordDims,
+              detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+    DEVICE constexpr bool operator>=(Dim d, const Coordinates<CoordDims...>& coords) {
+        return make_coordinates(d) >= coords;
+    }
+
+    /// @brief Compare dimension with coordinates (Dim == Coordinates)
+    template <typename Dim, typename... CoordDims,
+              detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+    DEVICE constexpr bool operator==(Dim d, const Coordinates<CoordDims...>& coords) {
+        return make_coordinates(d) == coords;
+    }
+
+    /// @brief Compare dimension with coordinates (Dim != Coordinates)
+    template <typename Dim, typename... CoordDims,
+              detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
+    DEVICE constexpr bool operator!=(Dim d, const Coordinates<CoordDims...>& coords) {
+        return make_coordinates(d) != coords;
+    }
+
     /// @brief Iterator for iterating over all coordinate combinations using CompoundIndex
     template <typename IndexType> class CoordinatesIterator {
     public:
-        using coordinates_type = decltype(IndexType(0).to_coordinates());
+        using coordinates_type = decltype(IndexType(0).coordinates());
 
         DEVICE constexpr CoordinatesIterator(int offset) : _offset(offset) {}
 
         DEVICE constexpr coordinates_type operator*() const {
-            return IndexType(_offset).to_coordinates();
+            return IndexType(_offset).coordinates();
         }
 
         DEVICE constexpr CoordinatesIterator& operator++() {
@@ -439,7 +458,7 @@ namespace spio {
     template <typename IndexType> class CoordinatesRange {
     public:
         using iterator = CoordinatesIterator<IndexType>;
-        using coordinates_type = decltype(IndexType(0).to_coordinates());
+        using coordinates_type = decltype(IndexType(0).coordinates());
 
         constexpr CoordinatesRange() = default;
 

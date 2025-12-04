@@ -6,6 +6,7 @@ nvcc.
 
 Therefore, nvcc is not requried for Spio to function correctly.
 """
+
 from pathlib import Path
 import os
 import shutil
@@ -53,10 +54,14 @@ def compile_with_nvcc(
     output_file=None,
     device_debug=False,
     lineinfo=False,
+    pre_includes=None,
+    run_args=None,
 ) -> int:
-    """Deprecated.
+    """Compile CUDA source files with nvcc.
 
-    Use compile_with_nvrtc instead.
+    Kernel compilation should use compile_with_nvrtc instead.
+
+    This function is used for C++ unit tests.
     """
     if includes is None:
         includes = []
@@ -64,8 +69,14 @@ def compile_with_nvcc(
     nvcc = nvcc_full_path()
     includes = [f"-I{path}" for path in includes]
     args = [nvcc] + includes
+    if pre_includes is not None:
+        pre_include_str = ",".join(pre_includes)
+        args += [f"--pre-include={pre_include_str}"]
     if run:
         args.append("--run")
+    if run_args is not None:
+        run_args_str = ",".join(run_args)
+        args += [f"--run-args={run_args_str}"]
     if compile_flag:
         args.append("--compile")
     if cubin:

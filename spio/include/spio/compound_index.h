@@ -38,11 +38,14 @@ namespace spio {
         /// @brief Get the typed coordinate for a specific dimension
         /// @tparam DimType The dimension type to extract
         /// @return A typed dimension value
-        template <typename DimType> DEVICE constexpr DimType get() const {
+        template <typename DimType> DEVICE constexpr auto get() const {
             constexpr unsigned size = dim_traits::dimension_size<DimType, DimInfos...>::value.get();
             constexpr unsigned stride =
                 dim_traits::dimension_stride<DimType, DimInfos...>::value.get();
-            return DimType((offset() / stride) % size);
+            auto value = (offset() / stride) % size;
+            using dim_base_type = detail::get_base_dim_type_t<DimType>;
+            constexpr int dim_stride = detail::get_dim_stride<DimType>::value;
+            return Module<dim_base_type, size, dim_stride>(value);
         }
 
         // Alternative method form if you prefer function syntax
@@ -60,20 +63,12 @@ namespace spio {
             return sizeof...(DimInfos);
         }
 
-        //@brief  Apply the index to a tensor or cursor.
-        //@details Converts to coordinates, folds to match the target's dimension layout,
-        /// then applies all dimensions.
-        /// @tparam TensorOrCursor the type of the tensor or cursor to apply the index to
-        /// @return a new tensor or cursor with the index applied
-        template <typename TensorOrCursor>
-        DEVICE constexpr auto apply_to(TensorOrCursor tensor) const {
-            // Convert to coordinates and use its apply_to, which does fold_like
-            return to_coordinates().apply_to(tensor);
-        }
-
         /// @brief Convert this CompoundIndex to a Coordinates object.
-        DEVICE constexpr auto to_coordinates() const {
-            return Coordinates<typename DimInfos::dim_type...>(
+        /// Returns Coordinates with Module types to preserve size/stride info for optimization.
+        DEVICE constexpr auto coordinates() const {
+            // get<DimType>() returns Module<base_dim, size, stride>
+            // We need to deduce the return type from what get() returns
+            return Coordinates<decltype(get<typename DimInfos::dim_type>())...>(
                 get<typename DimInfos::dim_type>()...);
         }
     };

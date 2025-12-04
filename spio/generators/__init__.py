@@ -2,7 +2,7 @@
 
 from .generators import generate
 from .gen_specs import GenSpecs
-from .index import CompoundIndex
+from .compound_index import CompoundIndex
 from .tensor import Tensor
 from .fragment_type import FragmentType
 from .data_type import dtype
@@ -17,24 +17,27 @@ from .fold import Fold
 from .dims import Dims, Strides
 from .matmul import Matmul
 
-__all__ = [
-    "generate",
-    "GenSpecs",
-    "CompoundIndex",
+GENERATORS = [
     "Tensor",
-    "FragmentType",
-    "dtype",
+    "CompoundIndex",
     "Fragment",
+    "Macro",
+    "Dim",
+    "Fold",
     "FragmentIndex",
     "FragmentLoadIndex",
-    "Macro",
     "ParamsSpec",
+    "Matmul",
+]
+
+__all__ = GENERATORS + [
+    "generate",
+    "GenSpecs",
+    "FragmentType",
+    "dtype",
     "Checkerboard",
     "AsyncStripLoader",
-    "Dim",
     "dim_name_to_dim_or_fold_class_name",
-    "Fold",
     "Dims",
     "Strides",
-    "Matmul",
 ]

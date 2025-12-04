@@ -15,6 +15,12 @@ class Checkerboard:
     offset_dim: str
     ranks: int = 8
 
+    def __post_init__(self):
+        """Normalize the dimension names to upper-case."""
+        object.__setattr__(self, "pairs_dim", self.pairs_dim.upper())
+        object.__setattr__(self, "colors_dim", self.colors_dim.upper())
+        object.__setattr__(self, "offset_dim", self.offset_dim.upper())
+
     def generate(self) -> str:
         """Return the CUDA / C++ source code for the checkerboard index subclass."""
         pairs_dim_class_name = dim_name_to_dim_or_fold_class_name(self.pairs_dim)

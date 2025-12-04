@@ -1,4 +1,4 @@
-#include "dim_test_common.h"
+#include "dim_test_types.h"
 
 #include "spio/meta.h"
 

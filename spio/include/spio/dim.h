@@ -3,9 +3,11 @@
 
 #include "spio/macros.h"
 #include "spio/mathutil.h"
+#include "spio/meta.h"
 
 namespace spio {
     template <class DimType, int Stride> class Fold;
+    template <class DimType, int Size, int Stride> class Module;
 
     /// @brief A base class for tensor dimensions using CRTP.
     /// Spio uses "typed tensors" which means that each tensor dimensions is a unique types.
@@ -41,25 +43,13 @@ namespace spio {
             return NewDimType(_i);
         }
 
-        /// @brief  Type-safe arithmetic operators that return the derived type.
-        /// @param other the index value to add to this one.
-        /// @return a new index value that is the sum of this and the other.
+        // Same-type arithmetic (Derived op Derived)
         DEVICE constexpr Derived operator+(Derived other) const {
             return Derived(_i + other._i);
         }
 
-        template <int OtherStride>
-        DEVICE constexpr auto operator+(Fold<Derived, OtherStride> other) const {
-            return *this + other.unfold();
-        }
-
         DEVICE constexpr Derived operator-(Derived other) const {
             return Derived(_i - other._i);
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr auto operator-(Fold<Derived, OtherStride> other) const {
-            return *this - other.unfold();
         }
 
         DEVICE constexpr Derived operator*(int scalar) const {
@@ -74,10 +64,7 @@ namespace spio {
             return Derived(_i % other._i);
         }
 
-        /// @brief Type-safe comparison operator that prevent accidental comparison of different
-        /// dimension types.
-        /// @param other the dimension to compare to.
-        /// @return true if this dimension is less than the other, false otherwise.
+        // Same-type comparisons (Derived op Derived)
         DEVICE constexpr bool operator<(Derived other) const {
             return _i < other._i;
         }
@@ -102,91 +89,16 @@ namespace spio {
             return _i != other._i;
         }
 
-        template <int OtherStride>
-        DEVICE constexpr bool operator<(Fold<Derived, OtherStride> other) const {
-            return *this < other.unfold();
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr bool operator<=(Fold<Derived, OtherStride> other) const {
-            return *this <= other.unfold();
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr bool operator>(Fold<Derived, OtherStride> other) const {
-            return *this > other.unfold();
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr bool operator>=(Fold<Derived, OtherStride> other) const {
-            return *this >= other.unfold();
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr bool operator==(Fold<Derived, OtherStride> other) const {
-            return *this == other.unfold();
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr bool operator!=(Fold<Derived, OtherStride> other) const {
-            return *this != other.unfold();
-        }
-
     private:
         const int _i;
     };
 
-    /// @brief  A template class that implemnts a folded dimension.
-    /// This class is used to represent a dimension that has been
-    /// folded by a given stride.
-    ///
-    /// Example:
-    ///      // Create an index variable c in dimension C_Dim.
-    ///      C_Dim c(32);
-    ///
-    ///      // Fold c by 8.
-    ///      auto c8 = c.fold<8>();
-    ///      assert c8 == Fold<C_Dim, 8>(4);
-    ///
-    ///      // Unfold c8.
-    ///      assert c8.unfold() == c;
-    ///
-    ///      // Increment c8 by 1.
-    ///      assert (c8 + 1).unfold() == c + 8;
-    ///
-    ///      // Refold to a different stride
-    ///      assert c8.fold<16>() == Fold<C_Dim, 16>(2);
-    ///
-    /// @tparam DimType the type that represents the dimension to fold
-    /// @tparam Stride the size of the fold.
+    /// @brief A folded dimension with stride.
     template <class DimType, int Stride> class Fold : public Dim<Fold<DimType, Stride>> {
         static_assert(Stride > 0, "Fold stride must be positive");
 
-        template <typename Compare, int OtherStride>
-        DEVICE constexpr bool _compare_fold(Fold<DimType, OtherStride> other, Compare&& cmp) const {
-            if constexpr (Stride == OtherStride) {
-                return cmp(get(), other.get());
-            } else if constexpr (Stride < OtherStride) {
-                return cmp(get(), other.template fold<Stride>().get());
-            } else {
-                return cmp(this->fold<OtherStride>().get(), other.get());
-            }
-        }
-
-        template <typename Op, int OtherStride>
-        DEVICE constexpr auto _apply_fold(Fold<DimType, OtherStride> other, Op&& op) const {
-            if constexpr (Stride == OtherStride) {
-                return Fold<DimType, Stride>(op(get(), other.get()));
-            } else if constexpr (Stride < OtherStride) {
-                return Fold<DimType, Stride>(op(get(), other.template fold<Stride>().get()));
-            } else {
-                return Fold<DimType, OtherStride>(op(this->fold<OtherStride>().get(), other.get()));
-            }
-        }
-
     public:
         using dim_type = DimType;
-
         constexpr static dim_type stride = Stride;
 
         using Base = Dim<Fold<DimType, Stride>>;
@@ -208,83 +120,12 @@ namespace spio {
             }
         }
 
-        template <int OtherStride>
-        DEVICE constexpr auto operator+(Fold<DimType, OtherStride> other) const {
-            return _apply_fold(other, [](int lhs, int rhs) { return lhs + rhs; });
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr auto operator-(Fold<DimType, OtherStride> other) const {
-            return _apply_fold(other, [](int lhs, int rhs) { return lhs - rhs; });
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr bool operator<(Fold<DimType, OtherStride> other) const {
-            return _compare_fold(other, [](int lhs, int rhs) { return lhs < rhs; });
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr bool operator<=(Fold<DimType, OtherStride> other) const {
-            return _compare_fold(other, [](int lhs, int rhs) { return lhs <= rhs; });
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr bool operator>(Fold<DimType, OtherStride> other) const {
-            return _compare_fold(other, [](int lhs, int rhs) { return lhs > rhs; });
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr bool operator>=(Fold<DimType, OtherStride> other) const {
-            return _compare_fold(other, [](int lhs, int rhs) { return lhs >= rhs; });
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr bool operator==(Fold<DimType, OtherStride> other) const {
-            return _compare_fold(other, [](int lhs, int rhs) { return lhs == rhs; });
-        }
-
-        template <int OtherStride>
-        DEVICE constexpr bool operator!=(Fold<DimType, OtherStride> other) const {
-            return _compare_fold(other, [](int lhs, int rhs) { return lhs != rhs; });
-        }
-
-        DEVICE constexpr auto operator+(DimType other) const {
-            return this->unfold() + other;
-        }
-
-        DEVICE constexpr auto operator-(DimType other) const {
-            return this->unfold() - other;
-        }
-
-        DEVICE constexpr auto operator<(DimType other) const {
-            return this->unfold() < other;
-        }
-
-        DEVICE constexpr auto operator<=(DimType other) const {
-            return this->unfold() <= other;
-        }
-
-        DEVICE constexpr auto operator>(DimType other) const {
-            return this->unfold() > other;
-        }
-
-        DEVICE constexpr auto operator>=(DimType other) const {
-            return this->unfold() >= other;
-        }
-
-        DEVICE constexpr auto operator==(DimType other) const {
-            return this->unfold() == other;
-        }
-
-        DEVICE constexpr auto operator!=(DimType other) const {
-            return this->unfold() != other;
-        }
-
         template <class NewDimType> DEVICE constexpr auto cast() const -> Fold<NewDimType, Stride> {
             return Fold<NewDimType, Stride>(get());
         }
     };
 
+    /// @brief A dimension with both size and stride (bounded).
     template <class DimType, int Size, int Stride>
     class Module : public Dim<Module<DimType, Size, Stride>> {
         static_assert(Size > 0, "Module size must be positive");
@@ -323,18 +164,108 @@ namespace spio {
         }
     };
 
-    /// @brief A template class that implements a range of indexes in a dimension.
-    /// This class is used internally by the range functions below.
-    /// @tparam dim_type The type of the dimension.
-    /// @tparam increment The increment value.
+    // ========================================================================
+    // Cross-type operators (Dim+Fold, Fold+Module, etc.)
+    // Uses ADL to find these when operands are in namespace spio
+    // ========================================================================
+
+    namespace detail {
+        // Convert any dim-like type to its base value
+        template <typename T> DEVICE constexpr int to_base_value(T d) {
+            if constexpr (has_dim_type_v<T>) {
+                return d.get() * get_dim_stride_v<T>;
+            } else {
+                return d.get();
+            }
+        }
+
+        // Result type: use the finer (smaller) stride
+        template <typename T, typename U> struct arithmetic_result_type {
+            using base_type = get_base_dim_type_t<T>;
+            static constexpr int t_stride = get_dim_stride_v<T>;
+            static constexpr int u_stride = get_dim_stride_v<U>;
+            static constexpr int result_stride = (t_stride < u_stride) ? t_stride : u_stride;
+            using type =
+                conditional_t<result_stride == 1, base_type, Fold<base_type, result_stride>>;
+        };
+
+        template <typename T, typename U>
+        using arithmetic_result_t = typename arithmetic_result_type<T, U>::type;
+
+        // Check if this is a cross-type operation (not same type, but compatible base)
+        template <typename T, typename U>
+        inline constexpr bool is_cross_type_op_v = dims_compatible_v<T, U> && !is_same<T, U>::value;
+    }
+
+    // Cross-type addition
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
+    DEVICE constexpr auto operator+(T lhs, U rhs) {
+        using result_type = detail::arithmetic_result_t<T, U>;
+        constexpr int result_stride = detail::get_dim_stride_v<result_type>;
+        int base_result = detail::to_base_value(lhs) + detail::to_base_value(rhs);
+        return result_type(base_result / result_stride);
+    }
+
+    // Cross-type subtraction
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
+    DEVICE constexpr auto operator-(T lhs, U rhs) {
+        using result_type = detail::arithmetic_result_t<T, U>;
+        constexpr int result_stride = detail::get_dim_stride_v<result_type>;
+        int base_result = detail::to_base_value(lhs) - detail::to_base_value(rhs);
+        return result_type(base_result / result_stride);
+    }
+
+    // Cross-type comparisons
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
+    DEVICE constexpr bool operator<(T lhs, U rhs) {
+        return detail::to_base_value(lhs) < detail::to_base_value(rhs);
+    }
+
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
+    DEVICE constexpr bool operator<=(T lhs, U rhs) {
+        return detail::to_base_value(lhs) <= detail::to_base_value(rhs);
+    }
+
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
+    DEVICE constexpr bool operator>(T lhs, U rhs) {
+        return detail::to_base_value(lhs) > detail::to_base_value(rhs);
+    }
+
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
+    DEVICE constexpr bool operator>=(T lhs, U rhs) {
+        return detail::to_base_value(lhs) >= detail::to_base_value(rhs);
+    }
+
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
+    DEVICE constexpr bool operator==(T lhs, U rhs) {
+        return detail::to_base_value(lhs) == detail::to_base_value(rhs);
+    }
+
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
+    DEVICE constexpr bool operator!=(T lhs, U rhs) {
+        return detail::to_base_value(lhs) != detail::to_base_value(rhs);
+    }
+
+    // ========================================================================
+    // Range utilities
+    // ========================================================================
+
     template <typename dim_type, int increment = 1> class _Range {
     public:
         class Iterator {
         public:
             DEVICE constexpr Iterator(int i) : _i(i) {}
 
-            DEVICE dim_type operator*() const {
-                return _i;
+            DEVICE constexpr dim_type operator*() const {
+                return dim_type(_i);
             }
 
             DEVICE constexpr Iterator& operator++() {
@@ -369,9 +300,6 @@ namespace spio {
         int _end;
     };
 
-    /// @brief A template class that implements a reverse range of indexes in a dimension.
-    /// This class is used internally by the reverse_range functions below.
-    /// @tparam dim_type The type of the dimension.
     template <typename dim_type> class _ReverseRange {
     public:
         class ReverseIterator {
@@ -395,10 +323,8 @@ namespace spio {
             int _i;
         };
 
-        // Create range from 0 to end (reverse)
         DEVICE constexpr _ReverseRange(dim_type end) : _start(end.get() - 1), _end(-1) {}
 
-        // Create range from start to end (reverse)
         DEVICE constexpr _ReverseRange(dim_type start, dim_type end)
             : _start(end.get() - 1),
               _end(start.get() - 1) {}
@@ -412,17 +338,15 @@ namespace spio {
         }
 
     private:
-        int _start; // Highest value (starting point)
-        int _end;   // Just below lowest value (ending point)
+        int _start;
+        int _end;
     };
 
-    /// @brief Returns a range of integers from 0 to end, incrementing by increment.
     template <int increment, typename dim_type>
     DEVICE constexpr auto range_with_step(dim_type end) {
         return _Range<dim_type, increment>(divup(end.get(), increment) * increment);
     }
 
-    /// @brief Returns a range of integers from start to end, incrementing by increment.
     template <int increment, typename dim_type>
     DEVICE constexpr auto range_with_step(dim_type start, dim_type end) {
         return _Range<dim_type, increment>(
@@ -430,25 +354,27 @@ namespace spio {
             start + static_cast<dim_type>(divup(end.get() - start.get(), increment) * increment));
     }
 
-    /// @brief Returns a range of integers from 0 to end, incrementing by 1.
     template <typename dim_type> DEVICE constexpr auto range(dim_type end) {
         return _Range<dim_type>(end);
     }
 
-    /// @brief Returns a range of integers from start to end, incrementing by 1.
     template <typename dim_type> DEVICE constexpr auto range(dim_type start, dim_type end) {
         return _Range<dim_type>(start, end);
     }
 
-    /// @brief Returns a range of integers from end-1 down to 0, decrementing by 1.
     template <typename dim_type> DEVICE constexpr auto reverse_range(dim_type end) {
         return _ReverseRange<dim_type>(end);
     }
 
-    /// @brief Returns a range of integers from end-1 down to start, decrementing by 1.
     template <typename dim_type> DEVICE constexpr auto reverse_range(dim_type start, dim_type end) {
         return _ReverseRange<dim_type>(start, end);
     }
 }
 
 #endif
+
+#define SPIO_DIM(Name)                                                                             \
+    class Name : public spio::Dim<Name> {                                                          \
+    public:                                                                                        \
+        using spio::Dim<Name>::Dim;                                                                \
+    }

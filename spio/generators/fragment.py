@@ -38,10 +38,15 @@ class Fragment:
     row: str
     col: str
 
+    def __post_init__(self):
+        """Normalize the row and column dimension names to upper-case."""
+        object.__setattr__(self, "row", self.row.upper())
+        object.__setattr__(self, "col", self.col.upper())
+
     def generate(self) -> str:
         """Generate the fragment class code as a type alias."""
-        row_dim = self.row.upper()
-        col_dim = self.col.upper()
+        row_dim = self.row
+        col_dim = self.col
         fragment_class = f"spio::{self.fragment_type.value}<{row_dim}, {col_dim}>"
         return f"using {self.class_name} = {fragment_class};\n"
 
