@@ -3,7 +3,7 @@
 from typing import List
 
 from .gen_specs import GenSpecs
-from .dim import Dim, _get_dim_name_and_stride
+from .dim import Dim, _get_dim_name_and_stride, BUILTIN_DIM_NAMES
 from .fold import Fold
 from .tensor import Tensor
 from .compound_index import CompoundIndex
@@ -69,7 +69,8 @@ def generate(
     if base_dims:
         code += "// Dimension classes\n"
         for dim in sorted(base_dims, key=lambda x: x.dim_name):
-            code += dim.generate()
+            if dim.dim_name not in BUILTIN_DIM_NAMES:
+                code += dim.generate()
         code += "\n"
 
     # Group 2: Fold aliases

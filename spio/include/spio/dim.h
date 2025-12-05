@@ -371,10 +371,15 @@ namespace spio {
     }
 }
 
-#endif
-
 #define SPIO_DIM(Name)                                                                             \
     class Name : public spio::Dim<Name> {                                                          \
     public:                                                                                        \
         using spio::Dim<Name>::Dim;                                                                \
     }
+
+namespace spio {
+    SPIO_DIM(OFFSET);
+    SPIO_DIM(LANE);
+}
+
+#endif

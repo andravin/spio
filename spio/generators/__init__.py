@@ -12,7 +12,7 @@ from .macros import Macro
 from .params import ParamsSpec
 from .checkerboard import Checkerboard
 from .async_strip_loader import AsyncStripLoader
-from .dim import Dim, dim_name_to_dim_or_fold_class_name
+from .dim import Dim, dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
 from .fold import Fold
 from .dims import Dims, Strides
 from .matmul import Matmul

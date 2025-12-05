@@ -263,7 +263,7 @@ UTEST(Lesson4, DimensionalProjection) {
 
 ### 5. Matrix Multiply Kernel
 
-For a full example of high-performance matrix multiply kernel using typed dimensions and just-in-time compilation, see:
+For a full example of a high-performance matrix multiply kernel using typed dimensions and just-in-time compilation, see:
 
 - CUDA Source: [mma_checkerboard_16c.cu](spio/src_tests/mma_checkerboard_16c.cu)
 - Python Generators: [test_mma_checkerboard.py](tests/matmul/test_mma_checkerboard.py)
@@ -316,17 +316,7 @@ Benchmarks use realistic workloads with layers embedded in ConvFirst or MBConv b
 
 ### Installation
 
-Create and activate a virtual environment (recommended):
-
-```bash
-python3 -m venv spio_env
-source spio_env/bin/activate
-
-# Upgrade pip.
-python -m pip install --upgrade pip
-```
-
-Then install Spio from PyPI using pip:
+Install Spio from PyPI using pip:
 
 ```bash
 pip install spio
@@ -334,46 +324,52 @@ pip install spio
 
 Notes:
 
-- PyTorch (torch\>=2.4.0) is an explicit dependency and will be installed automatically when you install Spio; no separate install step is required.
-- CUDA toolkit installation is not required. Spio relies on NVIDIA's CUDA runtime and NVRTC libraries that are pulled in via wheels and are the same libraries PyTorch uses.
+- PyTorch (torch\>=2.4.0) is an explicit dependency and will be installed automatically when you install Spio; no separate installation step is required.
+- CUDA toolkit installation is not required. Spio relies on NVIDIA's CUDA runtime and NVRTC libraries and installs them automatically via pip wheels. PyTorch also depends on the same NVIDIA packages.
 
-Alternatively, install Spio from source. For this, you will need a C compiler. On Ubuntu:
+## Development
+
+To install Spio from source, first ensure your system has a C compiler. On Ubuntu:
 
 ```bash
 sudo apt update && sudo apt install -y build-essential
 ```
 
-Then clone the Spio repository and install:
+Then clone the Spio repository and install the package in editable mode:
 
 ```bash
 git clone https://github.com/andravin/spio.git
 cd spio
-pip install .
-
-# Run tests (optional)
-cd tests
-SPIO_WORKERS=$(nproc) pytest .
+pip install -e .
 ```
 
-Exit the virtual environment when finished.
+Now run the unit tests:
 
 ```bash
-deactivate
+SPIO_WORKERS=$(nproc) pytest tests
 ```
 
-### Additional Requirements for `torch.compile()`
+The tutorial requires the CUDA toolkit. If your system has `nvcc`, you can run the examples like this:
 
-Spio itself does not need a host C/C++ compiler or the CUDA developer toolkit. You can use Spio operations with PyTorch on a production system that does not have these.
+```bash
+SPIO_ENABLE_CPP_TESTS=1 pytest -s tests/test_tutorial.py
+```
 
-However, `torch.compile()` (Inductor/Triton) does, and missing pieces cause errors like `nvrtc: file not found`, `error: unable to compile C wrapper`, `LLVM: external toolchain not found`, or `RuntimeError: codegen failed in Inductor`. These originate from PyTorch/Triton rather than Spio.
+Spio will likely find your CUDA toolkit installation automatically. To specify it manually, set the `CUDA_HOME` environment variable, or set `CUDACXX` to the full path of `nvcc`.
 
-If you intend to use `torch.compile()` with Spio operations, ensure your production environment provides:
+## Additional Requirements for torch.compile
 
-- gcc or clang (or a compatible toolchain)
-- CUDA driver development files (e.g., `libcuda.so` symlink or stubs)
-- Optional: CUDA toolkit runtime libraries (`libnvrtc.so`, `libnvjitlink.so`, CUDA “stubs”) when GPU compilation paths require them
+The Spio runtime does not need a host C/C++ compiler or the CUDA developer toolkit. You can use Spio operations with PyTorch on a production system that does not have these.
 
-This recipe will add the requirements for `torch.compile()` on an Ubuntu system:
+However, torch.compile (Inductor/Triton) does, and missing pieces cause errors like "nvrtc: file not found", "unable to compile C wrapper", "LLVM: external toolchain not found", or "codegen failed in Inductor". These originate from PyTorch/Triton rather than Spio.
+
+If you intend to use torch.compile, ensure your production environment provides:
+
+- GCC or Clang (or a compatible toolchain)
+- CUDA driver development files (e.g., libcuda.so symlink or stubs)
+- Optional: CUDA toolkit runtime libraries (libnvrtc.so, libnvjitlink.so, CUDA stubs) when GPU compilation paths require them
+
+These commands will add the requirements for torch.compile on an Ubuntu system:
 
 ```bash
 # Install development tools required by PyTorch Inductor + Triton
@@ -392,7 +388,9 @@ python3 -c "import torch; torch.cuda.is_available()"
 python3 -c "import torch; torch.compile(lambda x: x**2)(torch.randn(5, device='cuda'))"
 ```
 
-### Usage
+## Usage
+
+Here is an example of how to use Spio operations with PyTorch:
 
 ```python
 import torch

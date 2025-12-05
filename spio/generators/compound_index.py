@@ -4,7 +4,7 @@ from typing import List, Generator
 from dataclasses import dataclass
 
 from .dims import Dims, Strides, compute_full_strides
-from .dim import dim_name_to_dim_or_fold_class_name
+from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
 
 
 @dataclass
@@ -91,6 +91,9 @@ def _generate_index(
 
         # Use dim_name_to_dim_or_fold_class_name to handle both regular and fold dimensions
         dim_class = dim_name_to_dim_or_fold_class_name(name)
+
+        if dim_class in BUILTIN_DIM_NAMES:
+            dim_class = "spio::" + dim_class
 
         # Add the DimInfo parameter
         dim_infos.append(f"spio::DimInfo<{dim_class}, {size_str}, {stride}>")

@@ -37,4 +37,8 @@ struct utest_type_deducer<spio::Module<DimType, Size, Stride>, false> {
     SPIO_DIM(Name);                                                                                \
     UTEST_DIM_PRINTER(Name)
 
+UTEST_DIM_PRINTER(spio::OFFSET);
+
+UTEST_DIM_PRINTER(spio::LANE);
+
 #endif

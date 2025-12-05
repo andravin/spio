@@ -44,46 +44,50 @@
 /// support.
 namespace spio {
     /// @brief Base class for A-matrix load-index using 8x8 fragments.
-    class _MMA_A_88_F16_LoadIndex : public CompoundIndexBase {
+    template <typename OffsetType = LANE>
+    class _MMA_A_88_F16_LoadIndex : public CompoundIndexBase<OffsetType> {
     public:
-        using CompoundIndexBase::CompoundIndexBase;
+        using Base = CompoundIndexBase<OffsetType>;
+        using Base::CompoundIndexBase;
 
     protected:
         DEVICE inline constexpr int _i0() const {
-            return offset() & 15;
+            return Base::offset().get() & 15;
         };
 
         DEVICE inline constexpr int _k8() const {
-            return offset() >> 4;
+            return Base::offset().get() >> 4;
         };
     };
 
     /// @brief Base class for B-matrix load-index using 8x8 fragments.
-    class _MMA_B_88_F16_LoadIndex : public CompoundIndexBase {
+    template <typename OffsetType = LANE>
+    class _MMA_B_88_F16_LoadIndex : public CompoundIndexBase<OffsetType> {
     public:
-        using CompoundIndexBase::CompoundIndexBase;
+        using Base = CompoundIndexBase<OffsetType>;
+        using Base::CompoundIndexBase;
 
     protected:
         DEVICE inline constexpr int _j0() const {
-            return offset() & 7;
+            return Base::offset().get() & 7;
         }
 
         DEVICE inline constexpr int _j8() const {
-            return (offset() & 16) >> 1;
+            return (Base::offset().get() & 16) >> 1;
         }
 
         DEVICE inline constexpr int _k8() const {
-            return (offset() >> 3) & 1;
+            return (Base::offset().get() >> 3) & 1;
         }
     };
 
     /// @brief Indices for A-matrix shape M16 x K8 x float16 for use with ldmatrix.
     /// @tparam RowDim The dimension type for rows (i)
     /// @tparam ColDim The dimension type for columns (k)
-    template <typename RowDim, typename ColDim>
-    class MMA_A_M16_K8_F16_LoadIndex : public _MMA_A_88_F16_LoadIndex {
+    template <typename RowDim, typename ColDim, typename OffsetType = LANE>
+    class MMA_A_M16_K8_F16_LoadIndex : public _MMA_A_88_F16_LoadIndex<OffsetType> {
     private:
-        using Base = _MMA_A_88_F16_LoadIndex;
+        using Base = _MMA_A_88_F16_LoadIndex<OffsetType>;
 
     public:
         using Base::Base;
@@ -116,10 +120,10 @@ namespace spio {
     /// @brief Indices for A-matrix shape M16 x K16 x float16 for use with ldmatrix.
     /// @tparam RowDim The dimension type for rows (i)
     /// @tparam ColDim The dimension type for columns (k)
-    template <typename RowDim, typename ColDim>
-    class MMA_A_M16_K16_F16_LoadIndex : public _MMA_A_88_F16_LoadIndex {
+    template <typename RowDim, typename ColDim, typename OffsetType = LANE>
+    class MMA_A_M16_K16_F16_LoadIndex : public _MMA_A_88_F16_LoadIndex<OffsetType> {
     private:
-        using Base = _MMA_A_88_F16_LoadIndex;
+        using Base = _MMA_A_88_F16_LoadIndex<OffsetType>;
 
     public:
         using Base::Base;
@@ -152,10 +156,10 @@ namespace spio {
     /// @brief Indices for B-matrix shape N8 x K8 x float16 for use with ldmatrix.
     /// @tparam RowDim The dimension type for rows (k)
     /// @tparam ColDim The dimension type for columns (j)
-    template <typename RowDim, typename ColDim>
-    class MMA_B_N8_K8_F16_LoadIndex : public _MMA_B_88_F16_LoadIndex {
+    template <typename RowDim, typename ColDim, typename OffsetType = LANE>
+    class MMA_B_N8_K8_F16_LoadIndex : public _MMA_B_88_F16_LoadIndex<OffsetType> {
     private:
-        using Base = _MMA_B_88_F16_LoadIndex;
+        using Base = _MMA_B_88_F16_LoadIndex<OffsetType>;
 
     public:
         using Base::Base;
@@ -188,10 +192,10 @@ namespace spio {
     /// @brief Indices for B-matrix shape N8 x K16 x float16 for use with ldmatrix.
     /// @tparam RowDim The dimension type for rows (k)
     /// @tparam ColDim The dimension type for columns (j)
-    template <typename RowDim, typename ColDim>
-    class MMA_B_N8_K16_F16_LoadIndex : public _MMA_B_88_F16_LoadIndex {
+    template <typename RowDim, typename ColDim, typename OffsetType = LANE>
+    class MMA_B_N8_K16_F16_LoadIndex : public _MMA_B_88_F16_LoadIndex<OffsetType> {
     private:
-        using Base = _MMA_B_88_F16_LoadIndex;
+        using Base = _MMA_B_88_F16_LoadIndex<OffsetType>;
 
     public:
         using Base::Base;
@@ -224,10 +228,10 @@ namespace spio {
     /// @brief Indices for B-matrix shape N16 x K16 x float16 for use with ldmatrix.
     /// @tparam RowDim The dimension type for rows (k)
     /// @tparam ColDim The dimension type for columns (j)
-    template <typename RowDim, typename ColDim>
-    class MMA_B_N16_K16_F16_LoadIndex : public _MMA_B_88_F16_LoadIndex {
+    template <typename RowDim, typename ColDim, typename OffsetType = LANE>
+    class MMA_B_N16_K16_F16_LoadIndex : public _MMA_B_88_F16_LoadIndex<OffsetType> {
     private:
-        using Base = _MMA_B_88_F16_LoadIndex;
+        using Base = _MMA_B_88_F16_LoadIndex<OffsetType>;
 
     public:
         using Base::Base;

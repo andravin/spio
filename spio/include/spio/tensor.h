@@ -101,21 +101,6 @@ namespace spio {
                 (size - 1) * stride + calculate_storage_size<RestDims...>::value;
         };
 
-        // Detect if a type is Coordinates
-        template <typename T> struct is_coordinates : false_type {};
-
-        template <typename... Dims> struct is_coordinates<Coordinates<Dims...>> : true_type {};
-
-        template <typename T> inline constexpr bool is_coordinates_v = is_coordinates<T>::value;
-
-        // Detect if a type has coordinates() method
-        template <typename T, typename = void> struct has_coordinates : false_type {};
-
-        template <typename T>
-        struct has_coordinates<T, void_t<decltype(declval<T>().coordinates())>> : true_type {};
-
-        template <typename T> inline constexpr bool has_coordinates_v = has_coordinates<T>::value;
-
     } // namespace detail
 
     /// @brief Cursor with folded dimensions.
