@@ -2,18 +2,10 @@
 
 Experimental CUDA kernel framework unifying typed dimensions, NVRTC JIT specialization, and ML‑guided tuning.
 
-<p align="center">
-  <a href="https://pypi.org/project/spio/">
-    <img src="https://img.shields.io/pypi/v/spio.svg" alt="PyPI version">
-  </a>
-  <a href="https://pypi.org/project/spio/">
-    <img src="https://img.shields.io/pypi/pyversions/spio.svg" alt="Python versions">
-  </a>
-  <img src="https://img.shields.io/pypi/wheel/spio" alt="Wheel available">
-  <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/andravin/spio.svg" alt="License">
-  </a>
-</p>
+[![PyPI version](https://img.shields.io/pypi/v/spio.svg)](https://pypi.org/project/spio/)
+![Python versions](https://img.shields.io/pypi/pyversions/spio.svg)
+![Wheel](https://img.shields.io/pypi/wheel/spio)
+[![License](https://img.shields.io/github/license/andravin/spio.svg)](LICENSE)
 
 ## Overview
 
