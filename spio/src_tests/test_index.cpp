@@ -55,6 +55,15 @@ UTEST(IndexSize, total_size) {
     using Idx3D = CompoundIndex<DimInfo<I, 16, 32>, DimInfo<J, 8, 4>, DimInfo<K, 4, 1>>;
     EXPECT_EQ(Idx3D::total_size, 16 * 8 * 4);
     EXPECT_EQ(Idx3D::size(), 16 * 8 * 4);
+
+    // Index with two folds of the same base dimension (hierarchical)
+    // I8 (coarse, stride 8) and I (fine, stride 1) are complementary folds
+    using I8 = Fold<I, 8>;
+    using IdxFolded = CompoundIndex<DimInfo<I8, 8, 8>, DimInfo<I, 8, 1>>;
+    // Total size is product: 8 * 8 = 64
+    // This represents 8 groups of 8 elements
+    EXPECT_EQ(IdxFolded::total_size, 8 * 8);
+    EXPECT_EQ(IdxFolded::size(), 8 * 8);
 }
 
 // ============================================================================

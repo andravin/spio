@@ -15,32 +15,7 @@ namespace spio {
 
     namespace detail {
 
-        // ========================================================================
-        // Helper to filter DimInfos by base dimension types
-        // ========================================================================
-
-        // Filter DimInfos keeping only those whose base dim is in BaseDims tuple
-        template <typename DimInfosTuple, typename BaseDimsTuple> struct keep_dim_infos_by_base;
-
-        // Base case: no more DimInfos to process
-        template <typename BaseDimsTuple> struct keep_dim_infos_by_base<tuple<>, BaseDimsTuple> {
-            using type = tuple<>;
-        };
-
-        // Recursive case: check if first DimInfo's base dim is in BaseDims
-        template <typename FirstInfo, typename... RestInfos, typename BaseDimsTuple>
-        struct keep_dim_infos_by_base<tuple<FirstInfo, RestInfos...>, BaseDimsTuple> {
-            using first_base_dim = get_base_dim_type_t<typename FirstInfo::dim_type>;
-            using rest_result =
-                typename keep_dim_infos_by_base<tuple<RestInfos...>, BaseDimsTuple>::type;
-
-            using type = conditional_t<tuple_contains_v<first_base_dim, BaseDimsTuple>,
-                                       tuple_prepend_t<FirstInfo, rest_result>, rest_result>;
-        };
-
-        template <typename DimInfosTuple, typename BaseDimsTuple>
-        using keep_dim_infos_by_base_t =
-            typename keep_dim_infos_by_base<DimInfosTuple, BaseDimsTuple>::type;
+        // Note: keep_dim_infos_by_base is defined in meta.h
 
         // ========================================================================
         // Coordinates helpers - forward declarations for mutual dependencies

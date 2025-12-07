@@ -474,6 +474,93 @@ namespace spio {
 
         template <typename T> inline constexpr bool is_dim_like_v = is_dim_like<T>::value;
 
+        // ========================================================================
+        // Helper to filter DimInfos by base dimension types
+        // ========================================================================
+
+        // Filter DimInfos keeping only those whose base dim is in BaseDims tuple
+        template <typename DimInfosTuple, typename BaseDimsTuple> struct keep_dim_infos_by_base;
+
+        // Base case: no more DimInfos to process
+        template <typename BaseDimsTuple> struct keep_dim_infos_by_base<tuple<>, BaseDimsTuple> {
+            using type = tuple<>;
+        };
+
+        // Recursive case: check if first DimInfo's base dim is in BaseDims
+        template <typename FirstInfo, typename... RestInfos, typename BaseDimsTuple>
+        struct keep_dim_infos_by_base<tuple<FirstInfo, RestInfos...>, BaseDimsTuple> {
+            using first_base_dim = get_base_dim_type_t<typename FirstInfo::dim_type>;
+            using rest_result =
+                typename keep_dim_infos_by_base<tuple<RestInfos...>, BaseDimsTuple>::type;
+
+            using type = conditional_t<tuple_contains_v<first_base_dim, BaseDimsTuple>,
+                                       tuple_prepend_t<FirstInfo, rest_result>, rest_result>;
+        };
+
+        template <typename DimInfosTuple, typename BaseDimsTuple>
+        using keep_dim_infos_by_base_t =
+            typename keep_dim_infos_by_base<DimInfosTuple, BaseDimsTuple>::type;
+
+        // ========================================================================
+        // Find coarsest DimInfo per base dimension (largest stride)
+        // ========================================================================
+
+        // Compare two DimInfos with same base dim, keep the one with larger stride
+        template <typename InfoA, typename InfoB> struct coarser_dim_info {
+            static constexpr int stride_a = get_dim_stride<typename InfoA::dim_type>::value;
+            static constexpr int stride_b = get_dim_stride<typename InfoB::dim_type>::value;
+            using type = conditional_t<(stride_a >= stride_b), InfoA, InfoB>;
+        };
+
+        // Find coarsest info for a given base dim from a tuple of DimInfos
+        template <typename BaseDim, typename InfosTuple> struct find_coarsest_info_for_base;
+
+        template <typename BaseDim, typename FirstInfo>
+        struct find_coarsest_info_for_base<BaseDim, tuple<FirstInfo>> {
+            using type = FirstInfo;
+        };
+
+        template <typename BaseDim, typename FirstInfo, typename SecondInfo, typename... RestInfos>
+        struct find_coarsest_info_for_base<BaseDim, tuple<FirstInfo, SecondInfo, RestInfos...>> {
+            using coarser = typename coarser_dim_info<FirstInfo, SecondInfo>::type;
+            using type =
+                typename find_coarsest_info_for_base<BaseDim, tuple<coarser, RestInfos...>>::type;
+        };
+
+        // Build tuple of coarsest DimInfos, one per unique base dimension
+        template <typename BaseDimsTuple, typename AllInfosTuple> struct build_coarsest_infos;
+
+        template <typename AllInfosTuple> struct build_coarsest_infos<tuple<>, AllInfosTuple> {
+            using type = tuple<>;
+        };
+
+        template <typename FirstBase, typename... RestBases, typename AllInfosTuple>
+        struct build_coarsest_infos<tuple<FirstBase, RestBases...>, AllInfosTuple> {
+            // Filter to get only infos with this base dim
+            using matching_infos = keep_dim_infos_by_base_t<AllInfosTuple, tuple<FirstBase>>;
+            // Find coarsest among matching
+            using coarsest = typename find_coarsest_info_for_base<FirstBase, matching_infos>::type;
+            // Recurse for rest
+            using rest = typename build_coarsest_infos<tuple<RestBases...>, AllInfosTuple>::type;
+            using type = tuple_prepend_t<coarsest, rest>;
+        };
+
+        // Get unique base dimensions from DimInfos
+        template <typename InfosTuple> struct dim_infos_unique_bases;
+
+        template <typename... Infos> struct dim_infos_unique_bases<tuple<Infos...>> {
+            using type = tuple_unique_base_dims_t<tuple<typename Infos::dim_type...>>;
+        };
+
+        // Main entry point: get coarsest DimInfo per base dimension
+        template <typename InfosTuple> struct coarsest_dim_infos {
+            using unique_bases = typename dim_infos_unique_bases<InfosTuple>::type;
+            using type = typename build_coarsest_infos<unique_bases, InfosTuple>::type;
+        };
+
+        template <typename InfosTuple>
+        using coarsest_dim_infos_t = typename coarsest_dim_infos<InfosTuple>::type;
+
     } // namespace detail
 
 } // namespace spio

@@ -83,10 +83,8 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
 
     warp_n8 = config.warp_n // 8
 
-    double_chunk = 2 * config.chunk_k16
-    assert (
-        k16 % double_chunk == 0
-    ), f"Kernel requires K={k} to be a multiple of twice the chunk size {double_chunk}."
+    chunk = config.chunk_k16 * 16
+    double_chunk = 2 * chunk
 
     tensor_a = Tensor("A", dtype.uint4, Dims(k16=k16, i=m, k8=2), constant=True)
     tensor_b = Tensor("B", dtype.uint4, Dims(k16=k16, j=n, k8=2), constant=True)
@@ -96,7 +94,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         "SmemA",
         dtype.uint4,
         Dims(
-            ping=2,
+            chunk=2,
             k16=config.chunk_k16,
             i16=block_x16,
             checkers=32,
@@ -106,7 +104,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         "SmemB",
         dtype.uint4,
         Dims(
-            ping=2,
+            chunk=2,
             k16=config.chunk_k16,
             j16=block_x16,
             checkers=32,
@@ -121,6 +119,8 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         Fold("block_j", "j", block_x),
         Fold("warp_i", "i", config.warp_m),
         Fold("warp_j", "j", config.warp_n),
+        Fold("chunk", "k", chunk),
+        Fold("double_chunk", "k", double_chunk),
         tensor_a,
         tensor_b,
         tensor_c,

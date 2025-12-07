@@ -435,16 +435,38 @@ namespace spio {
             return storage_size() * sizeof(data_type);
         }
 
-        // Get size for a specific dimension as the dimension type
+        // Get size for a specific dimension as it exists in the tensor.
+        // Fails to compile if the exact dimension does not exist in the tensor.
         template <typename DimType> DEVICE static constexpr DimType size() {
             using info = typename dim_traits::find_dim_info<DimType, DimInfos...>::info;
             return DimType(info::module_type::size.get());
         }
 
-        // Get all sizes as a Coordinates struct.
-        DEVICE static constexpr auto sizes() {
-            return Coordinates<typename DimInfos::dim_type...>(
-                typename DimInfos::dim_type(DimInfos::module_type::size.get())...);
+        // Get the total extent of the tensor in the requested dimension's base type.
+        // Returns the size of the coarsest fold, converted to the requested dimension type.
+        template <typename DimType> DEVICE static constexpr DimType extent() {
+            using RequestedBaseDim = detail::get_base_dim_type_t<DimType>;
+            using matching_infos =
+                detail::keep_dim_infos_by_base_t<detail::tuple<DimInfos...>,
+                                                 detail::tuple<RequestedBaseDim>>;
+
+            static_assert(detail::tuple_size<matching_infos>::value > 0,
+                          "Requested dimension type does not match any tensor dimension");
+
+            // Find the coarsest info for this base dimension
+            using coarsest_info =
+                typename detail::find_coarsest_info_for_base<RequestedBaseDim,
+                                                             matching_infos>::type;
+            using coarsest_dim_type = typename coarsest_info::dim_type;
+
+            // Get size of coarsest dimension and convert to requested type
+            return DimType(size<coarsest_dim_type>());
+        }
+
+        // Get Coordinates that include the extent for each base dimension.
+        DEVICE static constexpr auto extents() {
+            using coarsest_infos = detail::coarsest_dim_infos_t<detail::tuple<DimInfos...>>;
+            return make_sizes_from_infos(coarsest_infos{});
         }
 
         /// @brief Subscript operator with any dimension type or Coordinates.
@@ -495,6 +517,12 @@ namespace spio {
         }
 
     private:
+        template <typename... Infos>
+        DEVICE static constexpr auto make_sizes_from_infos(detail::tuple<Infos...>) {
+            return Coordinates<typename Infos::dim_type...>(
+                typename Infos::dim_type(Infos::module_type::size.get())...);
+        }
+
         /// @brief Base case for loading data from a source cursor.
         template <typename DstCursorType, typename SrcCursorType>
         DEVICE static void load_impl(DstCursorType dst, SrcCursorType src) {

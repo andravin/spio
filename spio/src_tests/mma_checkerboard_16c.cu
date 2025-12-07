@@ -38,7 +38,7 @@ extern "C" {
         auto global_load_a_idx = global_load_idx.cast<X, I>();
         auto global_load_b_idx = global_load_idx.cast<X, J>();
 
-        // Construct cursors for loading A and B and from global memory.
+        // Construct cursors for loading A and B from global memory.
         auto a = A(a_ptr)[block_idx][global_load_a_idx].rebase();
         auto b = B(b_ptr)[block_idx][global_load_b_idx].rebase();
 
@@ -64,8 +64,8 @@ extern "C" {
         c_tile.zero();
 
         // Construct the global memory loaders for A and B. Set the valid mask.
-        auto loader_a = A_Loader(block_idx + global_load_a_idx < A::sizes());
-        auto loader_b = B_Loader(block_idx + global_load_b_idx < B::sizes());
+        auto loader_a = A_Loader(block_idx + global_load_a_idx < A::extents());
+        auto loader_b = B_Loader(block_idx + global_load_b_idx < B::extents());
 
         // Allocate registers for the A and B tiles.
         A_Tile::data_type a_data[A_Tile::storage_size()];
@@ -75,38 +75,38 @@ extern "C" {
         auto a_tile = A_Tile(a_data);
         auto b_tile = B_Tile(b_data);
 
-        constexpr auto size = A::size<K16>();
-        constexpr auto step_size = A_Tile::size<K16>();
+        constexpr auto step = A_Tile::extent<K16>();
+        constexpr auto size = A::extent<K>();
 
         // Prefetch the first chunk of data from A and B.
-        if constexpr (size > 0) {
+        if constexpr (size > K(0)) {
             loader_a.copy_async(smem_a_store.get(), a.get());
             loader_b.copy_async(smem_b_store.get(), b.get());
             __pipeline_commit();
-            a.step(step_size);
-            b.step(step_size);
+            a.step(step);
+            b.step(step);
         }
 
         // Main computation loop with pipelined memory operations.
 
         // Aggressive unrolling of the main loop improves arithmetic utilization.
 #pragma unroll MAIN_LOOP_UNROLL_DEPTH
-        for (int iter = 0; iter < size.get(); iter += 2 * step_size.get()) {
+        for (auto double_chunk : range(DOUBLE_CHUNK(size))) {
 
             // Double-buffered loads and computation
-            for (auto phase : range(PING(2))) {
+            for (auto chunk : range(CHUNK(2))) {
 
                 // If not the last iteration, copy the next tile from global
                 // memory to shared memory asynchronously.
-                if (iter + (phase.get() + 1) * step_size.get() < size.get()) {
+                if (double_chunk + chunk + CHUNK(1) < size) {
                     // Copy into the back-buffer.
-                    loader_a.copy_async(smem_a_store[(phase + 1) % 2].get(), a.get());
-                    loader_b.copy_async(smem_b_store[(phase + 1) % 2].get(), b.get());
+                    loader_a.copy_async(smem_a_store[(chunk + 1) % 2].get(), a.get());
+                    loader_b.copy_async(smem_b_store[(chunk + 1) % 2].get(), b.get());
                 }
 
                 // Advance the global memory tiles.
-                a.step(step_size);
-                b.step(step_size);
+                a.step(step);
+                b.step(step);
 
                 // Synchronize on the previous iteration's global memory copy.
                 __pipeline_commit();
@@ -114,8 +114,8 @@ extern "C" {
                 __syncthreads();
 
                 // Load matrix tiles from shared memory into registers.
-                a_tile.load(smem_a_load[phase]);
-                b_tile.load(smem_b_load[phase]);
+                a_tile.load(smem_a_load[chunk]);
+                b_tile.load(smem_b_load[chunk]);
 
                 // Matrix-multiply the tiles using Tensor Cores.
                 // Compile-time type checking ensures the compatibility of the tile dimensions.
@@ -126,7 +126,7 @@ extern "C" {
         __pipeline_wait_prior(0);
 
         // Final computation for any leftover iteration.
-        if constexpr (size % (step_size * 2) != 0) {
+        if constexpr (DOUBLE_CHUNK(size) < size) {
             a_tile.load(smem_a_load);
             b_tile.load(smem_b_load);
             mma(a_tile, b_tile, c_tile, c_tile);
@@ -155,7 +155,7 @@ extern "C" {
         auto smem_c_load = smem_c_load_tensor[compute_idx].rebase();
         auto world_idx = block_idx + compute_idx;
         for (auto idx : SmemCLoadIndex::partition<LANE>(compute_idx)) {
-            if (world_idx + idx < C::sizes()) { *c[idx] = *smem_c_load[idx]; }
+            if (world_idx + idx < C::extents()) { *c[idx] = *smem_c_load[idx]; }
         }
     }
 }
