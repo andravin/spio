@@ -27,7 +27,7 @@ extern "C" {
         auto bias_f32 = [&]() {
             if constexpr (Mode::has_bias) {
                 BiasIdx idx(threadIdx.x);
-                Acc::CompoundIndex acc_idx(idx.get<LANE>().get());
+                Acc::compound_index_type acc_idx(idx.get<LANE>().get());
                 auto k8 = idx.get<K8>() + block_idx.get<BLOCK_C>().fold<8>().cast<K>();
                 if (k8 < Bias::size<K8>()) { return *Bias(bias_ptr)[k8][acc_idx.get<K2>()]; }
             }
@@ -123,7 +123,7 @@ extern "C" {
         SmemOutput::base_cursor_type smem_output_store_qn8;
         {
             SmemOutputStoreIdx thread_idx(threadIdx.x);
-            Acc::CompoundIndex acc_idx(thread_idx.get<LANE>().get());
+            Acc::compound_index_type acc_idx(thread_idx.get<LANE>().get());
             BlockQNIdx block_qn_0_idx(acc_idx.get<QN>(0).get());
             BlockQNIdx block_qn_8_idx(acc_idx.get<QN>(1).get());
             auto smem_output_store = smem_output[thread_idx.get<K8>()][acc_idx.get<K2>()];

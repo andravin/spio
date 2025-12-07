@@ -186,7 +186,7 @@ extern "C" {
         auto warp_s = [&]() {
             SmemWgradStoreIdx idx(threadIdx.x);
             auto _warp_s = idx.get<WARP_S>().unfold();
-            Acc::CompoundIndex acc_idx(idx.get<LANE>().get());
+            Acc::compound_index_type acc_idx(idx.get<LANE>().get());
             smem_wgrad_store =
                 smem_wgrad[idx.get<K8>()][acc_idx.get<K2>()][_warp_s][acc_idx.get<C>()].rebase();
             return _warp_s;

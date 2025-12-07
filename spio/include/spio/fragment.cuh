@@ -157,7 +157,7 @@ namespace spio {
     template <typename RowDim, typename ColDim, int _NUM_FRAGMENTS_K>
     class _MMA_M16_N8_F16_A : public _MMA_F16<2 * _NUM_FRAGMENTS_K> {
     public:
-        using CompoundIndex = MMA_A_88_F16_Index<RowDim, ColDim>;
+        using compound_index_type = MMA_A_88_F16_Index<RowDim, ColDim>;
 
         using row_dim = RowDim;
         using col_dim = ColDim;
@@ -168,7 +168,7 @@ namespace spio {
     template <typename RowDim, typename ColDim, int _NUM_FRAGMENTS_K>
     class _MMA_M16_N8_F16_B : public _MMA_F16<_NUM_FRAGMENTS_K> {
     public:
-        using CompoundIndex = MMA_B_88_F16_Index<RowDim, ColDim>;
+        using compound_index_type = MMA_B_88_F16_Index<RowDim, ColDim>;
     };
 
     /// @brief  C or D matrix with float32 elements for M16_N8_K* matrix multiplication with float32
@@ -176,7 +176,7 @@ namespace spio {
     /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
     template <typename RowDim, typename ColDim> class MMA_M16_N8_F32_C : public _MMA_F32<2> {
     public:
-        using CompoundIndex = MMA_C_88_F32_Index<RowDim, ColDim>;
+        using compound_index_type = MMA_C_88_F32_Index<RowDim, ColDim>;
         using row_dim = RowDim;
         using col_dim = ColDim;
         using Base = _MMA_F32<2>;
@@ -186,7 +186,7 @@ namespace spio {
 
     template <typename RowDim, typename ColDim> class MMA_M16_N16_F32_C : public _MMA_F32<4> {
     public:
-        using CompoundIndex = MMA_C_88_F32_Index<RowDim, ColDim>;
+        using compound_index_type = MMA_C_88_F32_Index<RowDim, ColDim>;
         using row_dim = RowDim;
         using col_dim = ColDim;
         using Base = _MMA_F32<4>;

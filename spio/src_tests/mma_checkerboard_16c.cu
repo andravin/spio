@@ -8,22 +8,22 @@ extern "C" {
 
     /// Test matrix multiplication with checkerboard layout.
     ///
-    /// This kernel uses the checkerboard layout for shared memory when
-    /// loading the A and B matrices.
+    /// This kernel uses the checkerboard layout in shared memory
+    /// when loading the A and B matrices.
     ///
     /// The checkerboard is a 16x2 grid with a vector
     /// of 8 half2 elements per cell. See checkerboard_index.h for details.
     ///
     /// - c_ptr: result matrix with float16 precision.
-    /// - a_ptr: operand A matrix with float16 precision and format K16 x I X 16K
-    /// - b_ptr: operand B matrix with float16 precision and format K16 x J X 16K
+    /// - a_ptr: operand A matrix with float16 precision and format K16 x I x 16K
+    /// - b_ptr: operand B matrix with float16 precision and format K16 x J x 16K
     __global__ void mma_checkerboard_16c(uint4* __restrict__ c_ptr, const uint4* __restrict__ a_ptr,
                                          const uint4* __restrict__ b_ptr) {
         // Allocate sufficient shared memory for the kernel.
         __shared__ uint4 smem[spio::max(SmemA::storage_size() + SmemB::storage_size(),
                                         SmemCLoad::storage_size())];
 
-        // Allocate shared memory tensors for double-buffering loads from matrices A and B.
+        // Allocate shared memory tensors for the A and B matrices.
         auto smem_allocator = StackAllocator(smem);
         auto smem_a = SmemA::allocate(smem_allocator);
         auto smem_b = SmemB::allocate(smem_allocator);
@@ -31,24 +31,26 @@ extern "C" {
         // Get the tile coordinates for this thread-block.
         auto block_idx = make_coordinates(BLOCK_I(blockIdx.y), BLOCK_J(blockIdx.x));
 
-        // Map this thread to the global memory load index.
+        // Get the thread's coordinates for loads from global memory.
         auto global_load_idx = GlobalLoadIndex(threadIdx.x);
 
-        // Map global load index into A/B tensor coordinates. Replace base dims X with I/J.
+        // Cast coordinate dimensions for matrices A and B.
         auto global_load_a_idx = global_load_idx.cast<X, I>();
         auto global_load_b_idx = global_load_idx.cast<X, J>();
+
+        // Construct cursors for loading A and B and from global memory.
         auto a = A(a_ptr)[block_idx][global_load_a_idx].rebase();
         auto b = B(b_ptr)[block_idx][global_load_b_idx].rebase();
 
-        // Map the global memory tile to the shared memory tile.
+        // Construct cursors for storing A and B to shared memory.
         auto smem_checkers = Smem_Checkers(global_load_idx);
         auto smem_a_store = SmemA(smem_a)[global_load_a_idx][smem_checkers].rebase();
         auto smem_b_store = SmemB(smem_b)[global_load_b_idx][smem_checkers].rebase();
 
-        // Get the tile coordinates for this thread.
+        // Get the coordinates of the output tile this thread will compute.
         auto compute_idx = ComputeIndex(threadIdx.x);
 
-        // Map the shared memory tile to the registers.
+        // Construct cursors for loading A and B from shared memory into tensor core fragments.
         auto a_load_idx = A_Tile::data_type::LoadIndex(compute_idx);
         auto b_load_idx = B_Tile::data_type::LoadIndex(compute_idx);
         auto smem_a_checkers = SmemA_Checkers(a_load_idx);
@@ -61,8 +63,7 @@ extern "C" {
         auto c_tile = C_Tile(c_data);
         c_tile.zero();
 
-        // Construct the global memory loaders for A and B.
-        // Set the valid mask based on the tile coordinates.
+        // Construct the global memory loaders for A and B. Set the valid mask.
         auto loader_a = A_Loader(block_idx + global_load_a_idx < A::sizes());
         auto loader_b = B_Loader(block_idx + global_load_b_idx < B::sizes());
 
@@ -92,7 +93,7 @@ extern "C" {
 #pragma unroll MAIN_LOOP_UNROLL_DEPTH
         for (int iter = 0; iter < size.get(); iter += 2 * step_size.get()) {
 
-            // Double-buffer loads and compute.
+            // Double-buffered loads and computation
             for (auto phase : range(PING(2))) {
 
                 // If not the last iteration, copy the next tile from global
@@ -124,7 +125,7 @@ extern "C" {
         }
         __pipeline_wait_prior(0);
 
-        // Final compute for any leftover step.
+        // Final computation for any leftover iteration.
         if constexpr (size % (step_size * 2) != 0) {
             a_tile.load(smem_a_load);
             b_tile.load(smem_b_load);
@@ -132,13 +133,13 @@ extern "C" {
             __syncthreads();
         }
 
-        // Store outputs through shared memory.
+        // Store outputs to global memory via shared memory.
         smem_a.deallocate(smem_allocator);
         smem_b.deallocate(smem_allocator);
         auto smem_c = SmemCStore::allocate(smem_allocator);
 
-        // Transfer outputs from registers to shared memory, converting from fp32 to fp16.
-        auto c_idx = C_Tile::data_type::CompoundIndex(compute_idx);
+        // Transfer outputs from registers to shared memory, converting from float32 to float16.
+        auto c_idx = C_Tile::data_type::compound_index_type(compute_idx);
         auto smem_c_base = smem_c[compute_idx][c_idx.base_coord()].rebase();
         for (int f = 0; f < C_Tile::data_type::size(); ++f) {
             auto smem_c_fragment = smem_c_base[c_idx.fragment_coord(f)].rebase();
@@ -148,7 +149,7 @@ extern "C" {
         }
 
         // Transfer outputs from shared memory to global memory.
-        // Each warp transfers its own transposed tile, so no synchronization is needed.
+        // Since each warp transfers its own transposed tile, no synchronization is needed.
         auto c = C(c_ptr)[block_idx][compute_idx].rebase();
         auto smem_c_load_tensor = SmemCLoad(reinterpret_cast<const uint4*>(smem_c.get()));
         auto smem_c_load = smem_c_load_tensor[compute_idx].rebase();
