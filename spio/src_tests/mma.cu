@@ -36,14 +36,14 @@ extern "C" {
         int lane = threadIdx.x % 32;
 
         A a;
-        A::CompoundIndex a_index(lane);
+        A::compound_index_type a_index(lane);
 
         for (int f = 0; f < a.size(); ++f) {
             a(f) = a_ptr[a_index.get<I>(f).get() * 4 + a_index.get<Fold<K, 2>>(f).get()];
         }
 
         B b;
-        B::CompoundIndex b_index(lane);
+        B::compound_index_type b_index(lane);
         b() = b_trans_ptr[b_index.get<J>().get() * 4 + b_index.get<Fold<K, 2>>().get()];
 
         C c;
@@ -51,7 +51,7 @@ extern "C" {
 
         mma_trans(c, a, b, c);
 
-        C::CompoundIndex idx(lane);
+        C::compound_index_type idx(lane);
         c_ptr[idx.get<I>(0).get() * 4 + idx.get<Fold<J, 2>>(0).get()] = c.fragment(0);
         c_ptr[idx.get<I>(1).get() * 4 + idx.get<Fold<J, 2>>(1).get()] = c.fragment(1);
     }
@@ -81,13 +81,13 @@ extern "C" {
         int lane = threadIdx.x % 32;
 
         A a;
-        A::CompoundIndex a_index(lane);
+        A::compound_index_type a_index(lane);
         for (int f = 0; f < a.size(); ++f) {
             a(f) = a_ptr[a_index.get<I>(f).get() * 8 + a_index.get<Fold<K, 2>>(f).get()];
         }
 
         B b;
-        B::CompoundIndex b_index(lane);
+        B::compound_index_type b_index(lane);
         for (int f = 0; f < b.size(); ++f) {
             b(f) = b_trans_ptr[b_index.get<J>(f).get() * 8 + b_index.get<Fold<K, 2>>(f).get()];
         }
@@ -97,7 +97,7 @@ extern "C" {
 
         mma_trans(c, a, b, c);
 
-        C::CompoundIndex idx(lane);
+        C::compound_index_type idx(lane);
         for (int f = 0; f < c.size(); ++f) {
             c_ptr[idx.get<I>(f).get() * 4 + idx.get<Fold<J, 2>>(f).get()] = c.fragment(f);
         }
@@ -124,13 +124,13 @@ extern "C" {
         int lane = threadIdx.x % 32;
 
         A a;
-        A::CompoundIndex a_index(lane);
+        A::compound_index_type a_index(lane);
         for (int f = 0; f < a.size(); ++f) {
             a(f) = a_ptr[a_index.get<I>(f).get() * 8 + a_index.get<Fold<K, 2>>(f).get()];
         }
 
         B b;
-        B::CompoundIndex b_index(lane);
+        B::compound_index_type b_index(lane);
         for (int f = 0; f < b.size(); ++f) {
             b(f) = B_trans[b_index.get<J>(f).get() * 8 + b_index.get<Fold<K, 2>>(f).get()];
         }
@@ -140,7 +140,7 @@ extern "C" {
 
         mma_trans(c, a, b, c);
 
-        C::CompoundIndex idx(lane);
+        C::compound_index_type idx(lane);
 
         for (int f = 0; f < c.size(); ++f) {
             c_ptr[idx.get<I>(f).get() * 8 + idx.get<Fold<J, 2>>(f).get()] = c.fragment(f);
