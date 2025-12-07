@@ -20,6 +20,12 @@ namespace spio {
     public:
         DEVICE constexpr Dim() : _i(0) {}
 
+        DEVICE constexpr Dim(const Dim& other) : _i(other._i) {}
+
+        template <int Stride>
+        DEVICE constexpr Dim(const Fold<Derived, Stride> folded_dim)
+            : _i(folded_dim.unfold().get()) {}
+
         // TODO: make explicit to prevent accidental conversion.
         // But doing so will break a lot of code.
         DEVICE constexpr Dim(int i) : _i(i) {}
@@ -106,6 +112,10 @@ namespace spio {
         using Base::get;
 
         explicit DEVICE constexpr Fold(const DimType dim) : Base(dim.get() / Stride) {}
+
+        template <int OtherStride>
+        explicit DEVICE constexpr Fold(const Fold<DimType, OtherStride> other)
+            : Base(other.template fold<Stride>().get()) {}
 
         DEVICE constexpr DimType unfold() const {
             return DimType(get() * Stride);

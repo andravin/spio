@@ -5,27 +5,12 @@
 
 using namespace spio;
 
-class H : public Dim<H> {
-public:
-    using Dim<H>::Dim;
-};
-
-class W : public Dim<W> {
-public:
-    using Dim<W>::Dim;
-};
-
-template <> struct utest_type_deducer<H> {
-    static void _(const H d) {
-        UTEST_PRINTF("%d", d.get());
-    }
-};
-
-template <> struct utest_type_deducer<W> {
-    static void _(const W d) {
-        UTEST_PRINTF("%d", d.get());
-    }
-};
+TEST_DIM(H);
+TEST_DIM(W);
+TEST_DIM(I);
+TEST_DIM(J);
+TEST_DIM(K);
+TEST_DIM(M);
 
 // 2D tensor creation helper
 template <typename DataType, typename HeightDimType, typename WidthDimType, int HeightSize,
@@ -139,22 +124,6 @@ UTEST(Tensor, IndexSubscript) {
     constexpr int WIDTH = 4;
     float data2d[HEIGHT * WIDTH] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 
-    // Define dimension types
-    class I : public Dim<I> {
-    public:
-        using Dim<I>::Dim;
-    };
-
-    class J : public Dim<J> {
-    public:
-        using Dim<J>::Dim;
-    };
-
-    class K : public Dim<K> {
-    public:
-        using Dim<K>::Dim;
-    };
-
     // Create a 2D tensor
     auto tensor2d = Tensor<float, DimInfo<I, HEIGHT, WIDTH>, DimInfo<J, WIDTH, 1>>(data2d);
 
@@ -205,4 +174,87 @@ UTEST(Tensor, IndexSubscript) {
         // Values should be identical
         EXPECT_EQ(val1, val2);
     }
+}
+
+UTEST(Tensor, tensor_extent_simple) {
+    // Simple 2D tensor without folds
+    constexpr int Height = 16;
+    constexpr int Width = 32;
+
+    auto tensor = Tensor<float, DimInfo<H, Height, Width>, DimInfo<W, Width, 1>>();
+
+    // extent<H>() should return the total H extent
+    EXPECT_EQ(tensor.extent<H>(), H(Height));
+    EXPECT_EQ(tensor.extent<W>(), W(Width));
+}
+
+UTEST(Tensor, tensor_extent_folded) {
+    // Tensor with folded dimensions
+    constexpr int Height = 16;
+    constexpr int Width = 16;
+    constexpr int FoldSize = 4;
+
+    using FoldedH = Fold<H, FoldSize>;
+    using FoldedW = Fold<W, FoldSize>;
+
+    auto tensor = Tensor<float, DimInfo<FoldedH, Height / FoldSize, Width>,
+                         DimInfo<FoldedW, Width / FoldSize, 1>>();
+
+    // size<FoldedH>() returns the literal dimension size
+    EXPECT_EQ(tensor.size<FoldedH>(), FoldedH(Height / FoldSize));
+    EXPECT_EQ(tensor.size<FoldedW>(), FoldedW(Width / FoldSize));
+
+    // extent<H>() returns the total extent in base H units
+    EXPECT_EQ(tensor.extent<H>(), H(Height));
+    EXPECT_EQ(tensor.extent<W>(), W(Width));
+
+    // extent<FoldedH>() returns the total extent converted to FoldedH
+    EXPECT_EQ(tensor.extent<FoldedH>(), FoldedH(Height / FoldSize));
+    EXPECT_EQ(tensor.extent<FoldedW>(), FoldedW(Width / FoldSize));
+}
+
+UTEST(Tensor, tensor_extent_multiple_folds) {
+    // Tensor with multiple folds of the same base dimension (hierarchical)
+    // K8 (coarse) and K (fine) are complementary folds of dimension K
+
+    using K8 = Fold<K, 8>;
+
+    constexpr int k8_size = 8; // 8 groups of 8
+    constexpr int k_size = 8;  // 8 elements per group
+    // Total K extent = 8 * 8 = 64
+
+    auto tensor = Tensor<float, DimInfo<K8, k8_size, k_size>, DimInfo<K, k_size, 1>>();
+
+    // size<K8>() and size<K>() return literal dimension sizes
+    EXPECT_EQ(tensor.size<K8>(), K8(k8_size));
+    EXPECT_EQ(tensor.size<K>(), K(k_size));
+
+    // extent<K>() returns the total K extent from the coarsest fold
+    // Coarsest is K8 with stride 8, size 8 -> total = 8 * 8 = 64
+    EXPECT_EQ(tensor.extent<K>(), K(64));
+
+    // extent<K8>() returns the total extent converted to K8 units
+    // 64 base units / 8 stride = 8
+    EXPECT_EQ(tensor.extent<K8>(), K8(8));
+}
+
+UTEST(Tensor, tensor_extent_different_fold_levels) {
+    // Test querying extent at different fold levels
+
+    using M4 = Fold<M, 4>;
+    using M16 = Fold<M, 16>;
+
+    // Tensor with M16 dimension only (size 4, stride 16 -> total M = 64)
+    auto tensor = Tensor<float, DimInfo<M16, 4, 1>>();
+
+    EXPECT_EQ(tensor.size<M16>(), M16(4));
+
+    // extent<M>() should return M(64)
+    EXPECT_EQ(tensor.extent<M>(), M(64));
+
+    // extent<M4>() should return M4(16) since 64 / 4 = 16
+    EXPECT_EQ(tensor.extent<M4>(), M4(16));
+
+    // extent<M16>() should return M16(4) since 64 / 16 = 4
+    EXPECT_EQ(tensor.extent<M16>(), M16(4));
 }

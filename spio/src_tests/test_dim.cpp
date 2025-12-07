@@ -36,6 +36,7 @@ UTEST(Fold, methods) {
     EXPECT_EQ(F8(32).get(), 32);
     EXPECT_EQ(F8(32).unfold().get(), 8 * 32);
     EXPECT_EQ(F8(32).fold<16>().get(), 32 * 8 / 16);
+    EXPECT_EQ(F8(16), F16(F8(16)));
     EXPECT_TRUE(F8(32).fold<16>() == F16(16));
     EXPECT_TRUE(F16(16).fold<8>() == F8(32));
     EXPECT_TRUE(F8(32) < F8(33));
@@ -193,4 +194,15 @@ UTEST(reverse_range, step_1) {
         EXPECT_EQ(i16.get(), expect[count++]);
     }
     EXPECT_EQ(count, expect.size());
+}
+
+/// One can fold the limit of the range to iterate over folded dimensions.
+UTEST(range, fold_dim_range) {
+    using I16 = spio::Fold<I, 16>;
+    size_t count = 0;
+    int n = 33;
+    for (auto i16 : spio::range(I(n).fold<16>())) {
+        EXPECT_TRUE(i16 == I16(count++));
+    }
+    EXPECT_EQ(count, n / 16);
 }

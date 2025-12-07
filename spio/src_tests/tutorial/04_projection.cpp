@@ -55,16 +55,16 @@ UTEST(Lesson4, DimensionalProjection) {
             auto local = idx + k;
             auto world = origin + local;
 
-            // Check that world coordinates I and K are less than a's sizes.
+            // Check that world coordinates I and K are less than a's extents.
             // Ignore world coordinate J in the comparison and subscript operations.
-            if (world < a.sizes()) { EXPECT_EQ(*a_tile[local], *a[world]); }
+            if (world < a.extents()) { EXPECT_EQ(*a_tile[local], *a[world]); }
 
-            // Check that world coordinates J and K are less than b's sizes.
+            // Check that world coordinates J and K are less than b's extents.
             // Ignore world coordinate I in the comparison and subscript operations.
-            if (world < b.sizes()) { EXPECT_EQ(*b_tile[local], *b[world]); }
+            if (world < b.extents()) { EXPECT_EQ(*b_tile[local], *b[world]); }
         }
 
-        // Check that world coordinates I and J are less than c's sizes.
-        if (origin + idx < c.sizes()) { EXPECT_EQ(*c_tile[idx], *c[origin + idx]); }
+        // Check that world coordinates I and J are less than c's extents.
+        if (origin + idx < c.extents()) { EXPECT_EQ(*c_tile[idx], *c[origin + idx]); }
     }
 }
