@@ -24,7 +24,7 @@ extern "C" {
                                         SmemCLoad::storage_size())];
 
         // Allocate shared memory tensors for double-buffering loads from matrices A and B.
-        StackAllocator smem_allocator(smem);
+        auto smem_allocator = StackAllocator(smem);
         auto smem_a = SmemA::allocate(smem_allocator);
         auto smem_b = SmemB::allocate(smem_allocator);
 
@@ -32,7 +32,7 @@ extern "C" {
         auto block_idx = make_coordinates(BLOCK_I(blockIdx.y), BLOCK_J(blockIdx.x));
 
         // Map this thread to the global memory load index.
-        GlobalLoadIndex global_load_idx(threadIdx.x);
+        auto global_load_idx = GlobalLoadIndex(threadIdx.x);
 
         // Map global load index into A/B tensor coordinates. Replace base dims X with I/J.
         auto global_load_a_idx = global_load_idx.cast<X, I>();
@@ -46,11 +46,11 @@ extern "C" {
         auto smem_b_store = SmemB(smem_b)[global_load_b_idx][smem_checkers].rebase();
 
         // Get the tile coordinates for this thread.
-        ComputeIndex compute_idx(threadIdx.x);
+        auto compute_idx = ComputeIndex(threadIdx.x);
 
         // Map the shared memory tile to the registers.
-        A_Tile::data_type::LoadIndex a_load_idx(compute_idx.get<LANE>().get());
-        B_Tile::data_type::LoadIndex b_load_idx(compute_idx.get<LANE>().get());
+        auto a_load_idx = A_Tile::data_type::LoadIndex(compute_idx);
+        auto b_load_idx = B_Tile::data_type::LoadIndex(compute_idx);
         auto smem_a_checkers = SmemA_Checkers(a_load_idx);
         auto smem_b_checkers = SmemB_Checkers(b_load_idx);
         auto smem_a_load = SmemA(smem_a)[compute_idx][smem_a_checkers].rebase();
@@ -58,21 +58,21 @@ extern "C" {
 
         // Initialize the accumulators.
         C_Tile::data_type c_data[C_Tile::storage_size()];
-        C_Tile c_tile(c_data);
+        auto c_tile = C_Tile(c_data);
         c_tile.zero();
 
         // Construct the global memory loaders for A and B.
         // Set the valid mask based on the tile coordinates.
-        A_Loader loader_a(block_idx + global_load_a_idx < A::sizes());
-        B_Loader loader_b(block_idx + global_load_b_idx < B::sizes());
+        auto loader_a = A_Loader(block_idx + global_load_a_idx < A::sizes());
+        auto loader_b = B_Loader(block_idx + global_load_b_idx < B::sizes());
 
         // Allocate registers for the A and B tiles.
         A_Tile::data_type a_data[A_Tile::storage_size()];
         B_Tile::data_type b_data[B_Tile::storage_size()];
 
         // Construct tensors for the A and B tiles.
-        A_Tile a_tile(a_data);
-        B_Tile b_tile(b_data);
+        auto a_tile = A_Tile(a_data);
+        auto b_tile = B_Tile(b_data);
 
         constexpr auto size = A::size<K16>();
         constexpr auto step_size = A_Tile::size<K16>();
@@ -138,7 +138,7 @@ extern "C" {
         auto smem_c = SmemCStore::allocate(smem_allocator);
 
         // Transfer outputs from registers to shared memory, converting from fp32 to fp16.
-        C_Tile::data_type::CompoundIndex c_idx(compute_idx.get<LANE>().get());
+        auto c_idx = C_Tile::data_type::CompoundIndex(compute_idx);
         auto smem_c_base = smem_c[compute_idx][c_idx.base_coord()].rebase();
         for (int f = 0; f < C_Tile::data_type::size(); ++f) {
             auto smem_c_fragment = smem_c_base[c_idx.fragment_coord(f)].rebase();
@@ -152,11 +152,9 @@ extern "C" {
         auto c = C(c_ptr)[block_idx][compute_idx].rebase();
         auto smem_c_load_tensor = SmemCLoad(reinterpret_cast<const uint4*>(smem_c.get()));
         auto smem_c_load = smem_c_load_tensor[compute_idx].rebase();
-        auto base_idx = block_idx + compute_idx;
-        for (int offset = compute_idx.get<LANE>().get(); offset < SmemCLoadIndex::size();
-             offset += ComputeIndex::size<LANE>().get()) {
-            SmemCLoadIndex idx(offset);
-            if (base_idx + idx < C::sizes()) { *c[idx] = *smem_c_load[idx]; }
+        auto world_idx = block_idx + compute_idx;
+        for (auto idx : SmemCLoadIndex::partition<LANE>(compute_idx)) {
+            if (world_idx + idx < C::sizes()) { *c[idx] = *smem_c_load[idx]; }
         }
     }
 }

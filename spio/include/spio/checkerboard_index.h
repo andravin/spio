@@ -4,8 +4,10 @@
 #include "spio/macros.h"
 #include "spio/dim.h"
 #include "spio/compound_index_base.h"
+#include "spio/coordinates.h"
 
 namespace spio {
+
     /// @brief An index class for checkerboard memory layout.
     ///
     /// Arrange an N x 2 matrix into a checkerboard grid with the given number
@@ -58,32 +60,48 @@ namespace spio {
     /// @tparam PairDim the dimension type for the pair index
     /// @tparam ColorDim the dimension type for the color index
     template <int ranks, typename PairDim, typename ColorDim, typename OffsetDim>
-    class CheckerboardIndex : public CompoundIndexBase {
+    class CheckerboardIndex : public CompoundIndexBase<OffsetDim> {
     public:
-        using CompoundIndexBase::CompoundIndexBase;
+        using CompoundIndexBase<OffsetDim>::offset;
+
+        // Explicit int constructor
+        explicit DEVICE constexpr CheckerboardIndex(int offset = 0)
+            : CompoundIndexBase<OffsetDim>(offset) {}
+
+        /// @brief Construct from a compatible dimension type
+        template <typename DimLike,
+                  detail::enable_if_t<detail::is_dim_like_v<DimLike> &&
+                                          detail::dims_compatible_v<DimLike, OffsetDim>,
+                                      int> = 0>
+        DEVICE constexpr CheckerboardIndex(DimLike dim) : CompoundIndexBase<OffsetDim>(dim) {}
 
         /// @brief Construct index from pair and color dimensions
-        /// @param pair_dim The pair dimension value
-        /// @param color_dim The color dimension value
         DEVICE inline constexpr CheckerboardIndex(PairDim pair_dim, ColorDim color_dim)
-            : CompoundIndexBase(compute_offset(pair_dim.get(), color_dim.get())) {}
+            : CompoundIndexBase<OffsetDim>(compute_offset(pair_dim.get(), color_dim.get())) {}
 
-        template <typename IndexType>
+        /// @brief Construct from any index type that has get<PairDim>() and get<ColorDim>() methods
+        /// This handles fragment load indices that don't have coordinates() but do have typed
+        /// getters. Excluded: dim-like types (handled above) and types compatible with OffsetDim.
+        template <typename IndexType,
+                  detail::enable_if_t<!detail::is_dim_like_v<IndexType> &&
+                                          !detail::dims_compatible_v<IndexType, OffsetDim>,
+                                      int> = 0>
         DEVICE inline constexpr CheckerboardIndex(IndexType idx)
-            : CompoundIndexBase(compute_offset(idx.template get<PairDim>().get(),
-                                               idx.template get<ColorDim>().get())) {}
+            : CompoundIndexBase<OffsetDim>(compute_offset(idx.template get<PairDim>().get(),
+                                                          idx.template get<ColorDim>().get())) {}
 
         /// @brief Get dimension value by type
         /// @tparam Dim The dimension type to retrieve
         /// @return The dimension value with the proper type
         template <typename Dim> DEVICE constexpr auto get() const {
             if constexpr (std::is_same_v<Dim, PairDim>) {
-                return PairDim(offset() >> 1);
+                return PairDim(offset().get() >> 1);
             } else if constexpr (std::is_same_v<Dim, ColorDim>) {
-                const int row = static_cast<unsigned>(offset()) / static_cast<unsigned>(ranks);
-                return ColorDim((offset() & 1) ^ (row & 1));
+                const int row =
+                    static_cast<unsigned>(offset().get()) / static_cast<unsigned>(ranks);
+                return ColorDim((offset().get() & 1) ^ (row & 1));
             } else if constexpr (std::is_same_v<Dim, OffsetDim>) {
-                return OffsetDim(offset());
+                return offset();
             } else {
                 static_assert(std::is_same_v<Dim, PairDim> || std::is_same_v<Dim, ColorDim> ||
                                   std::is_same_v<Dim, OffsetDim>,
@@ -105,7 +123,7 @@ namespace spio {
         /// @param pair the index of a pair of grid elements.
         /// @param color the black (0) or white (1) grid element in the pair.
         /// @return Offset into the checkeboard grid.
-        DEVICE inline static constexpr int compute_offset(int pair, int color) {
+        DEVICE inline static constexpr OffsetDim compute_offset(int pair, int color) {
             int row = static_cast<unsigned>(pair) / (static_cast<unsigned>(ranks) >> 1);
             return (pair << 1 | color) ^ (row & 1);
         }
@@ -114,7 +132,8 @@ namespace spio {
         /// @param pair_dim The pair dimension
         /// @param color_dim The color dimension
         /// @return Offset into the checkerboard grid
-        DEVICE inline static constexpr int compute_offset(PairDim pair_dim, ColorDim color_dim) {
+        DEVICE inline static constexpr OffsetDim compute_offset(PairDim pair_dim,
+                                                                ColorDim color_dim) {
             return compute_offset(pair_dim.get(), color_dim.get());
         }
 

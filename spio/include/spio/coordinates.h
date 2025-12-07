@@ -53,6 +53,21 @@ namespace spio {
         template <typename BaseDimType, typename... Dims>
         DEVICE constexpr const auto& coords_get_by_base_dim(const Coordinates<Dims...>& coords);
 
+        // Detect if T is a Coordinates type
+        template <typename T> struct is_coordinates : false_type {};
+
+        template <typename... Dims> struct is_coordinates<Coordinates<Dims...>> : true_type {};
+
+        template <typename T> inline constexpr bool is_coordinates_v = is_coordinates<T>::value;
+
+        // Detect if T has a coordinates() method
+        template <typename T, typename = void> struct has_coordinates : false_type {};
+
+        template <typename T>
+        struct has_coordinates<T, void_t<decltype(declval<T>().coordinates())>> : true_type {};
+
+        template <typename T> inline constexpr bool has_coordinates_v = has_coordinates<T>::value;
+
         // ========================================================================
         // Validation helpers
         // ========================================================================

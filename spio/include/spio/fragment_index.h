@@ -31,16 +31,16 @@ namespace std {
 namespace spio {
 
     /// @brief Base class for all MMA indices that use 8x8 fragments.
-    class _MMA_88_Index : public CompoundIndexBase {
+    class _MMA_88_Index : public CompoundIndexBase<LANE> {
     public:
         using CompoundIndexBase::CompoundIndexBase;
 
         DEVICE inline constexpr int _x() const {
-            return offset() >> 2;
+            return offset().get() >> 2;
         };
 
         DEVICE inline constexpr int _y2m4() const {
-            return offset() & 3;
+            return offset().get() & 3;
         };
     };
 

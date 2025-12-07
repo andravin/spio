@@ -84,3 +84,6 @@ def header() -> str:
     custom dimension classes inherit.
     """
     return '#include "spio/dim.h"'
+
+
+BUILTIN_DIM_NAMES = ["LANE", "OFFSET"]

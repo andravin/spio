@@ -16,7 +16,7 @@ namespace spio {
     /// @details This class is the inverse of Tensor - it maps a linear offset
     /// (like a thread index) back to typed dimension coordinates.
     /// @tparam DimInfos The dimension information types (same as in Tensor)
-    template <typename... DimInfos> class CompoundIndex : public CompoundIndexBase {
+    template <typename... DimInfos> class CompoundIndex : public CompoundIndexBase<OFFSET> {
     public:
         // Total number of elements (product of all dimension sizes)
         static constexpr int total_size = detail::product_sizes<DimInfos...>::value;
@@ -42,7 +42,7 @@ namespace spio {
             constexpr unsigned size = dim_traits::dimension_size<DimType, DimInfos...>::value.get();
             constexpr unsigned stride =
                 dim_traits::dimension_stride<DimType, DimInfos...>::value.get();
-            auto value = (offset() / stride) % size;
+            auto value = (offset().get() / stride) % size;
             using dim_base_type = detail::get_base_dim_type_t<DimType>;
             constexpr int dim_stride = detail::get_dim_stride<DimType>::value;
             return Module<dim_base_type, size, dim_stride>(value);
@@ -70,6 +70,63 @@ namespace spio {
             // We need to deduce the return type from what get() returns
             return Coordinates<decltype(get<typename DimInfos::dim_type>())...>(
                 get<typename DimInfos::dim_type>()...);
+        }
+
+        // ========================================================================
+        // Partition iterator and range for cooperative iteration
+        // ========================================================================
+
+        /// @brief Iterator that yields IndexType for each partitioned offset.
+        template <typename IndexType, int Stride> class PartitionIterator {
+        public:
+            DEVICE constexpr PartitionIterator(int offset, int end) : _offset(offset), _end(end) {}
+
+            DEVICE constexpr IndexType operator*() const {
+                return IndexType(_offset);
+            }
+
+            DEVICE constexpr PartitionIterator& operator++() {
+                _offset += Stride;
+                return *this;
+            }
+
+            DEVICE constexpr bool operator!=(const PartitionIterator&) const {
+                return _offset < _end;
+            }
+
+        private:
+            int _offset;
+            int _end;
+        };
+
+        /// @brief A range that partitions an index's offset space.
+        template <typename IndexType, int Stride> class PartitionRange {
+        public:
+            DEVICE constexpr PartitionRange(int start, int end) : _start(start), _end(end) {}
+
+            DEVICE constexpr auto begin() const {
+                return PartitionIterator<IndexType, Stride>(_start, _end);
+            }
+
+            DEVICE constexpr auto end() const {
+                return PartitionIterator<IndexType, Stride>(_end, _end);
+            }
+
+        private:
+            int _start;
+            int _end;
+        };
+
+        /// Partition this index's offset space by PartitionDim from partition_idx.
+        /// Each thread handles offsets: start, start+stride, start+2*stride, ...
+        /// @tparam PartitionDim The dimension to partition by (e.g., LANE)
+        /// @param partition_idx Provides get<PartitionDim>() for start and size<PartitionDim>() for
+        /// stride
+        template <typename PartitionDim, typename PartitionIndexType>
+        DEVICE static constexpr auto partition(PartitionIndexType partition_idx) {
+            constexpr int stride = PartitionIndexType::template size<PartitionDim>().get();
+            int start = partition_idx.template get<PartitionDim>().get();
+            return PartitionRange<CompoundIndex, stride>(start, size());
         }
     };
 }

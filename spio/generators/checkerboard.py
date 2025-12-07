@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from .dim import dim_name_to_dim_or_fold_class_name
+from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
 
 
 @dataclass
@@ -12,7 +12,7 @@ class Checkerboard:
     class_name: str
     pairs_dim: str
     colors_dim: str
-    offset_dim: str
+    offset_dim: str = "LANE"
     ranks: int = 8
 
     def __post_init__(self):
@@ -26,6 +26,8 @@ class Checkerboard:
         pairs_dim_class_name = dim_name_to_dim_or_fold_class_name(self.pairs_dim)
         colors_dim_class_name = dim_name_to_dim_or_fold_class_name(self.colors_dim)
         offset_dim_class_name = dim_name_to_dim_or_fold_class_name(self.offset_dim)
+        if offset_dim_class_name in BUILTIN_DIM_NAMES:
+            offset_dim_class_name = "spio::" + offset_dim_class_name
         pars = f"{self.ranks}, {pairs_dim_class_name}, {colors_dim_class_name}, {offset_dim_class_name}"
         return f"using {self.class_name} = spio::CheckerboardIndex<{pars}>;"
 
