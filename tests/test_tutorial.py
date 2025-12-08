@@ -17,6 +17,7 @@ DIM_EXAMPLES = [
     "02_cursor_movement",
     "03_folding",
     "04_projection",
+    "05_compound_index",
 ]
 
 TRUTHS = ["true", "1", "yes", "y", "t"]
