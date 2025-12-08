@@ -108,9 +108,9 @@ UTEST(Lesson1, Commutativity) {
 }
 ```
 
-### 2\. The Unbounded Cursor
+### 2\. Cursors
 
-Spio uses Cursors: lightweight, unbounded pointers that traverse multiple dimensions.
+Spio uses Cursors: lightweight, multi-dimensional pointers that traverse tensor dimensions.
 
 **File:** [02\_cursor\_movement.cpp](spio/src_tests/tutorial/02_cursor_movement.cpp)
 
@@ -190,6 +190,16 @@ UTEST(Lesson3, AutomaticNormalization) {
         EXPECT_EQ(b.get(), c.get());
     }
 }
+```
+
+Spio accumulates subscripts in logical coordinates before folding, so repeated subscripts are equivalent to their sum. This enables correct carry-over when subscripts cross fold boundaries:
+
+```cpp
+// K(4) + K(4) = K(8), which correctly carries into K8
+EXPECT_EQ(*a[i][K(4)][K(4)], *a[i][K(8)]);
+
+// K(7) + K(5) = K(12) = K8(1) + K(4)
+EXPECT_EQ(*a[i][K(7)][K(5)], *a[i][K8(1)][K(4)]);
 ```
 
 ### 4\. Dimensional Projection
@@ -299,14 +309,13 @@ UTEST(Lesson5, CompoundIndex) {
             // Subscripting with the compound indices ..
             auto b = a[block][thread];
 
-            // .. saves the user from computing the coordinates ..
+            // .. saves the user from computing the coordinates and offset manually.
             auto block_i16 = blockIdx / 32;
             auto block_j16 = blockIdx % 32;
 
             auto thread_i = threadIdx / 16;
             auto thread_j = threadIdx % 16;
 
-            // .. and the offset manually.
             auto offset = (block_i16 * 16 + thread_i) * 512 + block_j16 * 16 + thread_j;
 
             // Check that these two methods are equivalent.

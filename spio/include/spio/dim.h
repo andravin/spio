@@ -20,7 +20,9 @@ namespace spio {
     public:
         DEVICE constexpr Dim() : _i(0) {}
 
-        DEVICE constexpr Dim(const Dim& other) : _i(other._i) {}
+        DEVICE constexpr Dim(const Dim& other) = default;
+
+        DEVICE constexpr Dim& operator=(const Dim& other) = default;
 
         template <int Stride>
         DEVICE constexpr Dim(const Fold<Derived, Stride> folded_dim)
@@ -96,7 +98,7 @@ namespace spio {
         }
 
     private:
-        const int _i;
+        int _i; // Removed 'const' to allow assignment
     };
 
     /// @brief A folded dimension with stride.

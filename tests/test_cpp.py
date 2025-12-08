@@ -49,7 +49,7 @@ TEST_SOURCES = []
 CPP_TESTS_FILTER = None
 
 # Select specific C++ unit tests with a filter like this:
-# CPP_TESTS_FILTER = "Dim.*"
+# CPP_TESTS_FILTER = "Tensor.subscript_multiple_folds_with_carry"
 
 
 @pytest.mark.skipif(
