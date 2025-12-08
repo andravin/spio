@@ -92,6 +92,10 @@ namespace spio {
             constexpr tuple(const tuple&) = default;
             constexpr tuple(tuple&&) = default;
 
+            // Add assignment operators
+            constexpr tuple& operator=(const tuple&) = default;
+            constexpr tuple& operator=(tuple&&) = default;
+
             template <typename U, typename... Us>
             DEVICE constexpr tuple(U&& first_value, Us&&... rest_values)
                 : first(static_cast<U&&>(first_value)),
@@ -430,6 +434,23 @@ namespace spio {
 
         template <typename T, typename Tuple>
         using tuple_prepend_t = typename tuple_prepend<T, Tuple>::type;
+
+        // Find a type in tuple by its base dimension
+        template <typename BaseDim, typename Tuple> struct tuple_find_by_base_dim;
+
+        template <typename BaseDim> struct tuple_find_by_base_dim<BaseDim, tuple<>> {
+            // Should never get here if tuple_contains_base_dim was checked first
+            using type = void;
+        };
+
+        template <typename BaseDim, typename First, typename... Rest>
+        struct tuple_find_by_base_dim<BaseDim, tuple<First, Rest...>> {
+            using first_base = get_base_dim_type_t<First>;
+            static constexpr bool matches = is_same<first_base, BaseDim>::value;
+            using type =
+                conditional_t<matches, First,
+                              typename tuple_find_by_base_dim<BaseDim, tuple<Rest...>>::type>;
+        };
 
         // ========================================================================
         // Base dimension replacement

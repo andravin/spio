@@ -101,11 +101,265 @@ namespace spio {
                 (size - 1) * stride + calculate_storage_size<RestDims...>::value;
         };
 
+        // ========================================================================
+        // Finest fold computation for Cursor coordinates
+        // ========================================================================
+
+        // Compare two DimInfos with same base dim, keep the one with smaller stride (finest)
+        template <typename InfoA, typename InfoB> struct finer_dim_info {
+            static constexpr int stride_a = get_dim_stride<typename InfoA::dim_type>::value;
+            static constexpr int stride_b = get_dim_stride<typename InfoB::dim_type>::value;
+            using type = conditional_t<(stride_a <= stride_b), InfoA, InfoB>;
+        };
+
+        // Find finest info for a given base dim from a tuple of DimInfos
+        template <typename BaseDim, typename InfosTuple> struct find_finest_info_for_base;
+
+        template <typename BaseDim, typename FirstInfo>
+        struct find_finest_info_for_base<BaseDim, tuple<FirstInfo>> {
+            using type = FirstInfo;
+        };
+
+        template <typename BaseDim, typename FirstInfo, typename SecondInfo, typename... RestInfos>
+        struct find_finest_info_for_base<BaseDim, tuple<FirstInfo, SecondInfo, RestInfos...>> {
+            using finer = typename finer_dim_info<FirstInfo, SecondInfo>::type;
+            using type =
+                typename find_finest_info_for_base<BaseDim, tuple<finer, RestInfos...>>::type;
+        };
+
+        // Build tuple of finest DimInfos, one per unique base dimension
+        template <typename BaseDimsTuple, typename AllInfosTuple> struct build_finest_infos;
+
+        template <typename AllInfosTuple> struct build_finest_infos<tuple<>, AllInfosTuple> {
+            using type = tuple<>;
+        };
+
+        template <typename FirstBase, typename... RestBases, typename AllInfosTuple>
+        struct build_finest_infos<tuple<FirstBase, RestBases...>, AllInfosTuple> {
+            // Filter to get only infos with this base dim
+            using matching_infos = keep_dim_infos_by_base_t<AllInfosTuple, tuple<FirstBase>>;
+            // Find finest among matching
+            using finest = typename find_finest_info_for_base<FirstBase, matching_infos>::type;
+            // Recurse for rest
+            using rest = typename build_finest_infos<tuple<RestBases...>, AllInfosTuple>::type;
+            using type = tuple_prepend_t<finest, rest>;
+        };
+
+        // Main entry point: get finest DimInfo per base dimension
+        template <typename InfosTuple> struct finest_dim_infos {
+            using unique_bases = typename dim_infos_unique_bases<InfosTuple>::type;
+            using type = typename build_finest_infos<unique_bases, InfosTuple>::type;
+        };
+
+        template <typename InfosTuple>
+        using finest_dim_infos_t = typename finest_dim_infos<InfosTuple>::type;
+
+        // Extract dim_types from a tuple of DimInfos to create Coordinates type
+        template <typename InfosTuple> struct coordinates_from_infos;
+
+        template <typename... Infos> struct coordinates_from_infos<tuple<Infos...>> {
+            using type = Coordinates<typename Infos::dim_type...>;
+        };
+
+        template <typename InfosTuple>
+        using coordinates_from_infos_t = typename coordinates_from_infos<InfosTuple>::type;
+
+        // Cursor's coordinate type: Coordinates with finest fold of each base dimension
+        template <typename... DimInfos> struct cursor_coordinates_type {
+            using finest_infos = finest_dim_infos_t<tuple<DimInfos...>>;
+            using type = coordinates_from_infos_t<finest_infos>;
+        };
+
+        template <typename... DimInfos>
+        using cursor_coordinates_t = typename cursor_coordinates_type<DimInfos...>::type;
+
+        // ========================================================================
+        // Offset computation from Coordinates
+        // ========================================================================
+
+        // Compute offset contribution from a single coordinate dimension to a single DimInfo
+        template <typename CoordDim, typename Info> struct compute_dim_offset {
+            using TargetDimType = typename Info::dim_type;
+            using CoordBaseDim = get_base_dim_type_t<CoordDim>;
+            using TargetBaseDim = get_base_dim_type_t<TargetDimType>;
+
+            static constexpr bool same_base = is_same<CoordBaseDim, TargetBaseDim>::value;
+            static constexpr int coord_stride = get_dim_stride<CoordDim>::value;
+            static constexpr int target_stride = get_dim_stride<TargetDimType>::value;
+            static constexpr int target_size = Info::module_type::size.get();
+            static constexpr int mem_stride = Info::module_type::stride.get();
+
+            // Compute the offset contribution from coordinate value to this dimension
+            DEVICE static constexpr int compute(int coord_value) {
+                if constexpr (!same_base) {
+                    return 0;
+                } else {
+                    // Convert coordinate value to base units
+                    int base_value = coord_value * coord_stride;
+                    // Fold to target dimension
+                    int folded_value = (base_value / target_stride) % target_size;
+                    return folded_value * mem_stride;
+                }
+            }
+        };
+
+        // Sum offset contributions from one coordinate dimension to all DimInfos
+        template <typename CoordDim, typename InfosTuple> struct sum_coord_to_infos;
+
+        template <typename CoordDim> struct sum_coord_to_infos<CoordDim, tuple<>> {
+            DEVICE static constexpr int compute(int) {
+                return 0;
+            }
+        };
+
+        template <typename CoordDim, typename FirstInfo, typename... RestInfos>
+        struct sum_coord_to_infos<CoordDim, tuple<FirstInfo, RestInfos...>> {
+            DEVICE static constexpr int compute(int coord_value) {
+                return compute_dim_offset<CoordDim, FirstInfo>::compute(coord_value) +
+                       sum_coord_to_infos<CoordDim, tuple<RestInfos...>>::compute(coord_value);
+            }
+        };
+
+        // Compute total offset from Coordinates to all DimInfos
+        template <typename CoordsTuple, typename InfosTuple> struct compute_total_offset_impl;
+
+        template <typename InfosTuple> struct compute_total_offset_impl<tuple<>, InfosTuple> {
+            template <typename Coords> DEVICE static constexpr int compute(const Coords&) {
+                return 0;
+            }
+        };
+
+        template <typename FirstCoord, typename... RestCoords, typename InfosTuple>
+        struct compute_total_offset_impl<tuple<FirstCoord, RestCoords...>, InfosTuple> {
+            template <typename Coords> DEVICE static constexpr int compute(const Coords& coords) {
+                int this_offset = sum_coord_to_infos<FirstCoord, InfosTuple>::compute(
+                    coords.template get<FirstCoord>().get());
+                int rest_offset =
+                    compute_total_offset_impl<tuple<RestCoords...>, InfosTuple>::compute(coords);
+                return this_offset + rest_offset;
+            }
+        };
+
+        template <typename... CoordDims, typename... DimInfos>
+        DEVICE constexpr int compute_offset_from_coords(const Coordinates<CoordDims...>& coords,
+                                                        const tuple<DimInfos...>& /* infos_tag */) {
+            return compute_total_offset_impl<tuple<CoordDims...>, tuple<DimInfos...>>::compute(
+                coords);
+        }
+
+        // ========================================================================
+        // Fold a dimension value to a target dimension type (same base)
+        // ========================================================================
+
+        template <typename TargetDim, typename SourceDim>
+        DEVICE constexpr TargetDim fold_to_target(SourceDim src) {
+            static_assert(
+                is_same<get_base_dim_type_t<TargetDim>, get_base_dim_type_t<SourceDim>>::value,
+                "Cannot fold dimensions with different base types");
+            constexpr int src_stride = get_dim_stride<SourceDim>::value;
+            constexpr int tgt_stride = get_dim_stride<TargetDim>::value;
+            // Convert to base units, then to target units
+            return TargetDim((src.get() * src_stride) / tgt_stride);
+        }
+
+        // ========================================================================
+        // Helper to update a single coordinate value in Coordinates
+        // Must be defined before add_subscript_dim_to_cursor_coords
+        // ========================================================================
+
+        // Helper to select value for coordinate update
+        template <typename TargetDim, typename CurrentDim, typename... AllDims>
+        DEVICE constexpr auto select_coord_value(const Coordinates<AllDims...>& coords,
+                                                 TargetDim new_value) {
+            if constexpr (is_same<CurrentDim, TargetDim>::value) {
+                return new_value;
+            } else {
+                return coords.template get<CurrentDim>();
+            }
+        }
+
+        // Helper to update a single coordinate value in Coordinates
+        template <typename TargetDim, typename... Dims>
+        DEVICE constexpr auto update_coord_value(const Coordinates<Dims...>& coords,
+                                                 TargetDim new_value) {
+            return Coordinates<Dims...>(select_coord_value<TargetDim, Dims>(coords, new_value)...);
+        }
+
+        // ========================================================================
+        // Add a subscript coordinate to cursor coordinates
+        // For each dimension in the subscript, if its base matches a cursor coord,
+        // fold it to the cursor's dimension type and add.
+        // ========================================================================
+
+        // Process one subscript dimension: find matching cursor dim and add
+        template <typename SubDim, typename... CursorDims>
+        DEVICE constexpr auto
+        add_subscript_dim_to_cursor_coords(SubDim sub_dim,
+                                           const Coordinates<CursorDims...>& cursor_coords) {
+            using sub_base = get_base_dim_type_t<SubDim>;
+
+            if constexpr (tuple_contains_base_dim<sub_base, tuple<CursorDims...>>::value) {
+                // Find which cursor dimension matches this base
+                using matching_cursor_dim =
+                    typename tuple_find_by_base_dim<sub_base, tuple<CursorDims...>>::type;
+                // Fold subscript dim to cursor dim's type and add
+                auto folded = fold_to_target<matching_cursor_dim>(sub_dim);
+                auto current = cursor_coords.template get<matching_cursor_dim>();
+                // Create new coordinates with the updated value
+                return update_coord_value<matching_cursor_dim>(cursor_coords, current + folded);
+            } else {
+                // No matching dimension in cursor, ignore this subscript dimension
+                return cursor_coords;
+            }
+        }
+
+        // Apply all subscript dimensions to cursor coordinates
+        template <typename CursorCoords, typename SubTuple> struct apply_subscript_impl;
+
+        // Base case: no more subscript dimensions to process
+        template <typename CursorCoords> struct apply_subscript_impl<CursorCoords, tuple<>> {
+            template <typename SubCoords>
+            DEVICE static constexpr CursorCoords apply(const CursorCoords& cursor_coords,
+                                                       const SubCoords&) {
+                return cursor_coords;
+            }
+        };
+
+        // Recursive case: process first subscript dimension, then recurse
+        template <typename CursorCoords, typename FirstSub, typename... RestSubs>
+        struct apply_subscript_impl<CursorCoords, tuple<FirstSub, RestSubs...>> {
+            template <typename SubCoords>
+            DEVICE static constexpr CursorCoords apply(const CursorCoords& cursor_coords,
+                                                       const SubCoords& sub_coords) {
+                auto updated = add_subscript_dim_to_cursor_coords(
+                    sub_coords.template get<FirstSub>(), cursor_coords);
+                // Continue with remaining subscript dimensions
+                return apply_subscript_impl<CursorCoords, tuple<RestSubs...>>::apply(updated,
+                                                                                     sub_coords);
+            }
+        };
+
+        template <typename... CursorDims, typename... SubDims>
+        DEVICE constexpr Coordinates<CursorDims...>
+        apply_subscript_to_cursor(const Coordinates<CursorDims...>& cursor_coords,
+                                  const Coordinates<SubDims...>& sub_coords) {
+            return apply_subscript_impl<Coordinates<CursorDims...>, tuple<SubDims...>>::apply(
+                cursor_coords, sub_coords);
+        }
+
     } // namespace detail
 
-    /// @brief Cursor with folded dimensions.
-    /// Cursor is a class that represents a position in a tensor. It provides a subscript
-    /// operator to access elements at a specific index in a given dimension.
+    /// @brief A multi-dimensional pointer that traverses tensor dimensions.
+    ///
+    /// Cursor stores logical coordinates and defers folding to physical offset until
+    /// pointer access. This enables correct cross-fold carry behavior when accumulating
+    /// subscripts or stepping through dimensions.
+    ///
+    /// Use rebase() to convert to a BaseCursor when you need direct pointer arithmetic
+    /// for performance-critical inner loops. Note that rebase() "commits" the current
+    /// logical coordinates to a physical pointer, and subsequent BaseCursor::step()
+    /// calls will not handle cross-fold carry.
+    ///
     /// @tparam DataType the data type of the tensor
     /// @tparam DimInfos the dimension infos
     template <typename DataType, typename... DimInfos> class Cursor : public Data<DataType> {
@@ -113,135 +367,46 @@ namespace spio {
         using Base = Data<DataType>;
         using data_type = DataType;
         using base_cursor_type = BaseCursor<DataType, DimInfos...>;
+        using coordinates_type = detail::cursor_coordinates_t<DimInfos...>;
+        using infos_tuple = detail::tuple<DimInfos...>;
 
-        DEVICE constexpr Cursor(DataType* data = nullptr, int offset = 0)
+        DEVICE constexpr Cursor(DataType* data = nullptr) : Base(data), _coords() {}
+
+        DEVICE constexpr Cursor(DataType* data, const coordinates_type& coords)
             : Base(data),
-              _offset(offset) {}
+              _coords(coords) {}
+
+        // Constructor from integer offset for backward compatibility
+        DEVICE constexpr Cursor(DataType* data, int offset) : Base(data), _coords() {
+            if (offset != 0) { Base::reset(Base::get() + offset); }
+        }
 
         DEVICE constexpr data_type* get() const {
-            return Base::get() + _offset;
+            return Base::get() + compute_offset();
         }
 
         DEVICE constexpr base_cursor_type rebase() const {
             return base_cursor_type(get());
         }
 
-        // --- dimension presence trait ---
+        DEVICE constexpr const coordinates_type& coordinates() const {
+            return _coords;
+        }
+
         template <typename DimType>
         static constexpr bool has_dimension_v =
             dim_traits::has_dimension<DimType, DimInfos...>::value;
 
     private:
-        // Direct offset calculation for exact dimension match
-        // Returns -1 if no exact match, otherwise returns the memory stride
-        template <typename SourceDim> static constexpr int find_exact_match_stride() {
-            return find_exact_match_stride_impl<SourceDim, DimInfos...>();
+        DEVICE constexpr int compute_offset() const {
+            return detail::compute_offset_from_coords(_coords, infos_tuple{});
         }
 
-        template <typename SourceDim> static constexpr int find_exact_match_stride_impl() {
-            return -1; // No match
-        }
-
-        template <typename SourceDim, typename FirstInfo, typename... RestInfos>
-        static constexpr int find_exact_match_stride_impl() {
-            using TargetDimType = typename FirstInfo::dim_type;
-            using SourceBaseDim = detail::get_base_dim_type_t<SourceDim>;
-            using TargetBaseDim = detail::get_base_dim_type_t<TargetDimType>;
-            constexpr int source_stride = detail::get_dim_stride<SourceDim>::value;
-            constexpr int target_stride = detail::get_dim_stride<TargetDimType>::value;
-            constexpr bool same_base = detail::is_same<SourceBaseDim, TargetBaseDim>::value;
-            constexpr bool same_stride = (source_stride == target_stride);
-
-            // Check for exact match: same base type and same stride
-            if constexpr (same_base && same_stride) {
-                // Found exact match - return the memory stride
-                return FirstInfo::module_type::stride.get();
-            } else {
-                return find_exact_match_stride_impl<SourceDim, RestInfos...>();
-            }
-        }
-
-        // Check if source dimension only matches exactly one target dimension
-        template <typename SourceDim> static constexpr bool has_single_exact_match() {
-            using matching = matching_dim_infos_t<SourceDim>;
-            if constexpr (detail::tuple_size<matching>::value != 1) {
-                return false;
-            } else {
-                return find_exact_match_stride<SourceDim>() >= 0;
-            }
-        }
-
-        // Apply a single dimension to all matching DimInfos with optimization
-        // Returns the offset contribution from this dimension
-        template <typename SourceDim>
-        DEVICE constexpr int apply_to_matching_impl(SourceDim, detail::tuple<>) const {
-            return 0;
-        }
-
-        template <typename SourceDim, typename FirstInfo, typename... RestInfos>
-        DEVICE constexpr int apply_to_matching_impl(SourceDim d,
-                                                    detail::tuple<FirstInfo, RestInfos...>) const {
-            using TargetDimType = typename FirstInfo::dim_type;
-            constexpr int source_stride = detail::get_dim_stride<SourceDim>::value;
-            constexpr int target_stride = detail::get_dim_stride<TargetDimType>::value;
-            constexpr int target_size = FirstInfo::module_type::size.get();
-            constexpr int target_max_value = (target_size - 1) * target_stride;
-            constexpr int dim_stride = FirstInfo::module_type::stride.get();
-
-            // Check if source has bounded size (is a Module)
-            constexpr bool source_is_bounded = detail::is_bounded_v<SourceDim>;
-            constexpr int source_size = detail::get_dim_size_v<SourceDim>;
-            constexpr int source_max_value =
-                source_is_bounded ? (source_size - 1) * source_stride : 0x7FFFFFFF;
-
-            // Optimization 1: If source stride > target max value, source can't contribute
-            if constexpr (source_stride > target_max_value) {
-                return apply_to_matching_impl<SourceDim, RestInfos...>(
-                    d, detail::tuple<RestInfos...>{});
-            }
-            // Optimization 2: If source max value < target stride, source can't reach this target
-            // This is only valid when source has bounded size (is a Module)
-            else if constexpr (source_is_bounded && source_max_value < target_stride) {
-                return apply_to_matching_impl<SourceDim, RestInfos...>(
-                    d, detail::tuple<RestInfos...>{});
-            }
-            // Fast path: strides match and source fits entirely in target
-            else if constexpr (source_stride == target_stride && source_is_bounded &&
-                               source_size <= target_size) {
-                // No modulo needed since source values are always in range
-                int step = d.get() * dim_stride;
-                return step + apply_to_matching_impl<SourceDim, RestInfos...>(
-                                  d, detail::tuple<RestInfos...>{});
-            }
-            // Fast path: strides match, may need modulo
-            else if constexpr (source_stride == target_stride) {
-                int step = (d.get() % target_size) * dim_stride;
-                return step + apply_to_matching_impl<SourceDim, RestInfos...>(
-                                  d, detail::tuple<RestInfos...>{});
-            } else {
-                // General case with folding arithmetic
-                int base_value = d.get() * source_stride;
-                int folded_value = (base_value / target_stride) % target_size;
-                int step = folded_value * dim_stride;
-
-                return step + apply_to_matching_impl<SourceDim, RestInfos...>(
-                                  d, detail::tuple<RestInfos...>{});
-            }
-        }
-
-        // Get all DimInfos that match a given base dimension type
         template <typename SourceDim>
         using matching_dim_infos_t =
             detail::keep_dim_infos_by_base_t<detail::tuple<DimInfos...>,
                                              detail::tuple<detail::get_base_dim_type_t<SourceDim>>>;
 
-        // Helper to check if any dimension in Coordinates matches tensor dimensions
-        template <typename... CoordDims>
-        static constexpr bool any_coordinate_matches(const Coordinates<CoordDims...>&) {
-            return (... || (detail::tuple_size<matching_dim_infos_t<CoordDims>>::value > 0));
-        }
-
-        // Helper to check if any dimension in a tuple matches tensor dimensions
         template <typename DimsTuple> struct any_coordinate_matches_impl;
 
         template <typename... CoordDims>
@@ -254,79 +419,24 @@ namespace spio {
         static constexpr bool any_coordinate_matches_v =
             any_coordinate_matches_impl<DimsTuple>::value;
 
-        // Helper to apply coordinates sequentially, skipping non-matching dimensions
-        DEVICE constexpr Cursor apply_coordinates_impl(const Coordinates<>&) const {
-            return *this;
-        }
-
-        template <typename FirstDim, typename... RestDims>
-        DEVICE constexpr Cursor
-        apply_coordinates_impl(const Coordinates<FirstDim, RestDims...>& coords) const {
-            using matching = matching_dim_infos_t<FirstDim>;
-
-            // Only apply if this dimension matches something in the tensor
-            if constexpr (detail::tuple_size<matching>::value > 0) {
-                Cursor next = (*this)[coords.template get<FirstDim>()];
-                if constexpr (sizeof...(RestDims) == 0) {
-                    return next;
-                } else {
-                    auto rest = Coordinates<RestDims...>(coords.template get<RestDims>()...);
-                    return next.apply_coordinates_impl(rest);
-                }
-            } else {
-                // Skip this dimension, continue with rest
-                if constexpr (sizeof...(RestDims) == 0) {
-                    return *this;
-                } else {
-                    auto rest = Coordinates<RestDims...>(coords.template get<RestDims>()...);
-                    return apply_coordinates_impl(rest);
-                }
-            }
-        }
-
     public:
-        /// @brief Apply a dimension to all tensor dimensions with the same base type.
-        template <typename SourceDim>
-        DEVICE constexpr Cursor apply_to_all_matching(SourceDim d) const {
-            using matching = matching_dim_infos_t<SourceDim>;
-            if constexpr (detail::tuple_size<matching>::value == 0) {
-                return *this;
-            } else {
-                int offset_delta = apply_to_matching_impl(d, matching{});
-                return Cursor(Base::get(), _offset + offset_delta);
-            }
-        }
-
-        /// @brief Subscript operator for any dimension-like type, Coordinates, or type with
+        /// @brief Subscript operator for dimension-like types, Coordinates, or types with
         /// coordinates().
         template <typename T> DEVICE constexpr Cursor operator[](T t) const {
             if constexpr (detail::is_coordinates_v<T>) {
-                // Coordinates - normalize and apply all dimensions sequentially
-                auto normalized = t.normalize();
-
-                // At least one dimension must match
                 static_assert(any_coordinate_matches_v<typename T::dims_tuple>,
                               "No dimensions in Coordinates match any tensor dimension");
 
-                return apply_coordinates_impl(normalized);
+                auto new_coords = detail::apply_subscript_to_cursor(_coords, t);
+                return Cursor(Base::get(), new_coords);
             } else if constexpr (detail::has_coordinates_v<T>) {
-                // Type with coordinates() - convert and apply
                 return (*this)[t.coordinates()];
             } else if constexpr (detail::is_dim_like_v<T>) {
-                // Single dimension - check for fast path first
                 using matching = matching_dim_infos_t<T>;
-
                 static_assert(detail::tuple_size<matching>::value > 0,
                               "Subscript dimension does not match any tensor dimension");
-
-                if constexpr (has_single_exact_match<T>()) {
-                    // Fast path: single exact match, direct offset calculation
-                    constexpr int mem_stride = find_exact_match_stride<T>();
-                    return Cursor(Base::get(), _offset + t.get() * mem_stride);
-                } else {
-                    // General case: apply to all matching dimensions
-                    return apply_to_all_matching(t);
-                }
+                auto new_coords = detail::add_subscript_dim_to_cursor_coords(t, _coords);
+                return Cursor(Base::get(), new_coords);
             } else {
                 static_assert(
                     detail::is_dim_like_v<T> || detail::is_coordinates_v<T> ||
@@ -336,11 +446,8 @@ namespace spio {
             }
         }
 
-        /// @brief Increment this cursor in a specific dimension type.
         template <typename DimType> DEVICE Cursor& step(DimType d = 1) {
-            constexpr int stride =
-                dim_traits::find_dim_info<DimType, DimInfos...>::info::module_type::stride.get();
-            Base::reset(Base::get() + d.get() * stride);
+            _coords = detail::apply_subscript_to_cursor(_coords, make_coordinates(d));
             return *this;
         }
 
@@ -353,10 +460,19 @@ namespace spio {
         }
 
     private:
-        const int _offset;
+        coordinates_type _coords;
     };
 
-    /// @brief A class that implements a cursor with no offset.
+    /// @brief A cursor with direct pointer arithmetic (no coordinate tracking).
+    ///
+    /// BaseCursor is used for performance-critical inner loops where you want direct
+    /// pointer manipulation without the overhead of coordinate tracking. It is typically
+    /// created via Cursor::rebase().
+    ///
+    /// Note: BaseCursor::step() does direct pointer arithmetic using memory strides.
+    /// It does NOT handle cross-fold carry behavior. If you need cross-fold carry,
+    /// use Cursor instead.
+    ///
     /// @tparam DataType the data type of the tensor
     /// @tparam DimInfos the dimension infos
     template <typename DataType, typename... DimInfos> class BaseCursor : public Data<DataType> {

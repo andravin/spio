@@ -258,3 +258,200 @@ UTEST(Tensor, tensor_extent_different_fold_levels) {
     // extent<M16>() should return M16(4) since 64 / 16 = 4
     EXPECT_EQ(tensor.extent<M16>(), M16(4));
 }
+
+UTEST(Tensor, subscript_projection_onto_folds) {
+    // Test subscripting a tensor with multiple folds of the same base dimension
+    // Ensure that projection of a dimension ontofolds works correctly
+
+    using K8 = Fold<K, 8>;
+
+    constexpr int k8_size = 4;
+    constexpr int k_size = 8;
+    constexpr int m_size = 16;
+    constexpr int total_k_size = k8_size * 8;
+
+    using T = Tensor<float, DimInfo<K8, k8_size, m_size * k_size>, DimInfo<M, m_size, k_size>,
+                     DimInfo<K, k_size, 1>>;
+
+    float data[T::total_size];
+    for (int i = 0; i < T::total_size; ++i) {
+        data[i] = static_cast<float>(i);
+    }
+    auto tensor = T(data);
+
+    EXPECT_EQ(tensor.extent<K>(), K(k8_size * 8));
+
+    for (int m = 0; m < m_size; ++m) {
+        for (int k = 0; k < total_k_size; ++k) {
+            int k8_index = k / 8;
+            int k_index = k % 8;
+            // This test works because all the dimensions are independent.
+            EXPECT_EQ(*tensor[K8(k8_index)][K(k_index)][M(m)], *tensor[K(k)][M(m)]);
+        }
+    }
+}
+
+UTEST(Tensor, subscript_multiple_folds_with_carry) {
+    // Test subscripting a tensor with multiple folds of the same base dimension
+    // Ensure that carry-over between folds works correctly
+
+    using K8 = Fold<K, 8>;
+
+    // Total K extent = 4 * 8 = 32
+    constexpr int k8_size = 4; // 4 groups of 8
+    constexpr int k_size = 8;  // 8 elements per group
+    constexpr int m_size = 16;
+
+    using T = Tensor<float, DimInfo<K8, k8_size, m_size * k_size>, DimInfo<M, m_size, k_size>,
+                     DimInfo<K, k_size, 1>>;
+
+    float data[T::total_size];
+    for (int i = 0; i < T::total_size; ++i) {
+        data[i] = static_cast<float>(i);
+    }
+    auto tensor = T(data);
+
+    // This test should now pass with deferred folding:
+    // K(4) + K(4) = K(8), which should map to K8=1, K=0
+    EXPECT_EQ(*tensor[K(4)][K(4)], *tensor[K(8)]);
+}
+
+UTEST(Tensor, deferred_folding_equivalence) {
+    // Test that a[e][f][g] == a[e + f + g] with deferred folding
+
+    using K8 = Fold<K, 8>;
+
+    constexpr int k8_size = 4;
+    constexpr int k_size = 8;
+    constexpr int m_size = 16;
+
+    using T = Tensor<float, DimInfo<K8, k8_size, m_size * k_size>, DimInfo<M, m_size, k_size>,
+                     DimInfo<K, k_size, 1>>;
+
+    float data[T::total_size];
+    for (int i = 0; i < T::total_size; ++i) {
+        data[i] = static_cast<float>(i);
+    }
+    auto tensor = T(data);
+
+    // Test various combinations
+    for (int e = 0; e < 8; ++e) {
+        for (int f = 0; f < 8; ++f) {
+            for (int g = 0; g < 8; ++g) {
+                // Subscripting separately vs combined should give same result
+                EXPECT_EQ(*tensor[K(e)][K(f)][K(g)], *tensor[K(e + f + g)]);
+            }
+        }
+    }
+
+    // Test with M dimension as well
+    for (int k = 0; k < 16; ++k) {
+        for (int m = 0; m < m_size; ++m) {
+            // Different orderings should be equivalent
+            EXPECT_EQ(*tensor[K(k)][M(m)], *tensor[M(m)][K(k)]);
+        }
+    }
+}
+
+UTEST(Tensor, deferred_folding_with_coordinates) {
+    // Test that coordinates addition works correctly with deferred folding
+
+    using K8 = Fold<K, 8>;
+
+    constexpr int k8_size = 4;
+    constexpr int k_size = 8;
+    constexpr int m_size = 16;
+
+    using T = Tensor<float, DimInfo<K8, k8_size, m_size * k_size>, DimInfo<M, m_size, k_size>,
+                     DimInfo<K, k_size, 1>>;
+
+    float data[T::total_size];
+    for (int i = 0; i < T::total_size; ++i) {
+        data[i] = static_cast<float>(i);
+    }
+    auto tensor = T(data);
+
+    // Test that coordinates work with the tensor
+    auto coord1 = make_coordinates(K(5), M(3));
+    auto coord2 = make_coordinates(K(7), M(2));
+
+    // Subscripting with coordinates should work
+    EXPECT_EQ(*tensor[coord1], *tensor[K(5)][M(3)]);
+    EXPECT_EQ(*tensor[coord2], *tensor[K(7)][M(2)]);
+
+    // Combined coordinates should equal sequential subscripts
+    auto combined = coord1 + coord2;
+    EXPECT_EQ(*tensor[combined], *tensor[K(12)][M(5)]);
+}
+
+UTEST(Tensor, deferred_folding_with_step) {
+    // Test that step() correctly handles cross-fold carry behavior
+
+    using K8 = Fold<K, 8>;
+
+    constexpr int k8_size = 4;
+    constexpr int k_size = 8;
+    constexpr int m_size = 16;
+
+    using T = Tensor<float, DimInfo<K8, k8_size, m_size * k_size>, DimInfo<M, m_size, k_size>,
+                     DimInfo<K, k_size, 1>>;
+
+    float data[T::total_size];
+    for (int i = 0; i < T::total_size; ++i) {
+        data[i] = static_cast<float>(i);
+    }
+    auto tensor = T(data);
+
+    // Test stepping by K(4) repeatedly
+    // Each step of K(4) should accumulate, and cross-fold carry should work correctly
+    auto cursor = tensor[M(3)];
+
+    for (int step_count = 0; step_count < 8; ++step_count) {
+        int expected_k = step_count * 4;
+        // Verify cursor points to correct element
+        EXPECT_EQ(*cursor, *tensor[K(expected_k)][M(3)]);
+
+        // Step by K(4)
+        cursor.step(K(4));
+    }
+
+    // Test stepping by K(1) to verify fine-grained carry
+    cursor = tensor[M(5)];
+
+    for (int step_count = 0; step_count < 20; ++step_count) {
+        EXPECT_EQ(*cursor, *tensor[K(step_count)][M(5)]);
+        cursor.step(K(1));
+    }
+
+    // Test stepping by K(8) - exactly one K8 unit
+    cursor = tensor[M(7)];
+
+    for (int step_count = 0; step_count < 4; ++step_count) {
+        int expected_k = step_count * 8;
+        EXPECT_EQ(*cursor, *tensor[K(expected_k)][M(7)]);
+        cursor.step(K(8));
+    }
+
+    // Test stepping by K8(1) directly
+    cursor = tensor[M(2)];
+
+    for (int step_count = 0; step_count < 4; ++step_count) {
+        int expected_k = step_count * 8;
+        EXPECT_EQ(*cursor, *tensor[K(expected_k)][M(2)]);
+        cursor.step(K8(1));
+    }
+
+    // Test mixed stepping - alternate between K(3) and K(5)
+    cursor = tensor[M(1)];
+    int accumulated_k = 0;
+
+    for (int i = 0; i < 4; ++i) {
+        EXPECT_EQ(*cursor, *tensor[K(accumulated_k)][M(1)]);
+        cursor.step(K(3));
+        accumulated_k += 3;
+
+        EXPECT_EQ(*cursor, *tensor[K(accumulated_k)][M(1)]);
+        cursor.step(K(5));
+        accumulated_k += 5;
+    }
+}

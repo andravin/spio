@@ -33,14 +33,13 @@ UTEST(Lesson5, CompoundIndex) {
             // Subscripting with the compound indices ..
             auto b = a[block][thread];
 
-            // .. saves the user from computing the coordinates ..
+            // .. saves the user from computing the coordinates and offset manually.
             auto block_i16 = blockIdx / 32;
             auto block_j16 = blockIdx % 32;
 
             auto thread_i = threadIdx / 16;
             auto thread_j = threadIdx % 16;
 
-            // .. and the offset manually.
             auto offset = (block_i16 * 16 + thread_i) * 512 + block_j16 * 16 + thread_j;
 
             // Check that these two methods are equivalent.

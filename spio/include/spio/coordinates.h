@@ -216,6 +216,9 @@ namespace spio {
 
         detail::tuple<Dims...> values;
 
+        /// @brief Default constructor - initializes all dimensions to zero.
+        DEVICE constexpr Coordinates() : values(Dims(0)...) {}
+
         DEVICE constexpr Coordinates(Dims... dims) : values(dims...) {}
 
         /// @brief Get the value of a specific dimension by exact type.
