@@ -246,7 +246,7 @@ UTEST(Lesson4, DimensionalProjection) {
 
     // ... create tensors a, b, and c with types A, B, and C.
 
-   // Select coordinates (I, J) for the tiles.
+    // Select coordinates (I, J) for the tiles.
     //
     auto origin = spio::make_coordinates(I(12), J(60));
 
