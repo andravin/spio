@@ -173,7 +173,7 @@ The generator `Dims(k8=4, i=4, k=8)` creates a tensor with physical layout $K_8(
 
 /*@spio
 [
-Tensor("A", dtype.float, Dims(k8=4, i=4, k=8))
+Tensor("A", dtype.float, Dims(k8=4, i=4, k=-1))
 ]
 @spio*/
 
