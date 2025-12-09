@@ -39,8 +39,8 @@ Dim("i"), Dim("j")
 UTEST(Lesson1, TypeSafety) {
 
     // Dimensions work like integers.
-    EXPECT_EQ(I(2) + I(4), I(6));
-    EXPECT_LT(I(8), I(10));
+    EXPECT_TRUE(I(2) + I(4) == I(6));
+    EXPECT_TRUE(I(8) < I(10));
 
     // Each dimension is a different CUDA / C++ type.
     static_assert(!std::is_same_v<I, J>, "I and J are different types");
@@ -85,26 +85,26 @@ UTEST(Lesson1, Commutativity) {
     auto b = B(b_data);
 
     // Verify matrix sizes.
-    EXPECT_EQ(A::size<I>(), I(16));
-    EXPECT_EQ(A::size<K>(), K(32));
-    EXPECT_EQ(B::size<K>(), K(32));
-    EXPECT_EQ(B::size<J>(), J(64));
+    EXPECT_TRUE(A::size<I>() == I(16));
+    EXPECT_TRUE(A::size<K>() == K(32));
+    EXPECT_TRUE(B::size<K>() == K(32));
+    EXPECT_TRUE(B::size<J>() == J(64));
 
-    // Define coordinates
+    // Define coordinates.
     auto i = I(2);
     auto j = J(3);
     auto k = K(4);
 
     // Position-free subscripting:
     // Subscript order does not affect the result.
-    EXPECT_EQ(a[i][k].get(), a[k][i].get());
-    EXPECT_EQ(b[k][j].get(), b[j][k].get());
+    EXPECT_TRUE(a[i][k].get() == a[k][i].get());
+    EXPECT_TRUE(b[k][j].get() == b[j][k].get());
 
     // Dimensional projection:
     // Coordinates project onto the tensor's supported dimensions.
     auto coords = make_coordinates(i, j, k);
-    EXPECT_EQ(a[coords].get(), a[k][i].get());
-    EXPECT_EQ(b[coords].get(), b[j][k].get());
+    EXPECT_TRUE(a[coords].get() == a[k][i].get());
+    EXPECT_TRUE(b[coords].get() == b[j][k].get());
 }
 ```
 
@@ -121,6 +121,27 @@ Tensor("A", dtype.float, Dims(i=10, j=10))
 ]
 @spio*/
 
+UTEST(Lesson2, RelativeMovement) {
+    // Create storage for matrix A.
+    A::data_type a_data[A::storage_size()];
+
+    // Create matrix A.
+    auto a = A(a_data);
+
+    // Create base cursor at (i=2, j=2).
+    auto b = a[I(2)][J(2)];
+
+    // Verify the offset from the base pointer.
+    EXPECT_TRUE(b.get() - a_data == 2 * 10 + 2);
+
+    // Move b.
+    b.step(I(1));
+    b.step(J(1));
+
+    // Verify movement.
+    EXPECT_EQ(b.get() - a_data, 3 * 10 + 3);
+}
+
 UTEST(Lesson2, AccumulationLoop) {
 
     // Create matrix A.
@@ -131,9 +152,8 @@ UTEST(Lesson2, AccumulationLoop) {
     auto b = a[I(2)][J(4)];
 
     for (int step = 0; step < 5; ++step) {
-
         // Verify the current position.
-        EXPECT_EQ(b.get(), a_data + (2 + step) * 10 + 4);
+        EXPECT_TRUE(b.get() == a_data + (2 + step) * 10 + 4);
 
         // Step by 1 in the I dimension.
         b.step(I(1));
@@ -157,7 +177,7 @@ Tensor("A", dtype.float, Dims(k8=4, i=4, k=8))
 ]
 @spio*/
 
-UTEST(Lesson3, AutomaticNormalization) {
+UTEST(Lesson3, Folding) {
 
     // Create tensor a.
     A::data_type data[A::storage_size()];
@@ -166,8 +186,8 @@ UTEST(Lesson3, AutomaticNormalization) {
     // Folded dimension K8 is dimension K folded by stride 8.
 
     // Dimensions are compatible with their folds:
-    EXPECT_EQ(K8(3), K(3 * 8));
-    EXPECT_EQ(K8(3) + K(4), K(3 * 8 + 4));
+    EXPECT_TRUE(K8(3) == K(3 * 8));
+    EXPECT_TRUE(K8(3) + K(4) == K(3 * 8 + 4));
 
     // Use constant I ..
     auto i = I(2);
@@ -187,7 +207,7 @@ UTEST(Lesson3, AutomaticNormalization) {
         auto km8 = K(k.get() % 8);
         auto c = a[i][k8][km8];
 
-        EXPECT_EQ(b.get(), c.get());
+        EXPECT_TRUE(b.get() == c.get());
     }
 }
 ```
@@ -195,11 +215,11 @@ UTEST(Lesson3, AutomaticNormalization) {
 Spio accumulates subscripts in logical coordinates before folding, so repeated subscripts are equivalent to their sum. This enables correct carry-over when subscripts cross fold boundaries:
 
 ```cpp
-// K(4) + K(4) = K(8), which correctly carries into K8
-EXPECT_EQ(*a[i][K(4)][K(4)], *a[i][K(8)]);
+// K(4) + K(4) == K8(1)
+EXPECT_TRUE(*a[i][K(4)][K(4)] == *a[i][K(8)]);
 
-// K(7) + K(5) = K(12) = K8(1) + K(4)
-EXPECT_EQ(*a[i][K(7)][K(5)], *a[i][K8(1)][K(4)]);
+// K(7) + K(5) = K(12) == K8(1) + K(4)
+EXPECT_TRUE(*a[i][K(7)][K(5)] == *a[i][K8(1)][K(4)]);
 ```
 
 ### 4\. Dimensional Projection
@@ -213,8 +233,6 @@ With dimensional projection, individual dimensions disappear from the program. T
 **File:** [04\_projection.cpp](spio/src_tests/tutorial/04_projection.cpp)
 
 ```cpp
-#include <numeric>
-
 // Define tensors A, B, C, and C_tile
 /*@spio
 [
@@ -258,15 +276,15 @@ UTEST(Lesson4, DimensionalProjection) {
 
             // Check that world coordinates I and K are less than a's extents.
             // Ignore world coordinate J in the comparison and subscript operations.
-            if (world < a.extents()) { EXPECT_EQ(*a_tile[local], *a[world]); }
+            if (world < a.extents()) { EXPECT_TRUE(*a_tile[local] == *a[world]); }
 
             // Check that world coordinates J and K are less than b's extents.
             // Ignore world coordinate I in the comparison and subscript operations.
-            if (world < b.extents()) { EXPECT_EQ(*b_tile[local], *b[world]); }
+            if (world < b.extents()) { EXPECT_TRUE(*b_tile[local] == *b[world]); }
         }
 
         // Check that world coordinates I and J are less than c's extents.
-        if (origin + idx < c.extents()) { EXPECT_EQ(*c_tile[idx], *c[origin + idx]); }
+        if (origin + idx < c.extents()) { EXPECT_TRUE(*c_tile[idx] == *c[origin + idx]); }
     }
 }
 ```

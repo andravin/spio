@@ -17,14 +17,14 @@ UTEST(Lesson2, RelativeMovement) {
     auto b = a[I(2)][J(2)];
 
     // Verify the offset from the base pointer.
-    EXPECT_EQ(b.get() - a_data, 2 * 10 + 2);
+    EXPECT_TRUE(b.get() - a_data == 2 * 10 + 2);
 
     // Move b.
     b.step(I(1));
     b.step(J(1));
 
     // Verify movement.
-    EXPECT_EQ(b.get() - a_data, 3 * 10 + 3);
+    EXPECT_TRUE(b.get() - a_data == 3 * 10 + 3);
 }
 
 UTEST(Lesson2, AccumulationLoop) {
@@ -38,7 +38,7 @@ UTEST(Lesson2, AccumulationLoop) {
 
     for (int step = 0; step < 5; ++step) {
         // Verify the current position.
-        EXPECT_EQ(b.get(), a_data + (2 + step) * 10 + 4);
+        EXPECT_TRUE(b.get() == a_data + (2 + step) * 10 + 4);
 
         // Step by 1 in the I dimension.
         b.step(I(1));
