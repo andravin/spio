@@ -39,6 +39,12 @@ class Tensor:
             self.dims = Dims(**self.dims)
         if isinstance(self.strides, dict):
             self.strides = Strides(**self.strides)
+        if self.strides is not None:
+            for stride_name in self.strides.keys():
+                if stride_name not in self.dims:
+                    raise ValueError(
+                        f"Stride name '{stride_name}' not found in dims {list(self.dims.keys())}."
+                    )
         self.strides = compute_full_strides(self.dims, self.strides)
 
     def generate_with_context(self, user_data_types: List[str] = None) -> str:

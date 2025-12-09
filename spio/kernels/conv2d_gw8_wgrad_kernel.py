@@ -148,7 +148,7 @@ def _get_kernel_spec(
             "SmemDelta",
             dtype.uint4,
             {"ping_pong": 2, "n": config.warp_n, "q": BLOCK_Q, "k8": block_c8},
-            strides={"x": smem_x_stride},
+            strides={"q": smem_x_stride},
         ),
         Tensor("SmemWgrad", dtype.float2, {"k8": block_c8, "s": s, "c": 8, "k2": 4}),
     ]
