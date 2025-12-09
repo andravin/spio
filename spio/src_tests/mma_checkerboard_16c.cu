@@ -20,93 +20,93 @@ extern "C" {
     __global__ void mma_checkerboard_16c(uint4* __restrict__ c_ptr, const uint4* __restrict__ a_ptr,
                                          const uint4* __restrict__ b_ptr) {
         // Allocate sufficient shared memory for the kernel.
-        __shared__ uint4 smem[spio::max(SmemA::storage_size() + SmemB::storage_size(),
-                                        SmemCLoad::storage_size())];
+        __shared__ uint4 smem[spio::max(ASmem::storage_size() + BSmem::storage_size(),
+                                        CLoadSmem::storage_size())];
 
         // Allocate shared memory tensors for the A and B matrices.
         auto smem_allocator = StackAllocator(smem);
-        auto smem_a = SmemA::allocate(smem_allocator);
-        auto smem_b = SmemB::allocate(smem_allocator);
+        auto a_smem = ASmem::allocate(smem_allocator);
+        auto b_smem = BSmem::allocate(smem_allocator);
 
         // Get the tile coordinates for this thread-block.
         auto block_idx = make_coordinates(BLOCK_I(blockIdx.y), BLOCK_J(blockIdx.x));
 
         // Get the thread's coordinates for loads from global memory.
-        auto global_load_idx = GlobalLoadIndex(threadIdx.x);
+        auto global_load_idx = LoadGlobalIndex(threadIdx.x);
 
         // Cast coordinate dimensions for matrices A and B.
-        auto global_load_a_idx = global_load_idx.cast<X, I>();
-        auto global_load_b_idx = global_load_idx.cast<X, J>();
+        auto a_global_load_idx = global_load_idx.cast<X, I>();
+        auto b_global_load_idx = global_load_idx.cast<X, J>();
 
         // Construct cursors for loading A and B from global memory.
-        auto a = A(a_ptr)[block_idx][global_load_a_idx].rebase();
-        auto b = B(b_ptr)[block_idx][global_load_b_idx].rebase();
+        auto a_global = AGlobal(a_ptr)[block_idx][a_global_load_idx].rebase();
+        auto b_global = BGlobal(b_ptr)[block_idx][b_global_load_idx].rebase();
 
         // Construct cursors for storing A and B to shared memory.
-        auto smem_checkers = Smem_Checkers(global_load_idx);
-        auto smem_a_store = SmemA(smem_a)[global_load_a_idx][smem_checkers].rebase();
-        auto smem_b_store = SmemB(smem_b)[global_load_b_idx][smem_checkers].rebase();
+        auto checker_smem_idx = CheckerSmemIndex(global_load_idx);
+        auto a_store_smem = ASmem(a_smem)[a_global_load_idx][checker_smem_idx].rebase();
+        auto b_store_smem = BSmem(b_smem)[b_global_load_idx][checker_smem_idx].rebase();
 
         // Get the coordinates of the output tile this thread will compute.
         auto compute_idx = ComputeIndex(threadIdx.x);
 
         // Construct cursors for loading A and B from shared memory into tensor core fragments.
-        auto a_load_idx = A_Tile::data_type::LoadIndex(compute_idx);
-        auto b_load_idx = B_Tile::data_type::LoadIndex(compute_idx);
-        auto smem_a_checkers = SmemA_Checkers(a_load_idx);
-        auto smem_b_checkers = SmemB_Checkers(b_load_idx);
-        auto smem_a_load = SmemA(smem_a)[compute_idx][smem_a_checkers].rebase();
-        auto smem_b_load = SmemB(smem_b)[compute_idx][smem_b_checkers].rebase();
+        auto a_load_idx = AReg::data_type::LoadIndex(compute_idx);
+        auto b_load_idx = BReg::data_type::LoadIndex(compute_idx);
+        auto a_checker_smem_idx = ACheckerSmemIndex(a_load_idx);
+        auto b_checker_smem_idx = BCheckerSmemIndex(b_load_idx);
+        auto a_load_smem = ASmem(a_smem)[compute_idx][a_checker_smem_idx].rebase();
+        auto b_load_smem = BSmem(b_smem)[compute_idx][b_checker_smem_idx].rebase();
 
         // Initialize the accumulators.
-        C_Tile::data_type c_data[C_Tile::storage_size()];
-        auto c_tile = C_Tile(c_data);
+        CReg::data_type c_data[CReg::storage_size()];
+        auto c_tile = CReg(c_data);
         c_tile.zero();
 
         // Construct the global memory loaders for A and B. Set the valid mask.
-        auto loader_a = A_Loader(block_idx + global_load_a_idx < A::extents());
-        auto loader_b = B_Loader(block_idx + global_load_b_idx < B::extents());
+        auto a_loader = ALoader(block_idx + a_global_load_idx < AGlobal::extents());
+        auto b_loader = BLoader(block_idx + b_global_load_idx < BGlobal::extents());
 
         // Allocate registers for the A and B tiles.
-        A_Tile::data_type a_data[A_Tile::storage_size()];
-        B_Tile::data_type b_data[B_Tile::storage_size()];
+        AReg::data_type a_data[AReg::storage_size()];
+        BReg::data_type b_data[BReg::storage_size()];
 
         // Construct tensors for the A and B tiles.
-        auto a_tile = A_Tile(a_data);
-        auto b_tile = B_Tile(b_data);
+        auto a_tile = AReg(a_data);
+        auto b_tile = BReg(b_data);
 
-        constexpr auto step = A_Tile::extent<K16>();
-        constexpr auto size = A::extent<K>();
+        constexpr auto step = AReg::extent<K16>();
+        constexpr auto size = AGlobal::extent<K>();
 
-        // Prefetch the first chunk of data from A and B.
+        // Prefetch the first k_chunk of data from A and B.
         if constexpr (size > K(0)) {
-            loader_a.copy_async(smem_a_store.get(), a.get());
-            loader_b.copy_async(smem_b_store.get(), b.get());
+            a_loader.copy_async(a_store_smem.get(), a_global.get());
+            b_loader.copy_async(b_store_smem.get(), b_global.get());
             __pipeline_commit();
-            a.step(step);
-            b.step(step);
+            a_global.step(step);
+            b_global.step(step);
         }
 
         // Main computation loop with pipelined memory operations.
 
         // Aggressive unrolling of the main loop improves arithmetic utilization.
 #pragma unroll MAIN_LOOP_UNROLL_DEPTH
-        for (auto double_chunk : range(DOUBLE_CHUNK(size))) {
+        for (auto k_double_chunk : range(K_DOUBLE_CHUNK(size))) {
 
             // Double-buffered loads and computation
-            for (auto chunk : range(CHUNK(2))) {
+            for (auto k_chunk : range(K_CHUNK(2))) {
 
                 // If not the last iteration, copy the next tile from global
                 // memory to shared memory asynchronously.
-                if (double_chunk + chunk + CHUNK(1) < size) {
+                if (k_double_chunk + k_chunk + K_CHUNK(1) < size) {
                     // Copy into the back-buffer.
-                    loader_a.copy_async(smem_a_store[(chunk + 1) % 2].get(), a.get());
-                    loader_b.copy_async(smem_b_store[(chunk + 1) % 2].get(), b.get());
+                    a_loader.copy_async(a_store_smem[(k_chunk + 1) % 2].get(), a_global.get());
+                    b_loader.copy_async(b_store_smem[(k_chunk + 1) % 2].get(), b_global.get());
                 }
 
                 // Advance the global memory tiles.
-                a.step(step);
-                b.step(step);
+                a_global.step(step);
+                b_global.step(step);
 
                 // Synchronize on the previous iteration's global memory copy.
                 __pipeline_commit();
@@ -114,8 +114,8 @@ extern "C" {
                 __syncthreads();
 
                 // Load matrix tiles from shared memory into registers.
-                a_tile.load(smem_a_load[chunk]);
-                b_tile.load(smem_b_load[chunk]);
+                a_tile.load(a_load_smem[k_chunk]);
+                b_tile.load(b_load_smem[k_chunk]);
 
                 // Matrix-multiply the tiles using Tensor Cores.
                 // Compile-time type checking ensures the compatibility of the tile dimensions.
@@ -126,37 +126,37 @@ extern "C" {
         __pipeline_wait_prior(0);
 
         // Final computation for any leftover iteration.
-        if constexpr (DOUBLE_CHUNK(size) < size) {
-            a_tile.load(smem_a_load);
-            b_tile.load(smem_b_load);
+        if constexpr (K_DOUBLE_CHUNK(size) < size) {
+            a_tile.load(a_load_smem);
+            b_tile.load(b_load_smem);
             mma(a_tile, b_tile, c_tile, c_tile);
             __syncthreads();
         }
 
         // Store outputs to global memory via shared memory.
-        smem_a.deallocate(smem_allocator);
-        smem_b.deallocate(smem_allocator);
-        auto smem_c = SmemCStore::allocate(smem_allocator);
+        a_smem.deallocate(smem_allocator);
+        b_smem.deallocate(smem_allocator);
+        auto c_smem = CStoreSmem::allocate(smem_allocator);
 
         // Transfer outputs from registers to shared memory, converting from float32 to float16.
-        auto c_idx = C_Tile::data_type::compound_index_type(compute_idx);
-        auto smem_c_base = smem_c[compute_idx][c_idx].rebase();
+        auto c_idx = CReg::data_type::compound_index_type(compute_idx);
+        auto c_store_smem = c_smem[compute_idx][c_idx].rebase();
         for (auto coord : range(c_tile)) {
             auto c_fragments = *c_tile[coord];
-            auto smem_c_coord = smem_c_base[coord];
+            auto c_coord_store_smem = c_store_smem[coord];
             for (auto frag_coord : range(c_fragments)) {
-                *smem_c_coord[frag_coord] = __float22half2_rn(*c_fragments[frag_coord]);
+                *c_coord_store_smem[frag_coord] = __float22half2_rn(*c_fragments[frag_coord]);
             }
         }
 
         // Transfer outputs from shared memory to global memory.
         // Since each warp transfers its own transposed tile, no synchronization is needed.
-        auto c = C(c_ptr)[block_idx][compute_idx].rebase();
-        auto smem_c_load_tensor = SmemCLoad(reinterpret_cast<const uint4*>(smem_c.get()));
-        auto smem_c_load = smem_c_load_tensor[compute_idx].rebase();
+        auto c_global = CGlobal(c_ptr)[block_idx][compute_idx].rebase();
+        auto c_load_smem =
+            CLoadSmem(reinterpret_cast<const uint4*>(c_smem.get()))[compute_idx].rebase();
         auto world_idx = block_idx + compute_idx;
-        for (auto idx : SmemCLoadIndex::partition<LANE>(compute_idx)) {
-            if (world_idx + idx < C::extents()) { *c[idx] = *smem_c_load[idx]; }
+        for (auto idx : CLoadSmemIndex::partition<LANE>(compute_idx)) {
+            if (world_idx + idx < CGlobal::extents()) { *c_global[idx] = *c_load_smem[idx]; }
         }
     }
 }
