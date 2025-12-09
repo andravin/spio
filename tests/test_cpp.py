@@ -427,6 +427,103 @@ UTEST(StrideTensor, offset_from_tensor)
 
 
 @_cpp_test
+def _test_generate_fold_auto_size():
+    """Return the C++ source code that tests automatic fold size inference."""
+    # Test case 1: k8=16, k4=-1, k=-1
+    # k4 = 8/4 = 2, k = 4/1 = 4
+    specs1 = [gen.Tensor("A", gen.dtype.float, gen.Dims(k8=16, i=32, k4=-1, k=-1))]
+    generated_code1 = gen.generate(specs1, namespace="AutoFold_GenCode1")
+
+    # Test case 2: k8=4, k=-1 (skip k4)
+    # k = 8/1 = 8
+    specs2 = [gen.Tensor("B", gen.dtype.float, gen.Dims(k8=4, j=16, k=-1))]
+    generated_code2 = gen.generate(specs2, namespace="AutoFold_GenCode2")
+
+    # Test case 3: Multiple base dimensions with auto-inference
+    # k8=8, k4=-1, k=-1, i16=4, i=-1
+    specs3 = [
+        gen.Tensor("C", gen.dtype.float, gen.Dims(k8=8, k4=-1, k=-1, i16=4, i=-1))
+    ]
+    generated_code3 = gen.generate(specs3, namespace="AutoFold_GenCode3")
+
+    return f"""
+{generated_code1}
+
+UTEST(AutoFold, tensor_k8_k4_k)
+{{
+    using namespace AutoFold_GenCode1;
+
+    // k8=16 (specified), k4=2 (8/4), k=4 (4/1)
+    // Total K extent = 16 * 2 * 4 = 128
+    EXPECT_EQ(A::size<K8>().get(), 16);
+    EXPECT_EQ(A::size<K4>().get(), 2);
+    EXPECT_EQ(A::size<K>().get(), 4);
+    EXPECT_EQ(A::size<I>().get(), 32);
+
+    // Verify total extent
+    EXPECT_EQ(A::size(), 16 * 2 * 4 * 32);
+}}
+
+{generated_code2}
+
+UTEST(AutoFold, tensor_k8_k)
+{{
+    using namespace AutoFold_GenCode2;
+
+    // k8=4 (specified), k=8 (8/1)
+    // Total K extent = 4 * 8 = 32
+    EXPECT_EQ(B::size<K8>().get(), 4);
+    EXPECT_EQ(B::size<K>().get(), 8);
+    EXPECT_EQ(B::size<J>().get(), 16);
+
+    // Verify total size
+    EXPECT_EQ(B::size(), 4 * 8 * 16);
+}}
+
+{generated_code3}
+
+UTEST(AutoFold, tensor_multiple_base_dims)
+{{
+    using namespace AutoFold_GenCode3;
+
+    // k8=8, k4=2 (8/4), k=4 (4/1)
+    // i16=4, i=16 (16/1)
+    EXPECT_EQ(C::size<K8>().get(), 8);
+    EXPECT_EQ(C::size<K4>().get(), 2);
+    EXPECT_EQ(C::size<K>().get(), 4);
+    EXPECT_EQ(C::size<I16>().get(), 4);
+    EXPECT_EQ(C::size<I>().get(), 16);
+
+    // Verify total size
+    EXPECT_EQ(C::size(), 8 * 2 * 4 * 4 * 16);
+}}
+"""
+
+
+@_cpp_test
+def _test_generate_fold_explicit_validation():
+    """Return the C++ source code that tests explicit size validation."""
+    # Explicit sizes that match computed values should work
+    specs = [gen.Tensor("D", gen.dtype.float, gen.Dims(k8=4, k4=2, k=4))]
+    generated_code = gen.generate(specs, namespace="ExplicitFold_GenCode")
+
+    return f"""
+{generated_code}
+
+UTEST(ExplicitFold, matching_explicit_sizes)
+{{
+    using namespace ExplicitFold_GenCode;
+
+    // All sizes explicitly specified and consistent
+    // k8=4, k4=2 (8/4=2 ✓), k=4 (4/1=4 ✓)
+    EXPECT_EQ(D::size<K8>().get(), 4);
+    EXPECT_EQ(D::size<K4>().get(), 2);
+    EXPECT_EQ(D::size<K>().get(), 4);
+}}
+"""
+
+
+@_cpp_test
 def _test_fragment_index():
 
     specs = [

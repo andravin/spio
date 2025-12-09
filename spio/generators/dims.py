@@ -1,22 +1,126 @@
 """This file implements the Dims class."""
 
-from typing import Dict, Union, Generator, Tuple
+from typing import Dict, Union, Generator, Tuple, List
 
 from .subindex_protocol import SubindexProtocol
+
+
+def _parse_dim_name_and_fold(name: str) -> Tuple[str, int]:
+    """Parse a dimension name into base name and fold factor.
+
+    Args:
+        name: Dimension name like 'K8', 'K4', 'K', 'I32', etc.
+
+    Returns:
+        Tuple of (base_name, fold_factor). fold_factor is 1 if not specified.
+    """
+    fold_factor = 1
+    base_name = name
+    for i, char in enumerate(name):
+        if char.isdigit():
+            fold_factor = int(name[i:])
+            base_name = name[:i]
+            break
+    return base_name, fold_factor
+
+
+def _compute_fold_sizes(
+    dims: Dict[str, Union[int, "SubindexProtocol"]],
+) -> Dict[str, Union[int, "SubindexProtocol"]]:
+    """Compute automatic fold sizes for dimensions specified as -1.
+
+    Args:
+        dims: Dictionary of dimension names to sizes. Size of -1 indicates
+            automatic computation.
+
+    Returns:
+        Dictionary with all -1 sizes replaced by computed values.
+
+    Raises:
+        ValueError: If the coarsest fold has size -1, or if an explicit size
+            doesn't match the computed value.
+    """
+    # Group dimensions by base name
+    base_dim_folds: Dict[str, List[Tuple[str, int, Union[int, SubindexProtocol]]]] = {}
+    for name, size in dims.items():
+        base_name, fold_factor = _parse_dim_name_and_fold(name)
+        if base_name not in base_dim_folds:
+            base_dim_folds[base_name] = []
+        base_dim_folds[base_name].append((name, fold_factor, size))
+
+    result = dict(dims)
+
+    for base_name, folds in base_dim_folds.items():
+        # Sort by fold factor descending (coarsest first)
+        folds_sorted = sorted(folds, key=lambda x: x[1], reverse=True)
+
+        # Coarsest fold must have explicit size
+        coarsest_name, coarsest_fold, coarsest_size = folds_sorted[0]
+        if coarsest_size == -1:
+            raise ValueError(
+                f"Coarsest fold '{coarsest_name}' (fold factor {coarsest_fold}) "
+                f"must have an explicit size, not -1."
+            )
+
+        # Compute sizes for remaining folds
+        for i in range(1, len(folds_sorted)):
+            name, fold_factor, specified_size = folds_sorted[i]
+            prev_name, prev_fold, prev_size = folds_sorted[i - 1]
+
+            # Computed size = ratio of fold factors
+            computed_size = prev_fold // fold_factor
+
+            if prev_fold % fold_factor != 0:
+                raise ValueError(
+                    f"Fold factor {prev_fold} of '{prev_name}' is not divisible "
+                    f"by fold factor {fold_factor} of '{name}'."
+                )
+
+            if specified_size == -1:
+                result[name] = computed_size
+            elif specified_size != computed_size:
+                raise ValueError(
+                    f"Dimension '{name}' has explicit size {specified_size}, "
+                    f"but computed size is {computed_size} "
+                    f"(from {prev_fold}/{fold_factor})."
+                )
+
+    return result
 
 
 class Dims:
     """A class to represent the dimensions of a tensor."""
 
     def __init__(self, **dims: Dict[str, Union[int, SubindexProtocol]]):
-        """Initialize the Dims object with the given dimensions.
+        """Initialize the Dims object with the given dimensions and sizes.
+
+        Dimensions with size -1 will have their sizes computed automatically based
+        on fold factor ratios. The coarsest fold must have an explicit size.
+
+        Example:
+            # Create a Dims object with folds and automatic size computation.
+            # k8=16 is the coarsest fold with explicit size 16.
+            # k4=-1 computes to size 2 (8/4 = 2).
+            # k=-1 computes to size 4 (4/1 = 4).
+            # Total K dimension: 16 * 2 * 4 = 128
+            dims = Dims(k8=16, i=32, k4=-1, k=-1)
 
         Args:
             **dims: Keyword arguments representing the dimensions. Each dimension
                 is specified as a name-value pair, where the name is a string
                 and the value is an integer or a SubindexProtocol object.
+
+                Names can include fold factors (e.g., 'k8', 'k4', 'k'). K8 means a fold
+                of dimension K with fold factor 8.
+
+                Names are automatically normalized to upper-case.
+
+                The coarsest folds must have an explicit size, the rest can use
+                a value of -1 to indicate the size should be computed automatically
+                from fold factor ratios.
         """
-        self._dims = {key.upper(): value for key, value in dims.items()}
+        normalized = {key.upper(): value for key, value in dims.items()}
+        self._dims = _compute_fold_sizes(normalized)
 
     def items(self) -> Generator[Tuple[str, Union[int, SubindexProtocol]], None, None]:
         """Get the dimensions as a generator of (name, value) pairs."""

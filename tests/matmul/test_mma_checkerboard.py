@@ -86,9 +86,9 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     chunk = config.chunk_k16 * 16
     double_chunk = 2 * chunk
 
-    tensor_a = Tensor("A", dtype.uint4, Dims(k16=k16, i=m, k8=2), constant=True)
-    tensor_b = Tensor("B", dtype.uint4, Dims(k16=k16, j=n, k8=2), constant=True)
-    tensor_c = Tensor("C", dtype.uint4, Dims(j16=j16, i=m, j8=2))
+    tensor_a = Tensor("A", dtype.uint4, Dims(k16=k16, i=m, k8=-1), constant=True)
+    tensor_b = Tensor("B", dtype.uint4, Dims(k16=k16, j=n, k8=-1), constant=True)
+    tensor_c = Tensor("C", dtype.uint4, Dims(j16=j16, i=m, j8=-1))
 
     smem_tensor_a = Tensor(
         "SmemA",
@@ -124,7 +124,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         tensor_a,
         tensor_b,
         tensor_c,
-        CompoundIndex("GlobalLoadIndex", Dims(x16=block_x16, x=16, k8=2)),
+        CompoundIndex("GlobalLoadIndex", Dims(x16=block_x16, x=-1, k8=2)),
         CompoundIndex("ComputeIndex", Dims(warp_i=warps_m, warp_j=warps_n, lane=32)),
         smem_tensor_a,
         smem_tensor_b,
@@ -165,7 +165,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         Tensor(
             "SmemCStore",
             dtype.half2,
-            Dims(warp_i=warps_m, j8=block_x8, i16=warp_m16, i=16, j2=4),
+            Dims(warp_i=warps_m, j8=block_x8, i16=warp_m16, i=-1, j2=-1),
             strides=Strides(j8=(config.warp_m + 1) * 4),
         ),
         #
