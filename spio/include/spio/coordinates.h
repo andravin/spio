@@ -469,6 +469,18 @@ namespace spio {
     DEVICE constexpr auto range(const Tensor<DataType, DimInfos...>&) {
         return CoordinatesRange<CompoundIndex<DimInfos...>>();
     }
+
+    /// @brief Create a range that iterates over all fragment coordinates
+    /// Works with any fragment type that has a tensor_type alias
+    /// Exclude dim-like types to avoid ambiguity with range(dim_type)
+    template <typename FragmentType, detail::enable_if_t<detail::has_tensor_type_v<FragmentType> &&
+                                                             !detail::is_dim_like_v<FragmentType>,
+                                                         int> = 0>
+    DEVICE constexpr auto range(const FragmentType&) {
+        using tensor_t = typename FragmentType::tensor_type;
+        return range(tensor_t(nullptr));
+    }
+
 }
 
 #endif

@@ -17,8 +17,8 @@ UTEST(Lesson5, CompoundIndex) {
     auto a = A(a_data);
 
     // Check the size of the compound indices.
-    EXPECT_EQ(BlockIndex::size(), 32 * 32);
-    EXPECT_EQ(ThreadIndex::size(), 16 * 16);
+    EXPECT_TRUE(BlockIndex::size() == 32 * 32);
+    EXPECT_TRUE(ThreadIndex::size() == 16 * 16);
 
     // Simulate thread-blocks and threads.
     for (int blockIdx = 0; blockIdx < BlockIndex::size(); ++blockIdx) {
@@ -43,7 +43,7 @@ UTEST(Lesson5, CompoundIndex) {
             auto offset = (block_i16 * 16 + thread_i) * 512 + block_j16 * 16 + thread_j;
 
             // Check that these two methods are equivalent.
-            EXPECT_EQ(*b, a_data[offset]);
+            EXPECT_TRUE(*b == a_data[offset]);
         }
     }
 }

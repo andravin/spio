@@ -20,9 +20,9 @@ namespace spio {
     public:
         DEVICE constexpr Dim() : _i(0) {}
 
-        DEVICE constexpr Dim(const Dim& other) = default;
+        constexpr Dim(const Dim& other) = default;
 
-        DEVICE constexpr Dim& operator=(const Dim& other) = default;
+        constexpr Dim& operator=(const Dim& other) = default;
 
         template <int Stride>
         DEVICE constexpr Dim(const Fold<Derived, Stride> folded_dim)
@@ -366,11 +366,17 @@ namespace spio {
             start + static_cast<dim_type>(divup(end.get() - start.get(), increment) * increment));
     }
 
-    template <typename dim_type> DEVICE constexpr auto range(dim_type end) {
+    template <typename dim_type,
+              detail::enable_if_t<
+                  detail::is_dim_like_v<dim_type> && !detail::has_tensor_type_v<dim_type>, int> = 0>
+    DEVICE constexpr auto range(dim_type end) {
         return _Range<dim_type>(end);
     }
 
-    template <typename dim_type> DEVICE constexpr auto range(dim_type start, dim_type end) {
+    template <typename dim_type,
+              detail::enable_if_t<
+                  detail::is_dim_like_v<dim_type> && !detail::has_tensor_type_v<dim_type>, int> = 0>
+    DEVICE constexpr auto range(dim_type start, dim_type end) {
         return _Range<dim_type>(start, end);
     }
 

@@ -217,15 +217,20 @@ namespace spio {
             }
         }
 
+        // Return full coordinates for given fragment index.
+        auto DEVICE constexpr coordinates(int idx = 0) const {
+            return make_coordinates(row(idx), col8(idx), col2_mod4());
+        }
+
         // Return a compound index that points to the given fragment.
         // @param idx The fragment index
         auto DEVICE constexpr fragment_coord(int idx = 0) const {
             return make_coordinates(get<RowDim>(idx), get<Fold<ColDim, 8>>(idx));
         }
 
-        // Return the coordinate that is independent of fragment index.
+        // Return the coordinates that is independent of fragment index.
         auto DEVICE constexpr base_coord() const {
-            return Module<ColDim, 4, 2>(Base::_y2m4());
+            return make_coordinates(RowDim(_x()), Module<ColDim, 4, 2>(Base::_y2m4()));
         }
 
         // Convenience methods
