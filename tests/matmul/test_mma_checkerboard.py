@@ -83,79 +83,79 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
 
     warp_n8 = config.warp_n // 8
 
-    chunk = config.chunk_k16 * 16
-    double_chunk = 2 * chunk
+    k_chunk = config.chunk_k16 * 16
+    k_double_chunk = 2 * k_chunk
 
-    tensor_a = Tensor("A", dtype.uint4, Dims(k16=k16, i=m, k8=-1), constant=True)
-    tensor_b = Tensor("B", dtype.uint4, Dims(k16=k16, j=n, k8=-1), constant=True)
-    tensor_c = Tensor("C", dtype.uint4, Dims(j16=j16, i=m, j8=-1))
+    a_global = Tensor("AGlobal", dtype.uint4, Dims(k16=k16, i=m, k8=-1), constant=True)
+    b_global = Tensor("BGlobal", dtype.uint4, Dims(k16=k16, j=n, k8=-1), constant=True)
+    c_global = Tensor("CGlobal", dtype.uint4, Dims(j16=j16, i=m, j8=-1))
 
-    smem_tensor_a = Tensor(
-        "SmemA",
+    a_smem = Tensor(
+        "ASmem",
         dtype.uint4,
         Dims(
-            chunk=2,
+            k_chunk=2,
             k16=config.chunk_k16,
             i16=block_x16,
             checkers=32,
         ),
     )
-    smem_tensor_b = Tensor(
-        "SmemB",
+    b_smem = Tensor(
+        "BSmem",
         dtype.uint4,
         Dims(
-            chunk=2,
+            k_chunk=2,
             k16=config.chunk_k16,
             j16=block_x16,
             checkers=32,
         ),
     )
-    a_tile = Tensor("A_Tile", "_A", Dims(k16=config.chunk_k16, i16=warp_m16))
-    b_tile = Tensor("B_Tile", "_B", Dims(k16=config.chunk_k16, j16=warp_n16))
-    c_tile = Tensor("C_Tile", "_C", Dims(i16=warp_m16, j16=warp_n16))
+    a_reg = Tensor("AReg", "AFragment", Dims(k16=config.chunk_k16, i16=warp_m16))
+    b_reg = Tensor("BReg", "BFragment", Dims(k16=config.chunk_k16, j16=warp_n16))
+    c_reg = Tensor("CReg", "CFragment", Dims(i16=warp_m16, j16=warp_n16))
 
     specs = [
         Fold("block_i", "i", block_x),
         Fold("block_j", "j", block_x),
         Fold("warp_i", "i", config.warp_m),
         Fold("warp_j", "j", config.warp_n),
-        Fold("chunk", "k", chunk),
-        Fold("double_chunk", "k", double_chunk),
-        tensor_a,
-        tensor_b,
-        tensor_c,
-        CompoundIndex("GlobalLoadIndex", Dims(x16=block_x16, x=-1, k8=2)),
+        Fold("k_chunk", "k", k_chunk),
+        Fold("k_double_chunk", "k", k_double_chunk),
+        a_global,
+        b_global,
+        c_global,
+        CompoundIndex("LoadGlobalIndex", Dims(x16=block_x16, x=-1, k8=2)),
         CompoundIndex("ComputeIndex", Dims(warp_i=warps_m, warp_j=warps_n, lane=32)),
-        smem_tensor_a,
-        smem_tensor_b,
+        a_smem,
+        b_smem,
         AsyncStripLoader(
-            "A_Loader",
-            smem_tensor=smem_tensor_a,
-            gmem_tensor=tensor_a,
+            "ALoader",
+            smem_tensor=a_smem,
+            gmem_tensor=a_global,
             minor_axis="k16",
             major_axis_size=block_x16,
             minor_axis_size=config.chunk_k16,
             num_warps=warps,
         ),
         AsyncStripLoader(
-            "B_Loader",
-            smem_tensor=smem_tensor_b,
-            gmem_tensor=tensor_b,
+            "BLoader",
+            smem_tensor=b_smem,
+            gmem_tensor=b_global,
             minor_axis="k16",
             major_axis_size=block_x16,
             minor_axis_size=config.chunk_k16,
             num_warps=warps,
         ),
-        Fragment("_A", FragmentType.M16_K16_F16_A, "i", "k"),
-        Fragment("_B", FragmentType.N16_K16_F16_B, "k", "j"),
-        Fragment("_C", FragmentType.M16_N16_F32_C, "i", "j"),
-        a_tile,
-        b_tile,
-        c_tile,
-        Matmul(a_tile, b_tile, c_tile, c_tile, function_name="mma"),
-        Checkerboard("Smem_Checkers", "x", "k8", "checkers"),
-        Checkerboard("SmemA_Checkers", "i", "k8", "checkers"),
-        Checkerboard("SmemB_Checkers", "j", "k8", "checkers"),
+        Fragment("AFragment", FragmentType.M16_K16_F16_A, "i", "k"),
+        Fragment("BFragment", FragmentType.N16_K16_F16_B, "k", "j"),
+        Fragment("CFragment", FragmentType.M16_N16_F32_C, "i", "j"),
+        a_reg,
+        b_reg,
+        c_reg,
+        Matmul(a_reg, b_reg, c_reg, c_reg, function_name="mma"),
+        Checkerboard("CheckerSmemIndex", "x", "k8", "checkers"),
+        Checkerboard("ACheckerSmemIndex", "i", "k8", "checkers"),
+        Checkerboard("BCheckerSmemIndex", "j", "k8", "checkers"),
         #
         # Each warp transposes its output tile through shared memory
         # and then writes it to global memory. Because there is no inter-warp
@@ -163,7 +163,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         #
         # Store outputs C to shared memory using 32-bit (2 x fp16) writes.
         Tensor(
-            "SmemCStore",
+            "CStoreSmem",
             dtype.half2,
             Dims(warp_i=warps_m, j8=block_x8, i16=warp_m16, i=-1, j2=-1),
             strides=Strides(j8=(config.warp_m + 1) * 4),
@@ -171,7 +171,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         #
         # Load outputs from shared memory using 128-bit (8 x fp16) loads.
         Tensor(
-            "SmemCLoad",
+            "CLoadSmem",
             dtype.uint4,
             Dims(warp_i=warps_m, j8=block_x8, i=config.warp_m),
             Strides(j8=(config.warp_m + 1)),
@@ -179,7 +179,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         ),
         #
         #
-        CompoundIndex("SmemCLoadIndex", Dims(i=config.warp_m, j8=warp_n8)),
+        CompoundIndex("CLoadSmemIndex", Dims(i=config.warp_m, j8=warp_n8)),
         #
         # Full unrolling of the main loop improves arithmetic utilization.
         # Empty string expands to "#pragma unroll" (full unroll).
