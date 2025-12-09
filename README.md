@@ -15,9 +15,11 @@ Spio compiles kernels just-in-time with NVRTC and launches them directly from Py
 
 ## The Typed Dimension System
 
-In high-performance GPU computing, memory layouts are rarely simple. We deal with swizzled shared memory, interleaved vector loads, and opaque tensor core fragments. Standard libraries try to manage this using positional indexing (e.g., `tensor(i, j, k)`), placing the cognitive load on the developer to track exactly which argument corresponds to which physical dimension.
+Standard tensor libraries use positional indexing like `tensor(i, j, k)` where argument order determines meaning. The programmer must track which dimensions each tensor has, which variables correspond to which dimensions, and apply this knowledge correctly at every access.
 
-Spio introduces a strongly typed, projective indexing system that decouples the logical description of your data from its physical layout. At its core, Spio uses a compound index to map a linear offset to logical dimensions, enabling complex geometries like tiling and swizzling to be handled transparently.
+This reflects an incomplete abstraction: the system knows tensor shapes but not the identity of dimensions or their relationships across tensors. That missing information must be reasserted by the programmer continuously.
+
+Spio introduces a strongly typed indexing system that describes dimensions consistently across their use in multiple tensors. Dimension types carry compile-time semantics, enabling dimension operators to do the right thing automatically, relieving the programmer from tedious bookkeeping.
 
 Spio implements typed dimensions in a header-only, CUDA-aware C++ library using template metaprogramming. In the following examples, the comment blocks marked with the `@spio` tag instruct Spio's code generator to pre-include header files that define the requested dimension, tensor, and compound index classes.
 
@@ -291,7 +293,7 @@ UTEST(Lesson4, DimensionalProjection) {
 
 ### 5\. Compound Index
 
-Spio uses a Compound index to fold a linear offset into multiple dimensions. A common use case is folding CUDA `blockIdx` and `threadIdx` into logical tensor coordinates.
+Spio uses a compound index to fold a linear offset into multiple dimensions. A common use case is folding CUDA `blockIdx` and `threadIdx` into logical tensor coordinates.
 
 **File:** [05\_compound\_index.cpp](spio/src_tests/tutorial/05_compound_index.cpp)
 
@@ -354,15 +356,15 @@ This example demonstrates how dimensional projection manages the complexity of m
 
 ## Additional Features
 
-### ⚡ Just-in-Time Kernel Generation
+### Just-in-Time Kernel Generation
 
 Spio compiles kernels at runtime with NVIDIA’s NVRTC (libnvrtc) and uses a trained performance model to select the fastest kernel configuration for your GPU and workload. No CUDA toolkit install is needed because Spio relies on the CUDA headers and NVRTC shared libraries that NVIDIA distributes as Python packages (the same infrastructure PyTorch depends on). Spio launches kernels directly through the CUDA driver API, so no C/C++ launcher wrappers are required.
 
-### 🎯 Performance Models
+### Performance Models
 
-Machine learning models predict optimal kernel configurations based on layer parameters and hardware characteristics. This eliminates expensive auto-tuning while achieving better performance than heuristic-based approaches.
+For each kernel and GPU architecture, Spio trains an XGBoost model to predict execution latency from layer parameters and kernel configuration. At runtime, these predictions guide configuration selection, eliminating expensive auto-tuning.
 
-### 🚀 PyTorch Integration
+### PyTorch Integration
 
 Seamless integration with PyTorch through custom operators and `torch.compile` support.
 
