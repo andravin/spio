@@ -7,10 +7,49 @@
 #include "spio/fragment_index.h"
 #include "spio/fragment_load_index.h"
 #include "spio/ldmatrix.cuh"
+#include "spio/tensor.h"
 
 namespace spio {
+
+    /// @brief CRTP mixin that provides tensor-like access for fragment classes.
+    /// Derived classes must define `tensor_type` and provide `data()` method.
+    template <typename Derived> class FragmentTensorAccess {
+    public:
+        __device__ auto as_tensor() {
+            using tensor_type = typename Derived::tensor_type;
+            return tensor_type(static_cast<Derived*>(this)->data());
+        }
+
+        __device__ auto as_tensor() const {
+            using tensor_type = typename Derived::tensor_type;
+            using data_type = typename tensor_type::data_type;
+            return tensor_type(const_cast<data_type*>(static_cast<const Derived*>(this)->data()));
+        }
+
+        // Subscript operators forwarding to tensor
+        template <typename DimType> __device__ auto operator[](DimType idx) {
+            return as_tensor()[idx];
+        }
+
+        template <typename DimType> __device__ auto operator[](DimType idx) const {
+            return as_tensor()[idx];
+        }
+
+        // Subscript with Coordinates
+        template <typename... Dims> __device__ auto operator[](const Coordinates<Dims...>& coords) {
+            return as_tensor()[coords];
+        }
+
+        template <typename... Dims>
+        __device__ auto operator[](const Coordinates<Dims...>& coords) const {
+            return as_tensor()[coords];
+        }
+    };
+
     template <int NUM_FRAGMENTS, typename T> class alignas(8) _MMA {
     public:
+        using data_type = T;
+
         __device__ static constexpr int size() {
             return NUM_FRAGMENTS;
         }
@@ -158,6 +197,8 @@ namespace spio {
     class _MMA_M16_N8_F16_A : public _MMA_F16<2 * _NUM_FRAGMENTS_K> {
     public:
         using compound_index_type = MMA_A_88_F16_Index<RowDim, ColDim>;
+        using Base = _MMA_F16<2 * _NUM_FRAGMENTS_K>;
+        using typename Base::data_type;
 
         using row_dim = RowDim;
         using col_dim = ColDim;
@@ -169,29 +210,44 @@ namespace spio {
     class _MMA_M16_N8_F16_B : public _MMA_F16<_NUM_FRAGMENTS_K> {
     public:
         using compound_index_type = MMA_B_88_F16_Index<RowDim, ColDim>;
+        using Base = _MMA_F16<_NUM_FRAGMENTS_K>;
+        using typename Base::data_type;
+
+        using row_dim = RowDim;
+        using col_dim = ColDim;
     };
 
     /// @brief  C or D matrix with float32 elements for M16_N8_K* matrix multiplication with float32
     /// accumulation.
     /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
-    template <typename RowDim, typename ColDim> class MMA_M16_N8_F32_C : public _MMA_F32<2> {
+    template <typename RowDim, typename ColDim>
+    class MMA_M16_N8_F32_C : public _MMA_F32<2>,
+                             public FragmentTensorAccess<MMA_M16_N8_F32_C<RowDim, ColDim>> {
     public:
         using compound_index_type = MMA_C_88_F32_Index<RowDim, ColDim>;
         using row_dim = RowDim;
         using col_dim = ColDim;
         using Base = _MMA_F32<2>;
-        using Base::data;
-        using Base::fragment;
+        using Base::data_type;
+
+        // Tensor type: 2x1 fragments, column-major (row varies fastest)
+        using tensor_type =
+            Tensor<data_type, DimInfo<Fold<ColDim, 8>, 1, 2>, DimInfo<Fold<RowDim, 8>, 2, 1>>;
     };
 
-    template <typename RowDim, typename ColDim> class MMA_M16_N16_F32_C : public _MMA_F32<4> {
+    template <typename RowDim, typename ColDim>
+    class MMA_M16_N16_F32_C : public _MMA_F32<4>,
+                              public FragmentTensorAccess<MMA_M16_N16_F32_C<RowDim, ColDim>> {
     public:
         using compound_index_type = MMA_C_88_F32_Index<RowDim, ColDim>;
         using row_dim = RowDim;
         using col_dim = ColDim;
         using Base = _MMA_F32<4>;
-        using Base::data;
-        using Base::fragment;
+        using Base::data_type;
+
+        // Tensor type: 2x2 fragments, column-major (row varies fastest)
+        using tensor_type =
+            Tensor<data_type, DimInfo<Fold<ColDim, 8>, 2, 2>, DimInfo<Fold<RowDim, 8>, 2, 1>>;
     };
 
     /// @brief  Mixin class for loading fragments from memory.
@@ -220,12 +276,19 @@ namespace spio {
     /// @brief A matrix with float16 elements for M16_N8_K8 matrix multiplication.
     template <typename RowDim, typename ColDim>
     class MMA_M16_K8_F16_A : public _MMA_M16_N8_F16_A<RowDim, ColDim, 1>,
-                             public FragmentLoader<MMA_M16_K8_F16_A<RowDim, ColDim>> {
+                             public FragmentLoader<MMA_M16_K8_F16_A<RowDim, ColDim>>,
+                             public FragmentTensorAccess<MMA_M16_K8_F16_A<RowDim, ColDim>> {
     public:
         using Vector = uint2;
         using LoadIndex = MMA_A_M16_K8_F16_LoadIndex<RowDim, ColDim>;
         using Base = _MMA_M16_N8_F16_A<RowDim, ColDim, 1>;
         using Base::data;
+        using typename Base::data_type;
+
+        // Tensor type: 2x1 fragments (16 rows × 8 cols), column-major (row varies fastest)
+        using tensor_type =
+            Tensor<data_type, DimInfo<Fold<ColDim, 8>, 1, 2>, DimInfo<Fold<RowDim, 8>, 2, 1>>;
+
         MMA_M16_K8_F16_A() = default;
 
         __device__ Vector& vector() {
@@ -252,12 +315,19 @@ namespace spio {
     /// @brief A matrix with float16 elements for M16_N8_K16 matrix multiplication.
     template <typename RowDim, typename ColDim>
     class MMA_M16_K16_F16_A : public _MMA_M16_N8_F16_A<RowDim, ColDim, 2>,
-                              public FragmentLoader<MMA_M16_K16_F16_A<RowDim, ColDim>> {
+                              public FragmentLoader<MMA_M16_K16_F16_A<RowDim, ColDim>>,
+                              public FragmentTensorAccess<MMA_M16_K16_F16_A<RowDim, ColDim>> {
     public:
         using Vector = uint4;
         using LoadIndex = MMA_A_M16_K16_F16_LoadIndex<RowDim, ColDim>;
         using Base = _MMA_M16_N8_F16_A<RowDim, ColDim, 2>;
         using Base::data;
+        using typename Base::data_type;
+
+        // Tensor type: 2x2 fragments (16 rows × 16 cols), column-major (row varies fastest)
+        using tensor_type =
+            Tensor<data_type, DimInfo<Fold<ColDim, 8>, 2, 2>, DimInfo<Fold<RowDim, 8>, 2, 1>>;
+
         MMA_M16_K16_F16_A() = default;
 
         __device__ Vector& vector() {
@@ -283,12 +353,19 @@ namespace spio {
 
     template <typename RowDim, typename ColDim>
     class MMA_N8_K8_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 1>,
-                            public FragmentLoader<MMA_N8_K8_F16_B<RowDim, ColDim>> {
+                            public FragmentLoader<MMA_N8_K8_F16_B<RowDim, ColDim>>,
+                            public FragmentTensorAccess<MMA_N8_K8_F16_B<RowDim, ColDim>> {
     public:
         using Vector = unsigned;
         using LoadIndex = MMA_B_N8_K8_F16_LoadIndex<RowDim, ColDim>;
         using Base = _MMA_M16_N8_F16_B<RowDim, ColDim, 1>;
         using Base::data;
+        using typename Base::data_type;
+
+        // Tensor type: 1x1 fragment (8 cols × 8 rows)
+        using tensor_type =
+            Tensor<data_type, DimInfo<Fold<ColDim, 8>, 1, 1>, DimInfo<Fold<RowDim, 8>, 1, 1>>;
+
         MMA_N8_K8_F16_B() = default;
 
         __device__ Vector& vector() {
@@ -316,12 +393,20 @@ namespace spio {
     /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
     template <typename RowDim, typename ColDim>
     class MMA_N8_K16_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 2>,
-                             public FragmentLoader<MMA_N8_K16_F16_B<RowDim, ColDim>> {
+                             public FragmentLoader<MMA_N8_K16_F16_B<RowDim, ColDim>>,
+                             public FragmentTensorAccess<MMA_N8_K16_F16_B<RowDim, ColDim>> {
     public:
         using Vector = uint2;
         using LoadIndex = MMA_B_N16_K16_F16_LoadIndex<RowDim, ColDim>;
         using Base = _MMA_M16_N8_F16_B<RowDim, ColDim, 2>;
         using Base::data;
+        using typename Base::data_type;
+
+        // Tensor type: 1x2 fragments (8 cols × 16 rows), column-major (K/row varies fastest)
+        using tensor_type =
+            Tensor<data_type, DimInfo<Fold<ColDim, 8>, 1, 2>, DimInfo<Fold<RowDim, 8>, 2, 1>>;
+
+        MMA_N8_K16_F16_B() = default;
 
         __device__ Vector& vector() {
             return *reinterpret_cast<Vector*>(data());
@@ -342,12 +427,19 @@ namespace spio {
 
     template <typename RowDim, typename ColDim>
     class MMA_N16_K16_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 4>,
-                              public FragmentLoader<MMA_N16_K16_F16_B<RowDim, ColDim>> {
+                              public FragmentLoader<MMA_N16_K16_F16_B<RowDim, ColDim>>,
+                              public FragmentTensorAccess<MMA_N16_K16_F16_B<RowDim, ColDim>> {
     public:
         using Vector = uint4;
         using LoadIndex = MMA_B_N16_K16_F16_LoadIndex<RowDim, ColDim>;
         using Base = _MMA_M16_N8_F16_B<RowDim, ColDim, 4>;
         using Base::data;
+        using typename Base::data_type;
+
+        // Tensor type: 2x2 fragments (16 cols × 16 rows), column-major (K/row varies fastest)
+        using tensor_type =
+            Tensor<data_type, DimInfo<Fold<ColDim, 8>, 2, 2>, DimInfo<Fold<RowDim, 8>, 2, 1>>;
+
         MMA_N16_K16_F16_B() = default;
 
         __device__ Vector& vector() {

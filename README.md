@@ -216,7 +216,7 @@ Spio accumulates subscripts in logical coordinates before folding, so repeated s
 
 ```cpp
 // K(4) + K(4) == K8(1)
-EXPECT_TRUE(*a[i][K(4)][K(4)] == *a[i][K(8)]);
+EXPECT_TRUE(*a[i][K(4)][K(4)] == *a[i][K8(1)]);
 
 // K(7) + K(5) = K(12) == K8(1) + K(4)
 EXPECT_TRUE(*a[i][K(7)][K(5)] == *a[i][K8(1)][K(4)]);
@@ -311,8 +311,8 @@ UTEST(Lesson5, CompoundIndex) {
     auto a = A(a_data);
 
     // Check the size of the compound indices.
-    EXPECT_EQ(BlockIndex::size(), 32 * 32);
-    EXPECT_EQ(ThreadIndex::size(), 16 * 16);
+    EXPECT_TRUE(BlockIndex::size() == 32 * 32);
+    EXPECT_TRUE(ThreadIndex::size() == 16 * 16);
 
     // Simulate thread-blocks and threads.
     for (int blockIdx = 0; blockIdx < BlockIndex::size(); ++blockIdx) {
@@ -337,7 +337,7 @@ UTEST(Lesson5, CompoundIndex) {
             auto offset = (block_i16 * 16 + thread_i) * 512 + block_j16 * 16 + thread_j;
 
             // Check that these two methods are equivalent.
-            EXPECT_EQ(*b, a_data[offset]);
+            EXPECT_TRUE(*b == a_data[offset]);
         }
     }
 }

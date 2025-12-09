@@ -140,11 +140,12 @@ extern "C" {
 
         // Transfer outputs from registers to shared memory, converting from float32 to float16.
         auto c_idx = C_Tile::data_type::compound_index_type(compute_idx);
-        auto smem_c_base = smem_c[compute_idx][c_idx.base_coord()].rebase();
-        for (int f = 0; f < C_Tile::data_type::size(); ++f) {
-            auto smem_c_fragment = smem_c_base[c_idx.fragment_coord(f)].rebase();
-            for (auto coord : range(c_tile)) {
-                *smem_c_fragment[coord] = c_tile[coord]->to_half2(f);
+        auto smem_c_base = smem_c[compute_idx][c_idx].rebase();
+        for (auto coord : range(c_tile)) {
+            auto c_fragments = *c_tile[coord];
+            auto smem_c_coord = smem_c_base[coord];
+            for (auto frag_coord : range(c_fragments)) {
+                *smem_c_coord[frag_coord] = __float22half2_rn(*c_fragments[frag_coord]);
             }
         }
 

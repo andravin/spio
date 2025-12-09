@@ -311,6 +311,18 @@ namespace spio {
             is_same<get_base_dim_type_t<T>, get_base_dim_type_t<U>>::value;
 
         // ========================================================================
+        // Detection for tensor_type member
+        // ========================================================================
+
+        // Check if a type has a tensor_type member alias
+        template <typename T, typename = void> struct has_tensor_type : false_type {};
+
+        template <typename T>
+        struct has_tensor_type<T, void_t<typename T::tensor_type>> : true_type {};
+
+        template <typename T> inline constexpr bool has_tensor_type_v = has_tensor_type<T>::value;
+
+        // ========================================================================
         // Tuple operations for dimension types
         // ========================================================================
 
