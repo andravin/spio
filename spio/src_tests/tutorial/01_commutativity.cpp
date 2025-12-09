@@ -11,8 +11,8 @@ Dim("i"), Dim("j")
 UTEST(Lesson1, TypeSafety) {
 
     // Dimensions work like integers.
-    EXPECT_EQ(I(2) + I(4), I(6));
-    EXPECT_LT(I(8), I(10));
+    EXPECT_TRUE(I(2) + I(4) == I(6));
+    EXPECT_TRUE(I(8) < I(10));
 
     // Each dimension is a different CUDA / C++ type.
     static_assert(!std::is_same_v<I, J>, "I and J are different types");
@@ -49,10 +49,10 @@ UTEST(Lesson1, Commutativity) {
     auto b = B(b_data);
 
     // Verify matrix sizes.
-    EXPECT_EQ(A::size<I>(), I(16));
-    EXPECT_EQ(A::size<K>(), K(32));
-    EXPECT_EQ(B::size<K>(), K(32));
-    EXPECT_EQ(B::size<J>(), J(64));
+    EXPECT_TRUE(A::size<I>() == I(16));
+    EXPECT_TRUE(A::size<K>() == K(32));
+    EXPECT_TRUE(B::size<K>() == K(32));
+    EXPECT_TRUE(B::size<J>() == J(64));
 
     // Define coordinates.
     auto i = I(2);
@@ -61,12 +61,12 @@ UTEST(Lesson1, Commutativity) {
 
     // Position-free subscripting:
     // Subscript order does not affect the result.
-    EXPECT_EQ(a[i][k].get(), a[k][i].get());
-    EXPECT_EQ(b[k][j].get(), b[j][k].get());
+    EXPECT_TRUE(a[i][k].get() == a[k][i].get());
+    EXPECT_TRUE(b[k][j].get() == b[j][k].get());
 
     // Dimensional projection:
     // Coordinates project onto the tensor's supported dimensions.
     auto coords = make_coordinates(i, j, k);
-    EXPECT_EQ(a[coords].get(), a[k][i].get());
-    EXPECT_EQ(b[coords].get(), b[j][k].get());
+    EXPECT_TRUE(a[coords].get() == a[k][i].get());
+    EXPECT_TRUE(b[coords].get() == b[j][k].get());
 }

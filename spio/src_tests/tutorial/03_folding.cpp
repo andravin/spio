@@ -18,8 +18,8 @@ UTEST(Lesson3, Folding) {
     // Folded dimension K8 is dimension K folded by stride 8.
 
     // Dimensions are compatible with their folds:
-    EXPECT_EQ(K8(3), K(3 * 8));
-    EXPECT_EQ(K8(3) + K(4), K(3 * 8 + 4));
+    EXPECT_TRUE(K8(3) == K(3 * 8));
+    EXPECT_TRUE(K8(3) + K(4) == K(3 * 8 + 4));
 
     // Use constant I ..
     auto i = I(2);
@@ -39,7 +39,7 @@ UTEST(Lesson3, Folding) {
         auto km8 = K(k.get() % 8);
         auto c = a[i][k8][km8];
 
-        EXPECT_EQ(b.get(), c.get());
+        EXPECT_TRUE(b.get() == c.get());
     }
 }
 
@@ -59,24 +59,24 @@ UTEST(Lesson3, CrossFoldCarry) {
     // This means repeated subscripts are equivalent to their sum.
 
     // Example: K(4) + K(4) = K(4 + 4), which carries into K8.
-    EXPECT_EQ(*a[i][K(4)][K(4)], *a[i][K(4 + 4)]);
+    EXPECT_TRUE(*a[i][K(4)][K(4)] == *a[i][K(4 + 4)]);
 
     // More generally, a[e][f][g] == a[e + f + g] for any dimension values.
     for (int e = 0; e < 8; ++e) {
         for (int f = 0; f < 8; ++f) {
             // Subscripting separately should equal subscripting with the sum.
-            EXPECT_EQ(*a[i][K(e)][K(f)], *a[i][K(e + f)]);
+            EXPECT_TRUE(*a[i][K(e)][K(f)] == *a[i][K(e + f)]);
         }
     }
 
     // This also works when the sum crosses fold boundaries.
     // K(7) + K(5) = K(12) = K8(1) + K(4)
-    EXPECT_EQ(*a[i][K(7)][K(5)], *a[i][K(7 + 5)]);
-    EXPECT_EQ(*a[i][K(7)][K(5)], *a[i][K8(1)][K(4)]);
+    EXPECT_TRUE(*a[i][K(7)][K(5)] == *a[i][K(7 + 5)]);
+    EXPECT_TRUE(*a[i][K(7)][K(5)] == *a[i][K8(1)][K(4)]);
 
     // And with cursor stepping:
     auto cursor = a[i];
     cursor.step(K(7));
     cursor.step(K(5));
-    EXPECT_EQ(*cursor, *a[i][K8(1)][K(4)]);
+    EXPECT_TRUE(*cursor == *a[i][K8(1)][K(4)]);
 }
