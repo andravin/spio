@@ -51,8 +51,8 @@ extern "C" {
         auto compute_idx = ComputeIndex(threadIdx.x);
 
         // Construct cursors for loading A and B from shared memory into tensor core fragments.
-        auto a_load_idx = AReg::data_type::LoadIndex(compute_idx);
-        auto b_load_idx = BReg::data_type::LoadIndex(compute_idx);
+        auto a_load_idx = AReg::data_type::load_index_type(compute_idx);
+        auto b_load_idx = BReg::data_type::load_index_type(compute_idx);
         auto a_swizzle_load_smem_idx = ASwizzleLoadSmemIndex(a_load_idx);
         auto b_swizzle_load_smem_idx = BSwizzleLoadSmemIndex(b_load_idx);
         auto a_load_smem = ASmem(a_smem)[compute_idx][a_swizzle_load_smem_idx].rebase();
@@ -60,8 +60,8 @@ extern "C" {
 
         // Initialize the accumulators.
         CReg::data_type c_data[CReg::storage_size()];
-        auto c_tile = CReg(c_data);
-        c_tile.zero();
+        auto c_reg = CReg(c_data);
+        c_reg.zero();
 
         // Construct the global memory loaders for A and B. Set the valid mask.
         auto a_loader = ALoader(block_idx + a_global_load_idx < AGlobal::extents());
@@ -72,8 +72,8 @@ extern "C" {
         BReg::data_type b_data[BReg::storage_size()];
 
         // Construct tensors for the A and B tiles.
-        auto a_tile = AReg(a_data);
-        auto b_tile = BReg(b_data);
+        auto a_reg = AReg(a_data);
+        auto b_reg = BReg(b_data);
 
         constexpr auto step = AReg::extent<K16>();
         constexpr auto size = AGlobal::extent<K>();
@@ -114,12 +114,12 @@ extern "C" {
                 __syncthreads();
 
                 // Load matrix tiles from shared memory into registers.
-                a_tile.load(a_load_smem[k_chunk]);
-                b_tile.load(b_load_smem[k_chunk]);
+                a_reg.load(a_load_smem[k_chunk]);
+                b_reg.load(b_load_smem[k_chunk]);
 
                 // Matrix-multiply the tiles using Tensor Cores.
                 // Compile-time type checking ensures the compatibility of the tile dimensions.
-                mma(a_tile, b_tile, c_tile, c_tile);
+                mma(a_reg, b_reg, c_reg, c_reg);
                 __syncthreads();
             }
         }
@@ -127,9 +127,9 @@ extern "C" {
 
         // Final computation for any leftover iteration.
         if constexpr (K_DOUBLE_CHUNK(size) < size) {
-            a_tile.load(a_load_smem);
-            b_tile.load(b_load_smem);
-            mma(a_tile, b_tile, c_tile, c_tile);
+            a_reg.load(a_load_smem);
+            b_reg.load(b_load_smem);
+            mma(a_reg, b_reg, c_reg, c_reg);
             __syncthreads();
         }
 
@@ -141,8 +141,8 @@ extern "C" {
         // Transfer outputs from registers to shared memory, converting from float32 to float16.
         auto c_idx = CReg::data_type::compound_index_type(compute_idx);
         auto c_store_smem = c_smem[compute_idx][c_idx].rebase();
-        for (auto e : range(c_tile)) {
-            auto c_fragments = *c_tile[e];
+        for (auto e : range(c_reg)) {
+            auto c_fragments = *c_reg[e];
             auto c_coord_store_smem = c_store_smem[e];
             for (auto f : range(c_fragments)) {
                 *c_coord_store_smem[f] = __float22half2_rn(*c_fragments[f]);
@@ -155,8 +155,8 @@ extern "C" {
         auto c_load_smem =
             CLoadSmem(reinterpret_cast<const uint4*>(c_smem.get()))[compute_idx].rebase();
         auto world_idx = block_idx + compute_idx;
-        for (auto idx : CLoadSmemIndex::partition<LANE>(compute_idx)) {
-            if (world_idx + idx < CGlobal::extents()) { *c_global[idx] = *c_load_smem[idx]; }
+        for (auto p : CLoadSmemIndex::partition<LANE>(compute_idx)) {
+            if (world_idx + p < CGlobal::extents()) { *c_global[p] = *c_load_smem[p]; }
         }
     }
 }
