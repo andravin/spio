@@ -21,7 +21,9 @@ This reflects an incomplete abstraction: the system knows tensor shapes but not 
 
 Spio introduces a strongly typed indexing system that describes dimensions consistently across their use in multiple tensors. Dimension types carry compile-time semantics, enabling dimension operators to do the right thing automatically, relieving the programmer from tedious bookkeeping.
 
-Spio implements typed dimensions in a header-only, CUDA-aware C++ library using template metaprogramming. In the following examples, the comment blocks marked with the `@spio` tag instruct Spio's code generator to pre-include header files that define the requested dimension, tensor, and compound index classes.
+Spio implements typed dimensions in a header-only, CUDA-aware C++ library using template metaprogramming. The abstractions resolve at compile time; in most cases, the generated code matches hand-written kernels.
+
+In the following examples, the comment blocks marked with the `@spio` tag instruct Spio's code generator to pre-include header files that define the requested dimension, tensor, and compound index classes.
 
 ### 1\. Safety and Commutativity
 
@@ -353,6 +355,10 @@ For a full example of a high-performance matrix multiply kernel using typed dime
 - Python Generators: [test_mma_checkerboard.py](tests/matmul/test_mma_checkerboard.py)
 
 This example demonstrates how dimensional projection manages the complexity of mapping global memory, shared memory tiles, and register matrix fragments within a single kernel.
+
+### Limitations
+
+Tensor dimensions are compile-time constants. This suits workloads with fixed shapes (e.g., vision systems deploying at known resolutions). Runtime-sized dimensions are not yet supported.
 
 ## Additional Features
 
