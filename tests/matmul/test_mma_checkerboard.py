@@ -97,7 +97,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
             k_chunk=2,
             k16=config.chunk_k16,
             i16=block_x16,
-            checkers=32,
+            swizzle=32,
         ),
     )
     b_smem = Tensor(
@@ -107,7 +107,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
             k_chunk=2,
             k16=config.chunk_k16,
             j16=block_x16,
-            checkers=32,
+            swizzle=32,
         ),
     )
     a_reg = Tensor("AReg", "AFragment", Dims(k16=config.chunk_k16, i16=warp_m16))
@@ -153,9 +153,9 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         b_reg,
         c_reg,
         Matmul(a_reg, b_reg, c_reg, c_reg, function_name="mma"),
-        Checkerboard("CheckerSmemIndex", "x", "k8", "checkers"),
-        Checkerboard("ACheckerSmemIndex", "i", "k8", "checkers"),
-        Checkerboard("BCheckerSmemIndex", "j", "k8", "checkers"),
+        Checkerboard("SwizzleStoreSmemIndex", "x", "k8", "swizzle"),
+        Checkerboard("ASwizzleLoadSmemIndex", "i", "k8", "swizzle"),
+        Checkerboard("BSwizzleLoadSmemIndex", "j", "k8", "swizzle"),
         #
         # Each warp transposes its output tile through shared memory
         # and then writes it to global memory. Because there is no inter-warp
