@@ -10,6 +10,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## **[0.6.0] — 2025-12-09**
+
+### **Compound index projection, deferred folding, and documentation improvements**
+
+This release enhances the compound index system with projection capabilities,
+fixes a fundamental issue with cross-fold carry in Cursor, adds automatic fold
+size inference, and substantially improves documentation.
+
+#### Added
+
+* Builtin `LANE` and `OFFSET` dimensions for compound index projection.
+* `partition()` static method on `CompoundIndex` for cooperative iteration.
+* Constructors for `CompoundIndex` from `Coordinates` and compatible dimensions.
+* Automatic fold size inference: use `-1` in `Dims()` to derive size from fold ratios.
+* Tensor-like access for fragment classes: `as_tensor()`, subscript operators, `range()` iteration.
+* `Tensor::extent()` and `Tensor::extents()` methods for hierarchical bounds checking.
+* Compound index tutorial (lesson 5).
+* Stride validation: dimension names in `Strides()` must match tensor dimensions.
+
+#### Changed
+
+* `Cursor` now uses `Coordinates` internally instead of an integer offset.
+  This enables correct cross-fold carry: `a[e][f][g] == a[e + f + g]`.
+* Renamed `Tensor::sizes()` to `Tensor::extents()`.
+* Renamed fragment `CompoundIndex` type to `compound_index_type`.
+* Standardized naming conventions in the matrix multiply example.
+* Replaced "checkers" terminology with "swizzle" in matmul example.
+
+#### Fixed
+
+* Wrong stride dimension name in `conv2d_gw8_wgrad` kernel caused shared memory
+  bank conflicts in some configurations.
+
+#### Documentation
+
+* Rewrote introduction to The Typed Dimension System section.
+* Added efficiency note: abstractions resolve at compile time with no runtime overhead.
+* Added Limitations section: tensor dimensions are compile-time constants.
+* Improved Performance Models section with concrete XGBoost details.
+* Added compound index tutorial to README.
+
+### Performance Models
+
+* No changes to convolution kernels.
+* Performance model archives from 0.5.0 are fully compatible.
+
+---
+
 ## **[0.5.0] – 2025-12-04**
 
 ### **Major expansion of the Typed Dimensions & projection system**
