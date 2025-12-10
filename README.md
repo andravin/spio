@@ -451,13 +451,16 @@ Spio will likely find your CUDA toolkit installation automatically. To specify i
 
 The Spio runtime does not need a host C/C++ compiler or the CUDA developer toolkit. You can use Spio operations with PyTorch on a production system that does not have these.
 
-However, torch.compile (Inductor/Triton) does, and missing pieces cause errors like "nvrtc: file not found", "unable to compile C wrapper", "LLVM: external toolchain not found", or "codegen failed in Inductor". These originate from PyTorch/Triton rather than Spio.
+However, torch.compile (Inductor/Triton) does. Without a C compiler installed, torch.compile will produce the error
+
+```text
+torch._inductor.exc.InductorError: RuntimeError: Failed to find C compiler. Please specify via CC environment variable or set triton.knobs.build.impl.
+```
 
 If you intend to use torch.compile, ensure your production environment provides:
 
 - GCC or Clang (or a compatible toolchain)
 - CUDA driver development files (e.g., libcuda.so symlink or stubs)
-- Optional: CUDA toolkit runtime libraries (libnvrtc.so, libnvjitlink.so, CUDA stubs) when GPU compilation paths require them
 
 These commands will add the requirements for torch.compile on an Ubuntu system:
 
