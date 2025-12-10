@@ -50,8 +50,8 @@ extern "C" {
         auto compute_idx = ComputeIndex(threadIdx.x);
 
         // Construct cursors for loading A and B from shared memory into tensor core fragments.
-        auto a_reg_idx = AReg::data_type::load_index_type(compute_idx);
-        auto b_reg_idx = BReg::data_type::load_index_type(compute_idx);
+        auto a_reg_idx = AFragment::load_index_type(compute_idx);
+        auto b_reg_idx = BFragment::load_index_type(compute_idx);
         auto a_load_smem = ASmem(a_smem)[compute_idx][ASwizzle(a_reg_idx)].rebase();
         auto b_load_smem = BSmem(b_smem)[compute_idx][BSwizzle(b_reg_idx)].rebase();
 
@@ -140,9 +140,8 @@ extern "C" {
         auto c_store_smem = c_smem[compute_idx][c_idx].rebase();
         for (auto e : range(c_reg)) {
             auto c_fragments = *c_reg[e];
-            auto c_coord_store_smem = c_store_smem[e];
             for (auto f : range(c_fragments)) {
-                *c_coord_store_smem[f] = __float22half2_rn(*c_fragments[f]);
+                *c_store_smem[e][f] = __float22half2_rn(*c_fragments[f]);
             }
         }
 
