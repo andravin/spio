@@ -43,9 +43,9 @@ extern "C" {
         auto b_global = BGlobal(b_ptr)[block_idx][b_global_load_idx].rebase();
 
         // Construct cursors for storing A and B to shared memory.
-        auto checker_smem_idx = CheckerSmemIndex(global_load_idx);
-        auto a_store_smem = ASmem(a_smem)[a_global_load_idx][checker_smem_idx].rebase();
-        auto b_store_smem = BSmem(b_smem)[b_global_load_idx][checker_smem_idx].rebase();
+        auto swizzle_store_smem_idx = SwizzleStoreSmemIndex(global_load_idx);
+        auto a_store_smem = ASmem(a_smem)[a_global_load_idx][swizzle_store_smem_idx].rebase();
+        auto b_store_smem = BSmem(b_smem)[b_global_load_idx][swizzle_store_smem_idx].rebase();
 
         // Get the coordinates of the output tile this thread will compute.
         auto compute_idx = ComputeIndex(threadIdx.x);
@@ -53,10 +53,10 @@ extern "C" {
         // Construct cursors for loading A and B from shared memory into tensor core fragments.
         auto a_load_idx = AReg::data_type::LoadIndex(compute_idx);
         auto b_load_idx = BReg::data_type::LoadIndex(compute_idx);
-        auto a_checker_smem_idx = ACheckerSmemIndex(a_load_idx);
-        auto b_checker_smem_idx = BCheckerSmemIndex(b_load_idx);
-        auto a_load_smem = ASmem(a_smem)[compute_idx][a_checker_smem_idx].rebase();
-        auto b_load_smem = BSmem(b_smem)[compute_idx][b_checker_smem_idx].rebase();
+        auto a_swizzle_load_smem_idx = ASwizzleLoadSmemIndex(a_load_idx);
+        auto b_swizzle_load_smem_idx = BSwizzleLoadSmemIndex(b_load_idx);
+        auto a_load_smem = ASmem(a_smem)[compute_idx][a_swizzle_load_smem_idx].rebase();
+        auto b_load_smem = BSmem(b_smem)[compute_idx][b_swizzle_load_smem_idx].rebase();
 
         // Initialize the accumulators.
         CReg::data_type c_data[CReg::storage_size()];
@@ -141,11 +141,11 @@ extern "C" {
         // Transfer outputs from registers to shared memory, converting from float32 to float16.
         auto c_idx = CReg::data_type::compound_index_type(compute_idx);
         auto c_store_smem = c_smem[compute_idx][c_idx].rebase();
-        for (auto coord : range(c_tile)) {
-            auto c_fragments = *c_tile[coord];
-            auto c_coord_store_smem = c_store_smem[coord];
-            for (auto frag_coord : range(c_fragments)) {
-                *c_coord_store_smem[frag_coord] = __float22half2_rn(*c_fragments[frag_coord]);
+        for (auto e : range(c_tile)) {
+            auto c_fragments = *c_tile[e];
+            auto c_coord_store_smem = c_store_smem[e];
+            for (auto f : range(c_fragments)) {
+                *c_coord_store_smem[f] = __float22half2_rn(*c_fragments[f]);
             }
         }
 
