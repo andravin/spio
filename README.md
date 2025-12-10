@@ -422,7 +422,8 @@ Notes:
 To install Spio from source, first ensure your system has a C compiler. On Ubuntu:
 
 ```bash
-sudo apt update && sudo apt install -y build-essential
+sudo apt update
+sudo apt install -y build-essential
 ```
 
 Then clone the Spio repository and install the package in editable mode:
