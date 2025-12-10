@@ -167,7 +167,7 @@ UTEST(Lesson2, AccumulationLoop) {
 
 ### 3\. Folded Dimensions
 
-The generator `Dims(k8=4, i=4, k=8)` creates a tensor with physical layout $K_8(4) \times I(4) \times K(8)$. Here, $K_8$ and $K$ together address the full logical range $K(0) \ldots K(31)$: $K_8$ selects which chunk of 8 (the quotient), and $K$ selects within that chunk (the remainder). This decomposition enables interleaved and vectorized memory layouts while letting you write loops over the logical dimension $K$.
+The generator `Dims(k8=4, i=4, k=-1)` creates a tensor with physical layout $K_8(4) \times I(4) \times K(8)$. Here, $K_8$ and $K$ together address the full logical range $K(0) \ldots K(31)$: $K_8$ selects which chunk of 8 (the quotient), and $K$ selects within that chunk (the remainder). This decomposition enables interleaved and vectorized memory layouts while letting you write loops over the logical dimension $K$.
 
 **File:** [03\_folding.cpp](spio/src_tests/tutorial/03_folding.cpp)
 

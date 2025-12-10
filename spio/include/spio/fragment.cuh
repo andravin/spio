@@ -279,8 +279,8 @@ namespace spio {
                              public FragmentLoader<MMA_M16_K8_F16_A<RowDim, ColDim>>,
                              public FragmentTensorAccess<MMA_M16_K8_F16_A<RowDim, ColDim>> {
     public:
-        using Vector = uint2;
-        using LoadIndex = MMA_A_M16_K8_F16_LoadIndex<RowDim, ColDim>;
+        using vector_type = uint2;
+        using load_index_type = MMA_A_M16_K8_F16_LoadIndex<RowDim, ColDim>;
         using Base = _MMA_M16_N8_F16_A<RowDim, ColDim, 1>;
         using Base::data;
         using typename Base::data_type;
@@ -291,15 +291,15 @@ namespace spio {
 
         MMA_M16_K8_F16_A() = default;
 
-        __device__ Vector& vector() {
-            return *reinterpret_cast<Vector*>(data());
+        __device__ vector_type& vector() {
+            return *reinterpret_cast<vector_type*>(data());
         }
 
-        __device__ const Vector& vector() const {
-            return *reinterpret_cast<const Vector*>(data());
+        __device__ const vector_type& vector() const {
+            return *reinterpret_cast<const vector_type*>(data());
         }
 
-        __device__ MMA_M16_K8_F16_A(const Vector& v) {
+        __device__ MMA_M16_K8_F16_A(const vector_type& v) {
             vector() = v;
         }
 
@@ -318,8 +318,8 @@ namespace spio {
                               public FragmentLoader<MMA_M16_K16_F16_A<RowDim, ColDim>>,
                               public FragmentTensorAccess<MMA_M16_K16_F16_A<RowDim, ColDim>> {
     public:
-        using Vector = uint4;
-        using LoadIndex = MMA_A_M16_K16_F16_LoadIndex<RowDim, ColDim>;
+        using vector_type = uint4;
+        using load_index_type = MMA_A_M16_K16_F16_LoadIndex<RowDim, ColDim>;
         using Base = _MMA_M16_N8_F16_A<RowDim, ColDim, 2>;
         using Base::data;
         using typename Base::data_type;
@@ -330,15 +330,15 @@ namespace spio {
 
         MMA_M16_K16_F16_A() = default;
 
-        __device__ Vector& vector() {
-            return *reinterpret_cast<Vector*>(data());
+        __device__ vector_type& vector() {
+            return *reinterpret_cast<vector_type*>(data());
         }
 
-        __device__ const Vector& vector() const {
-            return *reinterpret_cast<const Vector*>(data());
+        __device__ const vector_type& vector() const {
+            return *reinterpret_cast<const vector_type*>(data());
         }
 
-        __device__ MMA_M16_K16_F16_A(const Vector& v) {
+        __device__ MMA_M16_K16_F16_A(const vector_type& v) {
             vector() = v;
         }
 
@@ -356,8 +356,8 @@ namespace spio {
                             public FragmentLoader<MMA_N8_K8_F16_B<RowDim, ColDim>>,
                             public FragmentTensorAccess<MMA_N8_K8_F16_B<RowDim, ColDim>> {
     public:
-        using Vector = unsigned;
-        using LoadIndex = MMA_B_N8_K8_F16_LoadIndex<RowDim, ColDim>;
+        using vector_type = unsigned;
+        using load_index_type = MMA_B_N8_K8_F16_LoadIndex<RowDim, ColDim>;
         using Base = _MMA_M16_N8_F16_B<RowDim, ColDim, 1>;
         using Base::data;
         using typename Base::data_type;
@@ -368,15 +368,15 @@ namespace spio {
 
         MMA_N8_K8_F16_B() = default;
 
-        __device__ Vector& vector() {
-            return *reinterpret_cast<Vector*>(data());
+        __device__ vector_type& vector() {
+            return *reinterpret_cast<vector_type*>(data());
         }
 
-        __device__ const Vector& vector() const {
-            return *reinterpret_cast<const Vector*>(data());
+        __device__ const vector_type& vector() const {
+            return *reinterpret_cast<const vector_type*>(data());
         }
 
-        __device__ MMA_N8_K8_F16_B(const Vector& v) {
+        __device__ MMA_N8_K8_F16_B(const vector_type& v) {
             vector() = v;
         }
 
@@ -396,8 +396,8 @@ namespace spio {
                              public FragmentLoader<MMA_N8_K16_F16_B<RowDim, ColDim>>,
                              public FragmentTensorAccess<MMA_N8_K16_F16_B<RowDim, ColDim>> {
     public:
-        using Vector = uint2;
-        using LoadIndex = MMA_B_N16_K16_F16_LoadIndex<RowDim, ColDim>;
+        using vector_type = uint2;
+        using load_index_type = MMA_B_N16_K16_F16_LoadIndex<RowDim, ColDim>;
         using Base = _MMA_M16_N8_F16_B<RowDim, ColDim, 2>;
         using Base::data;
         using typename Base::data_type;
@@ -408,12 +408,12 @@ namespace spio {
 
         MMA_N8_K16_F16_B() = default;
 
-        __device__ Vector& vector() {
-            return *reinterpret_cast<Vector*>(data());
+        __device__ vector_type& vector() {
+            return *reinterpret_cast<vector_type*>(data());
         }
 
-        __device__ const Vector& vector() const {
-            return *reinterpret_cast<const Vector*>(data());
+        __device__ const vector_type& vector() const {
+            return *reinterpret_cast<const vector_type*>(data());
         }
 
         __device__ void load(const void* p) {
@@ -430,8 +430,8 @@ namespace spio {
                               public FragmentLoader<MMA_N16_K16_F16_B<RowDim, ColDim>>,
                               public FragmentTensorAccess<MMA_N16_K16_F16_B<RowDim, ColDim>> {
     public:
-        using Vector = uint4;
-        using LoadIndex = MMA_B_N16_K16_F16_LoadIndex<RowDim, ColDim>;
+        using vector_type = uint4;
+        using load_index_type = MMA_B_N16_K16_F16_LoadIndex<RowDim, ColDim>;
         using Base = _MMA_M16_N8_F16_B<RowDim, ColDim, 4>;
         using Base::data;
         using typename Base::data_type;
@@ -442,12 +442,12 @@ namespace spio {
 
         MMA_N16_K16_F16_B() = default;
 
-        __device__ Vector& vector() {
-            return *reinterpret_cast<Vector*>(data());
+        __device__ vector_type& vector() {
+            return *reinterpret_cast<vector_type*>(data());
         }
 
-        __device__ const Vector& vector() const {
-            return *reinterpret_cast<const Vector*>(data());
+        __device__ const vector_type& vector() const {
+            return *reinterpret_cast<const vector_type*>(data());
         }
 
         __device__ void load(const void* p) {

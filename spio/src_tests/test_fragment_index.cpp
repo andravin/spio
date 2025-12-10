@@ -109,14 +109,14 @@ UTEST(MMA_C_M16_N16_F32_Index, indices) {
 UTEST(MMA_A_M16_K16_F16_LoadIndex, from_compound_index_with_lane) {
     // Simulates the kernel pattern:
     // auto compute_idx = ComputeIndex(threadIdx.x);
-    // auto a_load_idx = A_Tile::data_type::LoadIndex(compute_idx);
+    // auto a_load_idx = A_Tile::data_type::load_index_type(compute_idx);
 
     using ComputeIdx = CompoundIndex<DimInfo<LANE, 32, 1>>;
 
     for (int lane = 0; lane < 32; ++lane) {
         ComputeIdx compute_idx(lane);
 
-        // Construct LoadIndex from CompoundIndex via coordinates()
+        // Construct load_index_type from CompoundIndex via coordinates()
         MMA_A_M16_K16_F16_LoadIndex<I, K> load_idx(compute_idx);
 
         // Should extract LANE value and compute I and K8
@@ -135,7 +135,7 @@ UTEST(MMA_A_M16_K16_F16_LoadIndex, from_compound_index_with_extra_dims) {
                 int offset = warp_i * 32 + warp_j * 128 + lane;
                 ComputeIdx compute_idx(offset);
 
-                // LoadIndex should only use the LANE component
+                // load_index_type should only use the LANE component
                 MMA_A_M16_K16_F16_LoadIndex<I, K> load_idx(compute_idx);
 
                 EXPECT_EQ(load_idx.get<I>().get(), lane % 16);
@@ -190,7 +190,7 @@ UTEST(MMA_B_N8_K16_F16_LoadIndex, from_compound_index_with_lane) {
 
 UTEST(MMA_A_M16_K16_F16_LoadIndex, from_compound_index_with_module_lane) {
     // When CompoundIndex::coordinates() is called, it returns Module<LANE, size, stride>
-    // The LoadIndex should handle this correctly via dimensional projection
+    // The load_index_type should handle this correctly via dimensional projection
     using ComputeIdx = CompoundIndex<DimInfo<LANE, 32, 1>>;
 
     for (int lane = 0; lane < 32; ++lane) {
@@ -199,7 +199,7 @@ UTEST(MMA_A_M16_K16_F16_LoadIndex, from_compound_index_with_module_lane) {
         // Get coordinates which contains Module<LANE, 32, 1>
         auto coords = compute_idx.coordinates();
 
-        // Construct LoadIndex from coordinates directly
+        // Construct load_index_type from coordinates directly
         MMA_A_M16_K16_F16_LoadIndex<I, K> load_idx(coords);
 
         EXPECT_EQ(load_idx.get<I>().get(), lane % 16);
@@ -226,13 +226,13 @@ UTEST(MMA_A_M16_K16_F16_LoadIndex, from_compound_index_with_fold_lane) {
 }
 
 // ============================================================================
-// Roundtrip tests: CompoundIndex -> LoadIndex -> CheckerboardIndex
+// Roundtrip tests: CompoundIndex -> load_index_type -> CheckerboardIndex
 // ============================================================================
 
 UTEST(LoadIndexToCheckerboard, mma_a_full_chain) {
     // This mirrors the kernel pattern:
     // auto compute_idx = ComputeIndex(threadIdx.x);
-    // auto a_load_idx = A_Tile::data_type::LoadIndex(compute_idx);
+    // auto a_load_idx = A_Tile::data_type::load_index_type(compute_idx);
     // auto smem_a_checkers = SmemA_Checkers(a_load_idx);
 
     using ComputeIdx = CompoundIndex<DimInfo<LANE, 32, 1>>;
