@@ -153,9 +153,9 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         b_reg,
         c_reg,
         Matmul(a_reg, b_reg, c_reg, c_reg, function_name="mma"),
-        Checkerboard("SwizzleStoreSmemIndex", "x", "k8", "swizzle"),
-        Checkerboard("ASwizzleLoadSmemIndex", "i", "k8", "swizzle"),
-        Checkerboard("BSwizzleLoadSmemIndex", "j", "k8", "swizzle"),
+        Checkerboard("XSwizzle", "x", "k8", "swizzle"),
+        Checkerboard("ASwizzle", "i", "k8", "swizzle"),
+        Checkerboard("BSwizzle", "j", "k8", "swizzle"),
         #
         # Each warp transposes its output tile through shared memory
         # and then writes it to global memory. Because there is no inter-warp

@@ -43,20 +43,17 @@ extern "C" {
         auto b_global = BGlobal(b_ptr)[block_idx][b_global_load_idx].rebase();
 
         // Construct cursors for storing A and B to shared memory.
-        auto swizzle_store_smem_idx = SwizzleStoreSmemIndex(global_load_idx);
-        auto a_store_smem = ASmem(a_smem)[a_global_load_idx][swizzle_store_smem_idx].rebase();
-        auto b_store_smem = BSmem(b_smem)[b_global_load_idx][swizzle_store_smem_idx].rebase();
+        auto a_store_smem = ASmem(a_smem)[a_global_load_idx][XSwizzle(global_load_idx)].rebase();
+        auto b_store_smem = BSmem(b_smem)[b_global_load_idx][XSwizzle(global_load_idx)].rebase();
 
         // Get the coordinates of the output tile this thread will compute.
         auto compute_idx = ComputeIndex(threadIdx.x);
 
         // Construct cursors for loading A and B from shared memory into tensor core fragments.
-        auto a_load_idx = AReg::data_type::load_index_type(compute_idx);
-        auto b_load_idx = BReg::data_type::load_index_type(compute_idx);
-        auto a_swizzle_load_smem_idx = ASwizzleLoadSmemIndex(a_load_idx);
-        auto b_swizzle_load_smem_idx = BSwizzleLoadSmemIndex(b_load_idx);
-        auto a_load_smem = ASmem(a_smem)[compute_idx][a_swizzle_load_smem_idx].rebase();
-        auto b_load_smem = BSmem(b_smem)[compute_idx][b_swizzle_load_smem_idx].rebase();
+        auto a_reg_idx = AReg::data_type::load_index_type(compute_idx);
+        auto b_reg_idx = BReg::data_type::load_index_type(compute_idx);
+        auto a_load_smem = ASmem(a_smem)[compute_idx][ASwizzle(a_reg_idx)].rebase();
+        auto b_load_smem = BSmem(b_smem)[compute_idx][BSwizzle(b_reg_idx)].rebase();
 
         // Initialize the accumulators.
         CReg::data_type c_data[CReg::storage_size()];
