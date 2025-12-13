@@ -1,6 +1,7 @@
 """CUDA code generators."""
 
 from .generators import generate
+from .generators_class import Generators
 from .gen_specs import GenSpecs
 from .compound_index import CompoundIndex
 from .tensor import Tensor
@@ -16,6 +17,7 @@ from .dim import Dim, dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
 from .fold import Fold
 from .dims import Dims, Strides
 from .matmul import Matmul
+from .built_in import BuiltIn
 
 GENERATORS = [
     "Tensor",
@@ -32,6 +34,7 @@ GENERATORS = [
 
 __all__ = GENERATORS + [
     "generate",
+    "Generators",
     "GenSpecs",
     "FragmentType",
     "dtype",
@@ -40,4 +43,5 @@ __all__ = GENERATORS + [
     "dim_name_to_dim_or_fold_class_name",
     "Dims",
     "Strides",
+    "BuiltIn",
 ]

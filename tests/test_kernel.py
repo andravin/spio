@@ -135,46 +135,48 @@ def test_row_memcpy_kernel():
     # Generate code specifications
     specs = [
         # Fold dimensions
-        Fold("block_p", "p", BLOCK_P),
-        Fold("block_q", "q", BLOCK_Q),
-        Fold("block_c", "c", BLOCK_C),
+        Fold("p", BLOCK_P, fold_name="block_p"),
+        Fold("q", BLOCK_Q, fold_name="block_q"),
+        Fold("c", BLOCK_C, fold_name="block_c"),
         # Parameters
         ParamsSpec("Block", {"padding": 1, "c4": BLOCK_C4}),
         # CompoundIndex types
         CompoundIndex(
-            "BlockIdx",
             Dims(n=BLOCKS_N, block_p=BLOCKS_P, block_q=BLOCKS_Q, block_c=BLOCKS_C4),
+            class_name="BlockIdx",
         ),
-        CompoundIndex("InputIdx", Dims(x=BLOCK_W, c4=BLOCK_C4)),
+        CompoundIndex(Dims(x=BLOCK_W, c4=BLOCK_C4), class_name="InputIdx"),
         # Tensor types
         Tensor(
-            "Input",
             dtype.float4,
             Dims(n=N, y=H, x=W, c4=C4),
+            class_name="Input",
             constant=True,
         ),
-        Tensor("Output", dtype.float4, Dims(n=N, p=H, q=W, c4=C4)),
+        Tensor(dtype.float4, Dims(n=N, p=H, q=W, c4=C4), class_name="Output"),
         Tensor(
-            "SmemInput",
             dtype.float4,
             Dims(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1),
+            class_name="SmemInput",
         ),
         Tensor(
-            "ConstSmemInput",
             dtype.float2,
             Dims(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1, c2=2),
+            class_name="ConstSmemInput",
             constant=True,
         ),
-        CompoundIndex("SmemInputLoadIdx", Dims(c4=BLOCK_C4, q=BLOCK_Q, c2=2)),
-        Tensor(
-            "SmemOutput",
-            dtype.float2,
-            Dims(q=BLOCK_Q, c4=BLOCK_C4 + 1, c2=2),
+        CompoundIndex(
+            Dims(c4=BLOCK_C4, q=BLOCK_Q, c2=2), class_name="SmemInputLoadIdx"
         ),
         Tensor(
-            "ConstSmemOutput",
+            dtype.float2,
+            Dims(q=BLOCK_Q, c4=BLOCK_C4 + 1, c2=2),
+            class_name="SmemOutput",
+        ),
+        Tensor(
             dtype.float4,
             Dims(q=BLOCK_Q, c4=BLOCK_C4 + 1),
+            class_name="ConstSmemOutput",
             constant=True,
         ),
     ]

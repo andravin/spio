@@ -19,58 +19,50 @@ extern "C" {
     /// - b_ptr: operand B matrix with float16 precision and format K16 x J x 16K
     __global__ void mma_checkerboard_16c(uint4* __restrict__ c_ptr, const uint4* __restrict__ a_ptr,
                                          const uint4* __restrict__ b_ptr) {
-        // Allocate sufficient shared memory for the kernel.
+
+        // Create a shared memory allocator for the kernel.
         __shared__ uint4 smem[spio::max(ASmem::storage_size() + BSmem::storage_size(),
                                         CLoadSmem::storage_size())];
-
-        // Allocate shared memory tensors for the A and B matrices.
         auto smem_allocator = StackAllocator(smem);
+
+        // Allocate shared memory for the A and B matrices.
         auto a_smem = ASmem::allocate(smem_allocator);
         auto b_smem = BSmem::allocate(smem_allocator);
 
-        // Get the tile coordinates for this thread-block.
-        auto block_idx = make_coordinates(BLOCK_I(blockIdx.y), BLOCK_J(blockIdx.x));
+        // Get the coordinates for this thread-block.
+        auto block_idx = make_coordinates(BLOCK_I(), BLOCK_J());
 
-        // Get the thread's coordinates for loads from global memory.
-        auto global_load_idx = LoadGlobalIndex(threadIdx.x);
-
-        // Cast coordinate dimensions for matrices A and B.
-        auto a_global_load_idx = global_load_idx.cast<X, I>();
-        auto b_global_load_idx = global_load_idx.cast<X, J>();
-
-        // Construct cursors for loading A and B from global memory.
+        // Set up matrix A copy from global memorty to shared memory.
+        auto a_global_load_idx = ALoadGlobalIndex();
         auto a_global = AGlobal(a_ptr)[block_idx][a_global_load_idx].rebase();
-        auto b_global = BGlobal(b_ptr)[block_idx][b_global_load_idx].rebase();
-
-        // Construct cursors for storing A and B to shared memory.
-        auto a_store_smem = ASmem(a_smem)[a_global_load_idx][XSwizzle(global_load_idx)].rebase();
-        auto b_store_smem = BSmem(b_smem)[b_global_load_idx][XSwizzle(global_load_idx)].rebase();
-
-        // Get the coordinates of the output tile this thread will compute.
-        auto compute_idx = ComputeIndex(threadIdx.x);
-
-        // Construct cursors for loading A and B from shared memory into tensor core fragments.
-        auto a_reg_idx = AFragment::load_index_type(compute_idx);
-        auto b_reg_idx = BFragment::load_index_type(compute_idx);
-        auto a_load_smem = ASmem(a_smem)[compute_idx][ASwizzle(a_reg_idx)].rebase();
-        auto b_load_smem = BSmem(b_smem)[compute_idx][BSwizzle(b_reg_idx)].rebase();
-
-        // Initialize the accumulators.
-        CReg::data_type c_data[CReg::storage_size()];
-        auto c_reg = CReg(c_data);
-        c_reg.zero();
-
-        // Construct the global memory loaders for A and B. Set the valid mask.
+        auto a_store_smem = ASmem(a_smem)[a_global_load_idx][ASwizzle(a_global_load_idx)].rebase();
         auto a_loader = ALoader(block_idx + a_global_load_idx < AGlobal::extents());
+
+        // Set up matrix B copy from global memory to shared memory.
+        auto b_global_load_idx = BLoadGlobalIndex();
+        auto b_global = BGlobal(b_ptr)[block_idx][b_global_load_idx].rebase();
+        auto b_store_smem = BSmem(b_smem)[b_global_load_idx][BSwizzle(b_global_load_idx)].rebase();
         auto b_loader = BLoader(block_idx + b_global_load_idx < BGlobal::extents());
 
-        // Allocate registers for the A and B tiles.
+        // Get the coordinates of the output tile this thread will compute.
+        auto compute_idx = ComputeIndex();
+
+        // Set up loads from shared memory to registers for A and B.
+        auto a_load_smem =
+            ASmem(a_smem)[compute_idx][ASwizzle(AFragment::load_index_type(compute_idx))].rebase();
+        auto b_load_smem =
+            BSmem(b_smem)[compute_idx][BSwizzle(BFragment::load_index_type(compute_idx))].rebase();
+
+        // Allocate registers for the local matrices.
         AReg::data_type a_data[AReg::storage_size()];
         BReg::data_type b_data[BReg::storage_size()];
+        CReg::data_type c_data[CReg::storage_size()];
 
-        // Construct tensors for the A and B tiles.
+        // Construct tensors for the local matrices.
         auto a_reg = AReg(a_data);
         auto b_reg = BReg(b_data);
+        auto c_reg = CReg(c_data);
+        c_reg.zero();
 
         constexpr auto step = AReg::extent<K16>();
         constexpr auto size = AGlobal::extent<K>();
@@ -130,7 +122,7 @@ extern "C" {
             __syncthreads();
         }
 
-        // Store outputs to global memory via shared memory.
+        // Allocate shared memory for transposing the output matrix.
         a_smem.deallocate(smem_allocator);
         b_smem.deallocate(smem_allocator);
         auto c_smem = CStoreSmem::allocate(smem_allocator);

@@ -3,11 +3,9 @@
 #include <numeric>
 
 /*@spio
-[
-CompoundIndex("BlockIndex", Dims(i16=32, j16=32)),
-CompoundIndex("ThreadIndex", Dims(i=16, j=16)),
-Tensor("A", dtype.float, Dims(i=512, j=512)),
-]
+BlockIndex = CompoundIndex(Dims(i16=32, j16=32))
+ThreadIndex = CompoundIndex(Dims(i=16, j=16))
+A = Tensor(dtype.float, Dims(i=512, j=512))
 @spio*/
 UTEST(Lesson5, CompoundIndex) {
 

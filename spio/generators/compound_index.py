@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from .dims import Dims, Strides, compute_full_strides
 from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
+from .built_in import BuiltIn
 
 
 @dataclass
@@ -22,17 +23,21 @@ class CompoundIndex:
     and then the "repeat" dimension will not be used when applying the index to the tensor subscript
     operator like "tensor[index]".
 
+    When used with the Generators container, class_name can be omitted and will
+    be set from the attribute name.
+
     Attributes:
-        class_name (str): The name of the custom index class.
         dims (Dims): A dictionary mapping dimension names to their sizes.
+        class_name (str): The name of the custom index class (optional with Generators).
         strides (Strides): Optional strides for the dimensions.
         dummies (List[str]): List of dimension names that will not be applied to tensor subscripts.
     """
 
-    class_name: str
     dims: Dims
+    class_name: str = None
     strides: Strides = None
     dummies: List[str] = None
+    init: BuiltIn = None
 
     def __post_init__(self):
         # Ensure strides are calculated for each dimension
@@ -43,9 +48,20 @@ class CompoundIndex:
         self.strides = compute_full_strides(self.dims, self.strides)
         self.dummies = self.dummies or []
 
-    def generate_with_context(self, user_data_types: List[str] = None) -> str:
+    def _set_class_name(self, name: str) -> None:
+        """Set the class name for this index.
+
+        Called by the Generators container when the index is assigned to an attribute.
+        """
+        self.class_name = name
+
+    def generate_with_context(
+        self, user_data_types: List[str] = None
+    ) -> str:  # noqa: ARG002
         """Generate the C++ source code for the custom index class."""
-        return _generate_index(self.class_name, self.dims, self.strides, self.dummies)
+        return _generate_index(
+            self.class_name, self.dims, self.strides, self.dummies, self.init
+        )
 
     @property
     def total_size(self) -> int:
@@ -76,6 +92,7 @@ def _generate_index(
     dims: Dims,
     strides: Strides,
     dummy_dims: List[str] = None,
+    init: BuiltIn = None,
 ) -> str:
     """Generate a using statement for an CompoundIndex template instantiation."""
     dim_infos = []
@@ -109,8 +126,19 @@ def _generate_index(
                 f"}}}}\n"
             )
 
-    # Generate the index type using statement
-    index_using = f"using {class_name} = spio::CompoundIndex<{', '.join(dim_infos)}>;\n"
+    # Generate the base type
+    base_type = f"spio::CompoundIndex<{', '.join(dim_infos)}>"
 
-    # Combine the using statement with any specializations
-    return index_using + "\n".join(specializations)
+    if init is None:
+        # Generate a simple using statement
+        index_code = f"using {class_name} = {base_type};\n"
+    else:
+        # Generate a derived struct with an initializing constructor
+        index_code = (
+            f"struct {class_name} : {base_type} {{\n"
+            f"    {class_name}() : {base_type}({init.value}) {{}}\n"
+            f"}};\n"
+        )
+
+    # Combine the code with any specializations
+    return index_code + "\n".join(specializations)

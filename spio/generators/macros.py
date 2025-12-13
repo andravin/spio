@@ -1,4 +1,5 @@
 """Code generator for macros in CUDA kernel source code."""
+
 from typing import Dict
 from dataclasses import dataclass
 
@@ -14,6 +15,14 @@ class Macro:
     """
 
     macros: Dict[str, str]
+
+    def _set_class_name(self, name: str) -> None:
+        """Set the class name (ignored for Macro).
+
+        Macro doesn't use a class name since it generates #define statements.
+        This method exists for compatibility with the Generators container.
+        """
+        pass
 
     def generate(self) -> str:
         """Generate the macro definitions as a string."""

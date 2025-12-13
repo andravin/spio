@@ -113,10 +113,10 @@ def _get_kernel_spec(
 
     gen_specs = [
         Macro({"SPIO_CONV_KERNEL": full_kernel_name}),
-        Fold("block_n", "n", block_n),
-        Fold("block_p", "p", block_p),
-        Fold("block_q", "q", block_q),
-        Fold("block_c", "c", block_c),
+        Fold("n", block_n, fold_name="block_n"),
+        Fold("p", block_p, fold_name="block_p"),
+        Fold("q", block_q, fold_name="block_q"),
+        Fold("c", block_c, fold_name="block_c"),
         ParamsSpec(
             "Block",
             {
@@ -132,67 +132,71 @@ def _get_kernel_spec(
         ),
         ParamsSpec("Mode", {"igrad": igrad, "has_bias": kernel_has_bias}),
         CompoundIndex(
-            "BlockIdx",
             Dims(
                 block_n=blocks_n,
                 block_p=blocks_p,
                 block_q=blocks_q,
                 block_c=blocks_c,
             ),
+            class_name="BlockIdx",
         ),
-        CompoundIndex("InputIdx", Dims(n=block_n, x=block_w, c8=block_c8)),
-        Tensor("Input", dtype.uint4, Dims(n=n, y=h, x=w, c8=c8), constant=True),
-        Tensor("Bias", dtype.float2, Dims(k8=c8, k2=4), constant=True),
-        CompoundIndex("BiasIdx", Dims(k8=block_c8, lane=32)),
-        Tensor("Output", dtype.uint4, Dims(n=n, p=p, q=q, k8=c8)),
-        Tensor("Weights", dtype.uint4, Dims(k=c, r=r, s=s), constant=True),
-        Tensor("SmemWeights", dtype.uint4, Dims(k=block_c, r=r, s=s)),
+        CompoundIndex(Dims(n=block_n, x=block_w, c8=block_c8), class_name="InputIdx"),
         Tensor(
-            "ConstSmemWeights",
+            dtype.uint4, Dims(n=n, y=h, x=w, c8=c8), class_name="Input", constant=True
+        ),
+        Tensor(dtype.float2, Dims(k8=c8, k2=4), class_name="Bias", constant=True),
+        CompoundIndex(Dims(k8=block_c8, lane=32), class_name="BiasIdx"),
+        Tensor(dtype.uint4, Dims(n=n, p=p, q=q, k8=c8), class_name="Output"),
+        Tensor(dtype.uint4, Dims(k=c, r=r, s=s), class_name="Weights", constant=True),
+        Tensor(dtype.uint4, Dims(k=block_c, r=r, s=s), class_name="SmemWeights"),
+        Tensor(
             dtype.uint4,
             Dims(k8=block_c8, k=8, r=r, s=s),
+            class_name="ConstSmemWeights",
             constant=True,
         ),
         CompoundIndex(
-            "SmemWeightsLoadIdx",
             Dims(k8=block_c8, repeat=4, k=8),
+            class_name="SmemWeightsLoadIdx",
             dummies=["repeat"],
         ),
         Tensor(
-            "SmemInput",
             dtype.uint4,
             Dims(ping_pong=2, x=block_w, n=block_n, c8=block_c8),
+            class_name="SmemInput",
             strides=Strides(x=smem_x_stride),
         ),
         CompoundIndex(
-            "SmemInputLoadIdx",
             Dims(
                 c8=block_c8,
                 repeat=32 // (block_q * block_n),
                 x=block_q,
                 n=block_n,
             ),
+            class_name="SmemInputLoadIdx",
             dummies=["repeat"],
         ),
-        CompoundIndex("SmemOutputStoreIdx", Dims(k8=block_c8, lane=32)),
+        CompoundIndex(Dims(k8=block_c8, lane=32), class_name="SmemOutputStoreIdx"),
         Tensor(
-            "SmemOutput",
             dtype.half2,
             Dims(q=block_q, n=block_n, k8=block_c8 + 1, k2=4),
+            class_name="SmemOutput",
         ),
         Tensor(
-            "ConstSmemOutput",
             dtype.uint4,
             Dims(q=block_q, n=block_n, k8=block_c8 + 1),
+            class_name="ConstSmemOutput",
             constant=True,
         ),
-        CompoundIndex("OutputStoreIdx", Dims(n=block_n, q=block_q, k8=block_c8)),
-        CompoundIndex("BlockQNIdx", Dims(q=block_q, n=block_n)),
-        Fragment("Acc", FragmentType.M16_N8_F32_C, "qn", "k"),
-        Fragment("In", FragmentType.M16_K8_F16_A, "qn", "c"),
-        Fragment("Wgts", FragmentType.N8_K8_F16_B, "c", "k"),
-        Tensor("WeightsReg", "Wgts", Dims(r=r, s=s)),
-        Tensor("AccReg", "Acc", Dims(p=r)),
+        CompoundIndex(
+            Dims(n=block_n, q=block_q, k8=block_c8), class_name="OutputStoreIdx"
+        ),
+        CompoundIndex(Dims(q=block_q, n=block_n), class_name="BlockQNIdx"),
+        Fragment(FragmentType.M16_N8_F32_C, "qn", "k", class_name="Acc"),
+        Fragment(FragmentType.M16_K8_F16_A, "qn", "c", class_name="In"),
+        Fragment(FragmentType.N8_K8_F16_B, "c", "k", class_name="Wgts"),
+        Tensor("Wgts", Dims(r=r, s=s), class_name="WeightsReg"),
+        Tensor("Acc", Dims(p=r), class_name="AccReg"),
     ]
     return KernelSpec(gen_specs=gen_specs, launch_params=launch_params)
 

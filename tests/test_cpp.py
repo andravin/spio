@@ -130,10 +130,10 @@ UTEST(I, range)
 def _test_generate_fold():
     specs = [
         gen.Dim("c"),
-        gen.Fold("block_i", "i", 64),
-        gen.Fold("block_j", "j", 64),
+        gen.Fold("i", 64, fold_name="block_i"),
+        gen.Fold("j", 64, fold_name="block_j"),
         # Test a fold of a fold. Produces using BLOCK_C8 = Fold<Fold<C, 8>, 4>;
-        gen.Fold("block_c8", "c8", 4),
+        gen.Fold("c8", 4, fold_name="block_c8"),
     ]
     generated_code = gen.generate(specs, namespace="I_Fold_GenCode")
     return f"""
@@ -157,10 +157,43 @@ UTEST(I_Fold, methods)
 
 
 @_cpp_test
+def _test_generate_fold_with_init():
+    """Test Fold generation with a BuiltIn initializer."""
+    specs = [
+        gen.Dim("i"),
+        gen.Fold("i", 64, fold_name="block_i", init=gen.BuiltIn.BLOCK_IDX_Y),
+    ]
+    generated_code = gen.generate(specs, namespace="FoldInit_GenCode")
+    return f"""
+// Mock blockIdx for host testing
+namespace {{
+    struct {{ int x = 7, y = 128, z = 9; }} blockIdx;
+}}
+
+{generated_code}
+
+UTEST(FoldInit, default_constructor)
+{{
+    using namespace FoldInit_GenCode;
+    BLOCK_I bi;  // Uses default constructor with blockIdx.y = 128
+    EXPECT_EQ(bi.get(), 128);
+}}
+
+UTEST(FoldInit, unfold)
+{{
+    using namespace FoldInit_GenCode;
+    BLOCK_I bi;
+    // blockIdx.y = 128, so unfold() should give I(128 * 64) = I(8192)
+    EXPECT_TRUE(bi.unfold() == I(128 * 64));
+}}
+"""
+
+
+@_cpp_test
 def _test_generate_index():
     """Return the C++ source code that tests a custom index class."""
 
-    specs = [gen.CompoundIndex("MyIndex", gen.Dims(n=4, h=32, w=64, c=128))]
+    specs = [gen.CompoundIndex(gen.Dims(n=4, h=32, w=64, c=128), class_name="MyIndex")]
     generated_code = gen.generate(specs, namespace="MyIndex_GenCode")
     size = 4 * 32 * 64 * 128
     test_code = f"""
@@ -196,8 +229,47 @@ UTEST(MyIndex, dim_sizes)
 
 
 @_cpp_test
+def _test_generate_index_with_init():
+    """Test CompoundIndex generation with a BuiltIn initializer."""
+    specs = [
+        gen.CompoundIndex(
+            gen.Dims(i=4, j=8),
+            class_name="WarpIndex",
+            init=gen.BuiltIn.THREAD_IDX_X,
+        )
+    ]
+    generated_code = gen.generate(specs, namespace="IndexInit_GenCode")
+    return f"""
+// Mock threadIdx for host testing
+namespace {{
+    struct {{ int x = 17, y = 0, z = 0; }} threadIdx;
+}}
+
+{generated_code}
+
+UTEST(IndexInit, default_constructor)
+{{
+    using namespace IndexInit_GenCode;
+    WarpIndex idx;  // Uses default constructor with threadIdx.x = 17
+    // i has stride 8, j has stride 1
+    // offset 17: i = 17 / 8 = 2, j = 17 % 8 = 1
+    EXPECT_TRUE(idx.get<I>() == I(2));
+    EXPECT_TRUE(idx.get<J>() == J(1));
+}}
+
+UTEST(IndexInit, size)
+{{
+    using namespace IndexInit_GenCode;
+    EXPECT_EQ(WarpIndex::size(), 32);
+}}
+"""
+
+
+@_cpp_test
 def _test_generate_checkerboard_index():
-    specs = [gen.Checkerboard("Checkers", "r", "c8", "offset", 8)]
+    specs = [
+        gen.Checkerboard("r", "c8", class_name="Checkers", offset_dim="offset", ranks=8)
+    ]
     generated_code = gen.generate(specs, namespace="IndexSpec_GenCode")
     code = f"""
 {generated_code}
@@ -231,7 +303,7 @@ def _test_contiguous_tensor():
     c = 42
 
     tensor_spec = gen.Tensor(
-        "ContiguousTensor", gen.dtype.float, gen.Dims(n=n, h=h, w=w, c=c)
+        gen.dtype.float, gen.Dims(n=n, h=h, w=w, c=c), class_name="ContiguousTensor"
     )
 
     size = n * h * w * c
@@ -322,7 +394,9 @@ def _test_genrate_1d_contiguous_tensor():
     """Return the C++ source code that tests a custom 1D tensor class"""
     n = 7
     specs = [
-        gen.Tensor("ContiguousTensor", gen.dtype.float, gen.Dims(n=n), constant=True),
+        gen.Tensor(
+            gen.dtype.float, gen.Dims(n=n), class_name="ContiguousTensor", constant=True
+        ),
     ]
     generated_code = gen.generate(specs, namespace="ContiguousTensor_1D_GenCode")
     test_code = f"""
@@ -366,9 +440,9 @@ def _test_generate_tensor_with_strides():
 
     specs = [
         gen.Tensor(
-            "StrideTensor",
             gen.dtype.float,
             gen.Dims(n=n, h=h, w=w, c=c),
+            class_name="StrideTensor",
             strides=gen.Strides(h=stride_h, w=stride_w),
             constant=True,
         ),
@@ -431,18 +505,22 @@ def _test_generate_fold_auto_size():
     """Return the C++ source code that tests automatic fold size inference."""
     # Test case 1: k8=16, k4=-1, k=-1
     # k4 = 8/4 = 2, k = 4/1 = 4
-    specs1 = [gen.Tensor("A", gen.dtype.float, gen.Dims(k8=16, i=32, k4=-1, k=-1))]
+    specs1 = [
+        gen.Tensor(gen.dtype.float, gen.Dims(k8=16, i=32, k4=-1, k=-1), class_name="A")
+    ]
     generated_code1 = gen.generate(specs1, namespace="AutoFold_GenCode1")
 
     # Test case 2: k8=4, k=-1 (skip k4)
     # k = 8/1 = 8
-    specs2 = [gen.Tensor("B", gen.dtype.float, gen.Dims(k8=4, j=16, k=-1))]
+    specs2 = [gen.Tensor(gen.dtype.float, gen.Dims(k8=4, j=16, k=-1), class_name="B")]
     generated_code2 = gen.generate(specs2, namespace="AutoFold_GenCode2")
 
     # Test case 3: Multiple base dimensions with auto-inference
     # k8=8, k4=-1, k=-1, i16=4, i=-1
     specs3 = [
-        gen.Tensor("C", gen.dtype.float, gen.Dims(k8=8, k4=-1, k=-1, i16=4, i=-1))
+        gen.Tensor(
+            gen.dtype.float, gen.Dims(k8=8, k4=-1, k=-1, i16=4, i=-1), class_name="C"
+        )
     ]
     generated_code3 = gen.generate(specs3, namespace="AutoFold_GenCode3")
 
@@ -504,7 +582,7 @@ UTEST(AutoFold, tensor_multiple_base_dims)
 def _test_generate_fold_explicit_validation():
     """Return the C++ source code that tests explicit size validation."""
     # Explicit sizes that match computed values should work
-    specs = [gen.Tensor("D", gen.dtype.float, gen.Dims(k8=4, k4=2, k=4))]
+    specs = [gen.Tensor(gen.dtype.float, gen.Dims(k8=4, k4=2, k=4), class_name="D")]
     generated_code = gen.generate(specs, namespace="ExplicitFold_GenCode")
 
     return f"""
@@ -527,10 +605,10 @@ UTEST(ExplicitFold, matching_explicit_sizes)
 def _test_fragment_index():
 
     specs = [
-        gen.FragmentIndex("A", gen.FragmentType.M16_K16_F16_A, "r", "s"),
-        gen.FragmentIndex("B", gen.FragmentType.N16_K16_F16_B, "s", "t"),
-        gen.FragmentIndex("C", gen.FragmentType.M16_N16_F32_C, "r", "s"),
-        gen.FragmentIndex("B2", gen.FragmentType.N8_K8_F16_B, "s", "t"),
+        gen.FragmentIndex(gen.FragmentType.M16_K16_F16_A, "r", "s", class_name="A"),
+        gen.FragmentIndex(gen.FragmentType.N16_K16_F16_B, "s", "t", class_name="B"),
+        gen.FragmentIndex(gen.FragmentType.M16_N16_F32_C, "r", "s", class_name="C"),
+        gen.FragmentIndex(gen.FragmentType.N8_K8_F16_B, "s", "t", class_name="B2"),
     ]
     generated_code = gen.generate(specs, namespace="FragmentIndex_GenCode")
     test_code = f"""
@@ -612,8 +690,12 @@ UTEST(FragmentIndex, MMA_M16_N16_F32_C)
 def _test_fragment_load_index():
     specs = [
         gen.Dim("lane"),
-        gen.FragmentLoadIndex("Input", gen.FragmentType.M16_K16_F16_A, "x", "c"),
-        gen.FragmentLoadIndex("Weights", gen.FragmentType.N8_K16_F16_B, "c", "k"),
+        gen.FragmentLoadIndex(
+            gen.FragmentType.M16_K16_F16_A, "x", "c", class_name="Input"
+        ),
+        gen.FragmentLoadIndex(
+            gen.FragmentType.N8_K16_F16_B, "c", "k", class_name="Weights"
+        ),
     ]
     generated_code = gen.generate(specs, namespace="FragmentLoadIndex_GenCode")
     test_code = f"""

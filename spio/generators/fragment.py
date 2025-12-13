@@ -1,7 +1,7 @@
 """Code generator for matrix fragment with named dimensions."""
 
-from dataclasses import dataclass
 from typing import Tuple
+from dataclasses import dataclass
 
 from .fragment_type import FragmentType
 
@@ -13,7 +13,7 @@ class Fragment:
     Example:
 
         Define a Fragment spec in your kernel factory's specs like this:
-            Fragment("Acc", FragmentType.M16_N8_F32_C, "qn", "k2")
+            Fragment(FragmentType.M16_N8_F32_C, "qn", "k2")
 
         Use the generated class in your CUDA kernel like this:
             # Get element coordinates for this thread.
@@ -26,22 +26,32 @@ class Fragment:
             Acc acc;
             acc.zero();
 
+    When used with the Generators container, class_name can be omitted and will
+    be set from the attribute name.
+
     Attributes:
-        class_name: Name of the fragment class.
         fragment_type: Type of the fragment (see spio.include.spio / fragment.cuh)
         row: Name of the row dimension.
         col: Name of the column dimension.
+        class_name: Name of the fragment class (optional with Generators).
     """
 
-    class_name: str
     fragment_type: FragmentType
     row: str
     col: str
+    class_name: str = None
 
     def __post_init__(self):
         """Normalize the row and column dimension names to upper-case."""
         object.__setattr__(self, "row", self.row.upper())
         object.__setattr__(self, "col", self.col.upper())
+
+    def _set_class_name(self, name: str) -> None:
+        """Set the class name for this fragment.
+
+        Called by the Generators container when the fragment is assigned to an attribute.
+        """
+        self.class_name = name
 
     def generate(self) -> str:
         """Generate the fragment class code as a type alias."""

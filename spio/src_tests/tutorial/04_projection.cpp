@@ -4,12 +4,10 @@
 
 // Define tensors A, B, C, and C_tile
 /*@spio
-[
-Tensor("A", dtype.float, Dims(i=16, k=32)),
-Tensor("B", dtype.float, Dims(k=32, j=64)),
-Tensor("C", dtype.float, Dims(i=16, j=64)),
-Tensor("C_tile", dtype.float, Dims(i=8, j=32), Strides(i=64))
-]
+A = Tensor(dtype.float, Dims(i=16, k=32))
+B = Tensor(dtype.float, Dims(k=32, j=64))
+C = Tensor(dtype.float, Dims(i=16, j=64))
+C_tile = Tensor(dtype.float, Dims(i=8, j=32), strides=Strides(i=64))
 @spio*/
 UTEST(Lesson4, DimensionalProjection) {
     // Create data for matrices a, b, and c.

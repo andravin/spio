@@ -99,22 +99,22 @@ def _get_source(example_name: str) -> str:
     )
 
 
-def _extract_specs(source: str) -> list:
+def _extract_specs(source: str) -> Generators:
     """Extract generator specifications from source code.
 
     Generator specs can appear anywhere in the source code in this format:
 
     /*@spio
-        [Dim("N"), Dim("C"), Dim("H"), Dim("W")]
+    A = Tensor(dtype.float, Dims(i=16, k=32))
+    B = Tensor(dtype.float, Dims(k=32, j=64))
     @spio*/
     """
     matches = SPIO_PATTERN.findall(source)
-    specs = []
+    g = Generators()
     for match in matches:
-        # Use eval with a restricted namespace
-        result = eval(match, EVAL_NAMESPACE)
-        if isinstance(result, (list, tuple)):
-            specs.extend(result)
-        else:
-            specs.append(result)
-    return specs
+        namespace = dict(EVAL_NAMESPACE)
+        exec(match, namespace)
+        for name, value in namespace.items():
+            if name not in EVAL_NAMESPACE:
+                setattr(g, name, value)
+    return g

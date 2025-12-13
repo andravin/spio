@@ -18,14 +18,19 @@ class Dim(GenSpecs):
     need to use this class directly.
 
     Attributes:
-        class_name (str): The name of the custom dimension class.
+        dim_name (str): The name of the dimension. If None, set via assignment in Generators.
     """
 
-    dim_name: str
+    dim_name: str = None
 
     def __post_init__(self):
         """Normalize the dimension name to upper-case."""
-        object.__setattr__(self, "dim_name", self.dim_name.upper())
+        if self.dim_name is not None:
+            object.__setattr__(self, "dim_name", self.dim_name.upper())
+
+    def _set_class_name(self, name: str) -> None:
+        """Set the dimension name from the Generators container attribute name."""
+        object.__setattr__(self, "dim_name", name.upper())
 
     @property
     def class_name(self) -> str:
@@ -35,7 +40,7 @@ class Dim(GenSpecs):
     def generate(self):
         """Generate the C++ code for a dimension class using CRTP."""
         class_name = self.class_name
-        return f"class {class_name} : public spio::Dim<{class_name}> {{ public: using spio::Dim<{class_name}>::Dim; }};\n"
+        return f"struct {class_name} : spio::Dim<{class_name}> {{ using spio::Dim<{class_name}>::Dim; }};\n"
 
     @property
     def dim_names(self) -> Tuple[str,]:

@@ -390,8 +390,7 @@ namespace spio {
 }
 
 #define SPIO_DIM(Name)                                                                             \
-    class Name : public spio::Dim<Name> {                                                          \
-    public:                                                                                        \
+    struct Name : spio::Dim<Name> {                                                                \
         using spio::Dim<Name>::Dim;                                                                \
     }
 

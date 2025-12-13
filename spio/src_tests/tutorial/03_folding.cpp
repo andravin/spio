@@ -4,9 +4,7 @@
 // Layout: K8(4) x I(4) x K(8)
 
 /*@spio
-[
-Tensor("A", dtype.float, Dims(k8=4, i=4, k=-1))
-]
+A = Tensor(dtype.float, Dims(k8=4, i=4, k=-1))
 @spio*/
 
 UTEST(Lesson3, Folding) {
