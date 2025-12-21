@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from .dims import Dims, Strides, compute_full_strides
 from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
 from .built_in import BuiltIn
+from .gen_specs import GenSpecsWithContext
 
 
 @dataclass
-class CompoundIndex:
+class CompoundIndex(GenSpecsWithContext):
     """CUDA Code generator for custom index classes.
 
     This class is used to generate custom index classes that map linear offsets
@@ -54,6 +55,10 @@ class CompoundIndex:
         Called by the Generators container when the index is assigned to an attribute.
         """
         self.class_name = name
+
+    def get_class_name(self) -> str:
+        """Return the class name, or None if not set."""
+        return self.class_name
 
     def generate_with_context(
         self, user_data_types: List[str] = None

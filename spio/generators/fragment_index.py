@@ -5,6 +5,7 @@ from typing import Tuple
 
 from .dim import dim_name_to_dim_or_fold_class_name
 from .fragment_type import FragmentType
+from .gen_specs import GenSpecs
 
 
 @dataclass
@@ -64,7 +65,7 @@ FRAGMENT_DESCRIPTORS = {
 }
 
 
-class FragmentIndex:
+class FragmentIndex(GenSpecs):
     """Fragment index code generator for matrix fragment with named dimensions.
 
     This class generates a type alias for the fragment index template class
@@ -99,6 +100,10 @@ class FragmentIndex:
         Called by the Generators container when assigned to an attribute.
         """
         self.class_name = name
+
+    def get_class_name(self) -> str:
+        """Return the class name, or None if not set."""
+        return self.class_name
 
     def generate(self) -> str:
         """Return the CUDA / C++ source code for the fragment index type alias."""

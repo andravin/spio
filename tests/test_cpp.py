@@ -190,6 +190,98 @@ UTEST(FoldInit, unfold)
 
 
 @_cpp_test
+def _test_generate_coordinates():
+    """Test Coordinates generation with Dim and Fold.
+
+    This mirrors the usage in test_mma_checkerboard.py:
+        g.block_i = Fold("i", block_x, init=BuiltIn.BLOCK_IDX_Y)
+        g.block_j = Fold("j", block_x, init=BuiltIn.BLOCK_IDX_X)
+        g.BlockIdx = Coordinates(g.block_i, g.block_j)
+    """
+    block_i = gen.Fold("i", 64, fold_name="block_i", init=gen.BuiltIn.BLOCK_IDX_Y)
+    block_j = gen.Fold("j", 64, fold_name="block_j", init=gen.BuiltIn.BLOCK_IDX_X)
+    specs = [
+        gen.Dim("i"),
+        gen.Dim("j"),
+        block_i,
+        block_j,
+        gen.Coordinates(block_i, block_j, coord_name="BlockIdx"),
+    ]
+    generated_code = gen.generate(specs, namespace="Coordinates_GenCode")
+    return f"""
+// Mock blockIdx for host testing - inside namespace to avoid conflicts
+namespace Coordinates_GenCode {{
+    struct {{ int x = 7, y = 128, z = 9; }} blockIdx;
+}}
+
+{generated_code}
+
+UTEST(Coordinates, generate_with_folds)
+{{
+    using namespace Coordinates_GenCode;
+    auto coords = BlockIdx();
+    // blockIdx.y = 128, blockIdx.x = 7
+    EXPECT_EQ(coords.get<BLOCK_I>().get(), 128);
+    EXPECT_EQ(coords.get<BLOCK_J>().get(), 7);
+}}
+"""
+
+
+@_cpp_test
+def _test_generate_coordinates_with_anonymous_folds():
+    """Test Coordinates generation with anonymous (unnamed) Folds.
+
+    This mirrors the cleaner usage in test_mma_checkerboard.py where Folds
+    are created inline without explicit fold_name - the generate() function
+    automatically assigns names like _FOLD_1, _FOLD_2 (uppercase).
+    """
+    specs = [
+        gen.Dim("i"),
+        gen.Dim("j"),
+        gen.Coordinates(
+            gen.Fold("i", 64, init=gen.BuiltIn.BLOCK_IDX_Y),
+            gen.Fold("j", 64, init=gen.BuiltIn.BLOCK_IDX_X),
+            coord_name="BlockIdx",
+        ),
+    ]
+    generated_code = gen.generate(specs, namespace="AnonCoordinates_GenCode")
+    return f"""
+// Mock blockIdx for host testing - inside namespace to avoid conflicts
+namespace AnonCoordinates_GenCode {{
+    struct {{ int x = 3, y = 42, z = 0; }} blockIdx;
+}}
+
+{generated_code}
+
+UTEST(AnonCoordinates, anonymous_folds_are_generated)
+{{
+    using namespace AnonCoordinates_GenCode;
+    auto coords = BlockIdx();
+    // blockIdx.y = 42, blockIdx.x = 3
+    // Anonymous folds get auto-generated names, but order is not guaranteed
+    auto f1 = coords.get<_FOLD_1>().get();
+    auto f2 = coords.get<_FOLD_2>().get();
+    // Check that we got both values (in some order)
+    EXPECT_EQ(std::max(f1, f2), 42);
+    EXPECT_EQ(std::min(f1, f2), 3);
+}}
+
+UTEST(AnonCoordinates, anonymous_folds_unfold_correctly)
+{{
+    using namespace AnonCoordinates_GenCode;
+    auto coords = BlockIdx();
+    // Each fold has stride 64, so unfold multiplies by 64
+    // Order of _FOLD_1 vs _FOLD_2 is not guaranteed
+    auto f1 = coords.get<_FOLD_1>().unfold().get();
+    auto f2 = coords.get<_FOLD_2>().unfold().get();
+    // Check that we got both unfolded values (in some order)
+    EXPECT_EQ(std::max(f1, f2), 42 * 64);
+    EXPECT_EQ(std::min(f1, f2), 3 * 64);
+}}
+"""
+
+
+@_cpp_test
 def _test_generate_index():
     """Return the C++ source code that tests a custom index class."""
 

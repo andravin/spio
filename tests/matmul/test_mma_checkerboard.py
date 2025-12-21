@@ -90,8 +90,10 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     g = Generators()
 
     # Fold dimensions
-    g.block_i = Fold("i", block_x, init=BuiltIn.BLOCK_IDX_Y)
-    g.block_j = Fold("j", block_x, init=BuiltIn.BLOCK_IDX_X)
+    g.BlockIdx = Coordinates(
+        Fold("i", block_x, init=BuiltIn.BLOCK_IDX_Y),
+        Fold("j", block_x, init=BuiltIn.BLOCK_IDX_X),
+    )
     g.warp_i = Fold("i", config.warp_m)
     g.warp_j = Fold("j", config.warp_n)
     g.k_chunk = Fold("k", k_chunk)

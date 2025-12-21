@@ -18,6 +18,7 @@ from .fold import Fold
 from .dims import Dims, Strides
 from .matmul import Matmul
 from .built_in import BuiltIn
+from .coordinates import Coordinates
 
 GENERATORS = [
     "Tensor",
@@ -30,6 +31,7 @@ GENERATORS = [
     "FragmentLoadIndex",
     "ParamsSpec",
     "Matmul",
+    "Coordinates",
 ]
 
 __all__ = GENERATORS + [

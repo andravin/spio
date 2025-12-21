@@ -8,10 +8,11 @@ from .dims import Dims, Strides, compute_full_strides
 from .fragment_type import FragmentType
 from .fragment import Fragment
 from .data_type import dtype
+from .gen_specs import GenSpecsWithContext
 
 
 @dataclass
-class Tensor:
+class Tensor(GenSpecsWithContext):
     """CUDA Code generator for custom tensor classes.
 
     This class is used to generate custom tensor classes that map named tensor
@@ -58,6 +59,10 @@ class Tensor:
         Called by the Generators container when the tensor is assigned to an attribute.
         """
         self.class_name = name
+
+    def get_class_name(self) -> str:
+        """Return the class name, or None if not set."""
+        return self.class_name
 
     def generate_with_context(self, user_data_types: List[str] = None) -> str:
         """Generate the C++ source code for the custom tensor class."""

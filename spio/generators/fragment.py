@@ -4,10 +4,11 @@ from typing import Tuple
 from dataclasses import dataclass
 
 from .fragment_type import FragmentType
+from .gen_specs import GenSpecs
 
 
 @dataclass
-class Fragment:
+class Fragment(GenSpecs):
     """Fragment code generator.
 
     Example:
@@ -52,6 +53,10 @@ class Fragment:
         Called by the Generators container when the fragment is assigned to an attribute.
         """
         self.class_name = name
+
+    def get_class_name(self) -> str:
+        """Return the class name, or None if not set."""
+        return self.class_name
 
     def generate(self) -> str:
         """Generate the fragment class code as a type alias."""

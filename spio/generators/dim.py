@@ -32,6 +32,10 @@ class Dim(GenSpecs):
         """Set the dimension name from the Generators container attribute name."""
         object.__setattr__(self, "dim_name", name.upper())
 
+    def get_class_name(self) -> str:
+        """Return the class name, or None if dim_name is not set."""
+        return self.dim_name
+
     @property
     def class_name(self) -> str:
         """Convert the dimension name to a dimension class name."""
