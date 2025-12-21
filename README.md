@@ -35,9 +35,8 @@ Spio dimensions behave like integers. Because dimensions are types, it is not po
 // Define dimension types I and J.
 //
 /*@spio
-[
-Dim("i"), Dim("j")
-]
+I = Dim()
+J = Dim()
 @spio*/
 
 UTEST(Lesson1, TypeSafety) {
@@ -73,10 +72,8 @@ Typed dimensions also enable something we call **dimensional projection**: a coo
 // Define tensors A and B using dimensions I(16) × K(32) and K(32) × J(64).
 //
 /*@spio
-[
-Tensor("A", dtype.float, Dims(i=16, k=32)),
-Tensor("B", dtype.float, Dims(k=32, j=64))
-]
+A = Tensor(dtype.float, Dims(i=16, k=32))
+B = Tensor(dtype.float, Dims(k=32, j=64))
 @spio*/
 UTEST(Lesson1, Commutativity) {
 
@@ -120,9 +117,7 @@ Spio uses Cursors: lightweight, multi-dimensional pointers that traverse tensor 
 
 ```cpp
 /*@spio
-[
-Tensor("A", dtype.float, Dims(i=10, j=10))
-]
+A = Tensor(dtype.float, Dims(i=10, j=10))
 @spio*/
 
 UTEST(Lesson2, RelativeMovement) {
@@ -176,9 +171,7 @@ The generator `Dims(k8=4, i=4, k=-1)` creates a tensor with physical layout $K_8
 // Layout: K8(4) x I(4) x K(8)
 
 /*@spio
-[
-Tensor("A", dtype.float, Dims(k8=4, i=4, k=-1))
-]
+A = Tensor(dtype.float, Dims(k8=4, i=4, k=-1))
 @spio*/
 
 UTEST(Lesson3, Folding) {
@@ -239,12 +232,10 @@ With dimensional projection, individual dimensions disappear from the program. T
 ```cpp
 // Define tensors A, B, C, and C_tile
 /*@spio
-[
-Tensor("A", dtype.float, Dims(i=16, k=32)),
-Tensor("B", dtype.float, Dims(k=32, j=64)),
-Tensor("C", dtype.float, Dims(i=16, j=64)),
-Tensor("C_tile", dtype.float, Dims(i=8, j=32), Strides(i=64))
-]
+A = Tensor(dtype.float, Dims(i=16, k=32))
+B = Tensor(dtype.float, Dims(k=32, j=64))
+C = Tensor(dtype.float, Dims(i=16, j=64))
+C_tile = Tensor(dtype.float, Dims(i=8, j=32), strides=Strides(i=64))
 @spio*/
 UTEST(Lesson4, DimensionalProjection) {
 
@@ -301,11 +292,9 @@ Spio uses a compound index to fold a linear offset into multiple dimensions. A c
 
 ```cpp
 /*@spio
-[
-CompoundIndex("BlockIndex", Dims(i16=32, j16=32)),
-CompoundIndex("ThreadIndex", Dims(i=16, j=16)),
-Tensor("A", dtype.float, Dims(i=512, j=512)),
-]
+BlockIndex = CompoundIndex(Dims(i16=32, j16=32))
+ThreadIndex = CompoundIndex(Dims(i=16, j=16))
+A = Tensor(dtype.float, Dims(i=512, j=512))
 @spio*/
 UTEST(Lesson5, CompoundIndex) {
 

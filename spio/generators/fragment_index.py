@@ -69,23 +69,36 @@ class FragmentIndex:
 
     This class generates a type alias for the fragment index template class
     with the appropriate dimension types.
+
+    When used with the Generators container, class_name can be omitted and will
+    be set from the attribute name.
+
+    Attributes:
+        fragment_type: The fragment type.
+        row_name: The name to use for the row index.
+        col_name: The name to use for the column index.
+        class_name: The name of the class to generate (optional with Generators).
     """
 
     def __init__(
-        self, class_name: str, fragment_type: FragmentType, row_name: str, col_name: str
+        self,
+        fragment_type: FragmentType,
+        row_name: str,
+        col_name: str,
+        class_name: str = None,
     ):
-        """Initialize the fragment index code generator.
-
-        Args:
-            class_name (str): The name of the class to generate.
-            fragment_type (FragmentType): The fragment type.
-            row_name (str): The name to use for the row index.
-            col_name (str): The name to use for the column index.
-        """
-        self.class_name = class_name
+        """Initialize the fragment index code generator."""
         self.fragment_type = fragment_type
         self.row_name = row_name.upper()
         self.col_name = col_name.upper()
+        self.class_name = class_name
+
+    def _set_class_name(self, name: str) -> None:
+        """Set the class name for this fragment index.
+
+        Called by the Generators container when assigned to an attribute.
+        """
+        self.class_name = name
 
     def generate(self) -> str:
         """Return the CUDA / C++ source code for the fragment index type alias."""

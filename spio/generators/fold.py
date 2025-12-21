@@ -1,7 +1,7 @@
 """Code generator for custom folded-dimension template classes."""
 
-from dataclasses import dataclass
 from typing import Tuple
+from dataclasses import dataclass
 
 from .gen_specs import GenSpecs
 from .dim import (
@@ -10,6 +10,7 @@ from .dim import (
     _format_dim_class_name,
     _get_dim_name_and_stride,
 )
+from .built_in import BuiltIn
 
 
 @dataclass(frozen=True)
@@ -18,16 +19,33 @@ class Fold(GenSpecs):
 
     This class defines a folding of a tensor dimension. The
     tensor dimension must already have been generated using DimSpec.
+
+    When used with the Generators container, fold_name can be omitted and will
+    be set from the attribute name.
+
+    Attributes:
+        dim_name: The name of the base dimension to fold.
+        stride: The fold stride.
+        fold_name: The name of the folded dimension class (optional with Generators).
     """
 
-    fold_name: str
     dim_name: str
     stride: int
+    fold_name: str = None
+    init: BuiltIn = None
 
     def __post_init__(self):
         """Normalize the fold and dimension names to upper-case."""
-        object.__setattr__(self, "fold_name", self.fold_name.upper())
+        if self.fold_name is not None:
+            object.__setattr__(self, "fold_name", self.fold_name.upper())
         object.__setattr__(self, "dim_name", self.dim_name.upper())
+
+    def _set_class_name(self, name: str) -> None:
+        """Set the fold name for this fold.
+
+        Called by the Generators container when the fold is assigned to an attribute.
+        """
+        object.__setattr__(self, "fold_name", name.upper())
 
     def generate(self):
         dim_class_name = dim_name_to_dim_or_fold_class_name(self.dim_name)
@@ -35,7 +53,16 @@ class Fold(GenSpecs):
             dim_class_name, self.stride
         )
         fold_class_name = _format_dim_class_name(self.fold_name)
-        return f"using {fold_class_name} = {fold_template_instance};\n"
+
+        if self.init is None:
+            return f"using {fold_class_name} = {fold_template_instance};\n"
+
+        # Generate a derived struct with an initializing constructor
+        return (
+            f"struct {fold_class_name} : {fold_template_instance} {{\n"
+            f"    {fold_class_name}() : {fold_template_instance}({self.init.value}) {{}}\n"
+            f"}};\n"
+        )
 
     @property
     def dim_names(self) -> Tuple[str]:

@@ -25,10 +25,7 @@ namespace spio {
     }
 
     /// @brief The private dimension type for linear offsets.
-    class _OffsetDim : public Dim<_OffsetDim> {
-    public:
-        using Dim<_OffsetDim>::Dim;
-    };
+    SPIO_DIM(_OffsetDim);
 
     /// @brief Store information about a tensor dimension.
     /// @tparam DimType the dimension type

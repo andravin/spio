@@ -1,9 +1,7 @@
 #include "tutorial.h"
 
 /*@spio
-[
-Tensor("A", dtype.float, Dims(i=10, j=10))
-]
+A = Tensor(dtype.float, Dims(i=10, j=10))
 @spio*/
 
 UTEST(Lesson2, RelativeMovement) {

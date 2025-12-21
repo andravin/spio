@@ -139,18 +139,22 @@ def _get_kernel_spec(
 
     smem_tensors = [
         Tensor(
-            "SmemInput",
             dtype.uint4,
             {"ping_pong": 2, "n": config.warp_n, "x": block_w, "c8": block_c8},
+            class_name="SmemInput",
             strides={"x": smem_x_stride},
         ),
         Tensor(
-            "SmemDelta",
             dtype.uint4,
             {"ping_pong": 2, "n": config.warp_n, "q": BLOCK_Q, "k8": block_c8},
+            class_name="SmemDelta",
             strides={"q": smem_x_stride},
         ),
-        Tensor("SmemWgrad", dtype.float2, {"k8": block_c8, "s": s, "c": 8, "k2": 4}),
+        Tensor(
+            dtype.float2,
+            {"k8": block_c8, "s": s, "c": 8, "k2": 4},
+            class_name="SmemWgrad",
+        ),
     ]
 
     smem_size = max(
@@ -167,12 +171,12 @@ def _get_kernel_spec(
         #
         # Block parameters.
         #
-        Fold("block_n", "n", block_n),
-        Fold("block_y", "y", block_h),
-        Fold("block_p", "p", block_p),
-        Fold("block_q", "q", BLOCK_Q),
-        Fold("block_c", "c", block_c),
-        Fold("warp_s", "s", config.warp_s),
+        Fold("n", block_n, fold_name="block_n"),
+        Fold("y", block_h, fold_name="block_y"),
+        Fold("p", block_p, fold_name="block_p"),
+        Fold("q", BLOCK_Q, fold_name="block_q"),
+        Fold("c", block_c, fold_name="block_c"),
+        Fold("s", config.warp_s, fold_name="warp_s"),
         ParamsSpec(
             "Block",
             {
@@ -201,21 +205,27 @@ def _get_kernel_spec(
         # Block indices.
         #
         CompoundIndex(
-            "BlockIdx",
             {
                 "block_n": blocks_n,
                 "block_y": blocks_h,
                 "block_q": blocks_q,
                 "block_c": blocks_c8,
             },
+            class_name="BlockIdx",
         ),
         #
         # Input loading.
         #
-        CompoundIndex("InputIdx", {"n": config.warp_n, "x": block_w, "c8": block_c8}),
-        Tensor("Input", dtype.uint4, {"n": n, "y": h, "x": w, "c8": c8}, constant=True),
         CompoundIndex(
-            "SmemInputLoadIdx",
+            {"n": config.warp_n, "x": block_w, "c8": block_c8}, class_name="InputIdx"
+        ),
+        Tensor(
+            dtype.uint4,
+            {"n": n, "y": h, "x": w, "c8": c8},
+            class_name="Input",
+            constant=True,
+        ),
+        CompoundIndex(
             {
                 "c8": warps_c8,
                 "warp_s": warps_s,
@@ -223,44 +233,53 @@ def _get_kernel_spec(
                 "s": 2,
                 "q": BLOCK_Q,
             },
+            class_name="SmemInputLoadIdx",
             dummies=["repeat"],
         ),
         #
         # Delta loading
         #
-        CompoundIndex("DeltaIdx", {"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}),
-        Tensor("Delta", dtype.uint4, {"n": n, "p": p, "q": q, "k8": c8}, constant=True),
         CompoundIndex(
-            "SmemDeltaLoadIdx",
+            {"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}, class_name="DeltaIdx"
+        ),
+        Tensor(
+            dtype.uint4,
+            {"n": n, "p": p, "q": q, "k8": c8},
+            class_name="Delta",
+            constant=True,
+        ),
+        CompoundIndex(
             {
                 "k8": warps_c8,
                 "repeat": (32 * warps_s) // BLOCK_Q,
                 "q": BLOCK_Q,
             },
+            class_name="SmemDeltaLoadIdx",
             dummies=["repeat"],
         ),
         #
         # MMA fragments
         #
-        Fragment("Acc", FragmentType.M16_N8_F32_C, "c", "k"),
-        Fragment("InputFragment", FragmentType.M16_K8_F16_A, "c", "x"),
-        Fragment("DeltaFragment", FragmentType.N8_K8_F16_B, "x", "k"),
+        Fragment(FragmentType.M16_N8_F32_C, "c", "k", class_name="Acc"),
+        Fragment(FragmentType.M16_K8_F16_A, "c", "x", class_name="InputFragment"),
+        Fragment(FragmentType.N8_K8_F16_B, "x", "k", class_name="DeltaFragment"),
         #
         # MMA tensors
         #
-        Tensor("AccTensor", "Acc", {"s2": warp_s2_up, "r": r}),
-        Tensor("InputTensor", "InputFragment", {"s2": warp_s2_up}),
-        Tensor("DeltaTensor", "DeltaFragment", {"n": config.warp_n, "r": r}),
+        Tensor("Acc", {"s2": warp_s2_up, "r": r}, class_name="AccTensor"),
+        Tensor("InputFragment", {"s2": warp_s2_up}, class_name="InputTensor"),
+        Tensor("DeltaFragment", {"n": config.warp_n, "r": r}, class_name="DeltaTensor"),
         #
         # Weights storing.
         #
         CompoundIndex(
-            "SmemWgradStoreIdx", {"k8": warps_c8, "warp_s": warps_s, "lane": 32}
+            {"k8": warps_c8, "warp_s": warps_s, "lane": 32},
+            class_name="SmemWgradStoreIdx",
         ),
         # Each thread stores 8k for a particular (k8, r, s, c).
-        CompoundIndex("WgradStoreIdx", {"k8": warps_c8, "s": s, "c": 8}),
+        CompoundIndex({"k8": warps_c8, "s": s, "c": 8}, class_name="WgradStoreIdx"),
         # Reduce Wgrad through global memory using float32 precision.
-        Tensor("Wgrad", dtype.float, {"k": c, "r": r, "s": s, "c": 8}),
+        Tensor(dtype.float, {"k": c, "r": r, "s": s, "c": 8}, class_name="Wgrad"),
     ] + smem_tensors
     return KernelSpec(gen_specs=gen_specs, launch_params=launch_params)
 

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from .dim import dim_name_to_dim_or_fold_class_name
 from .dims import Dims, Strides, compute_full_strides
 from .fragment_type import FragmentType
+from .fragment import Fragment
 from .data_type import dtype
 
 
@@ -16,21 +17,25 @@ class Tensor:
     This class is used to generate custom tensor classes that map named tensor
     dimensions to pointers.
 
-    The user may optionally optionally set the stride of a dimension
-    by specifying it in the strides parameter. Any unspecified stride is automatically
-    calculated as the the size of the next dimension times the stride of the next dimension,
+    The user may optionally set the stride of a dimension by specifying it in
+    the strides parameter. Any unspecified stride is automatically calculated
+    as the size of the next dimension times the stride of the next dimension,
     with the last dimension having a stride of 1.
 
+    When used with the Generators container, class_name can be omitted and will
+    be set from the attribute name.
+
     Attributes:
-        class_name (str): The name of the custom tensor class.
-        data_type (Union[dtype, FragmentType]): The data type of the tensor elements.
+        data_type (Union[dtype, FragmentType, str]): The data type of the tensor elements.
         dims (Dims): A dictionary mapping dimension names to their sizes.
+        class_name (str): The name of the custom tensor class (optional with Generators).
         strides (Strides): An optional dictionary mapping dimension names to their strides.
+        constant (bool): Whether the tensor is constant.
     """
 
-    class_name: str
-    data_type: Union[dtype, FragmentType]
+    data_type: Union[dtype, FragmentType, str]
     dims: Dims
+    class_name: str = None
     strides: Strides = None
     constant: bool = False
 
@@ -46,6 +51,13 @@ class Tensor:
                         f"Stride name '{stride_name}' not found in dims {list(self.dims.keys())}."
                     )
         self.strides = compute_full_strides(self.dims, self.strides)
+
+    def _set_class_name(self, name: str) -> None:
+        """Set the class name for this tensor.
+
+        Called by the Generators container when the tensor is assigned to an attribute.
+        """
+        self.class_name = name
 
     def generate_with_context(self, user_data_types: List[str] = None) -> str:
         """Generate the C++ source code for the custom tensor class."""
@@ -131,6 +143,8 @@ def _get_data_type_name(
 ) -> str:
     if isinstance(data_type, FragmentType):
         data_type = f"spio::{data_type.value}"
+    elif isinstance(data_type, Fragment):
+        data_type = data_type.class_name
     elif isinstance(data_type, dtype):
         data_type = data_type.value.name
     elif isinstance(data_type, str):

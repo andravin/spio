@@ -3,9 +3,8 @@
 // Define dimension types I and J.
 //
 /*@spio
-[
-Dim("i"), Dim("j")
-]
+I = Dim()
+J = Dim()
 @spio*/
 
 UTEST(Lesson1, TypeSafety) {
@@ -33,10 +32,8 @@ UTEST(Lesson1, TypeSafety) {
 // Define tensors A and B using dimensions I(16) × K(32) and K(32) × J(64).
 //
 /*@spio
-[
-Tensor("A", dtype.float, Dims(i=16, k=32)),
-Tensor("B", dtype.float, Dims(k=32, j=64))
-]
+A = Tensor(dtype.float, Dims(i=16, k=32))
+B = Tensor(dtype.float, Dims(k=32, j=64))
 @spio*/
 UTEST(Lesson1, Commutativity) {
 

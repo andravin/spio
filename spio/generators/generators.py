@@ -1,6 +1,6 @@
 """Generate CUDA code using generator specifications."""
 
-from typing import List
+from typing import Iterable, List
 
 from .gen_specs import GenSpecs
 from .dim import Dim, _get_dim_name_and_stride, BUILTIN_DIM_NAMES
@@ -11,11 +11,20 @@ from .fragment import Fragment
 
 
 def generate(
-    gen_specs: List[GenSpecs],
+    gen_specs: Iterable[GenSpecs],
     namespace: str = None,
     utest_dim_printers: bool = False,
 ) -> str:
-    """Generate CUDA code from generator specifications."""
+    """Generate CUDA code from generator specifications.
+
+    Args:
+        gen_specs: Either a list of generator specifications or a Generators container.
+        namespace: Optional C++ namespace to wrap the generated code.
+        utest_dim_printers: Whether to generate dimension printers for unit testing.
+
+    Returns:
+        The generated CUDA code as a string.
+    """
     # 1. Find explicitly declared Fold specs
     explicit_folds = {
         spec.fold_name: spec for spec in gen_specs if isinstance(spec, Fold)
@@ -48,7 +57,7 @@ def generate(
             if name not in folded_dim_names and name not in explicit_folds:
                 # Only create implicit folds if not explicitly declared
                 # and not used as dim_name in a fold spec
-                implicit_folds.add(Fold(name, base_name, stride))
+                implicit_folds.add(Fold(base_name, stride, fold_name=name))
                 fold_aliases.add(name)  # Add to fold_aliases to exclude from base dims
         base_dims.add(Dim(base_name))
 

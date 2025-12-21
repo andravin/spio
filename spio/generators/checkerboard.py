@@ -7,11 +7,22 @@ from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
 
 @dataclass
 class Checkerboard:
-    """CUDA / C++ code generator for checkerboard index classes."""
+    """CUDA / C++ code generator for checkerboard index classes.
 
-    class_name: str
+    When used with the Generators container, class_name can be omitted and will
+    be set from the attribute name.
+
+    Attributes:
+        pairs_dim: The dimension name for pairs.
+        colors_dim: The dimension name for colors.
+        class_name: The name of the generated class (optional with Generators).
+        offset_dim: The dimension name for offset (default: "LANE").
+        ranks: Number of ranks (default: 8).
+    """
+
     pairs_dim: str
     colors_dim: str
+    class_name: str = None
     offset_dim: str = "LANE"
     ranks: int = 8
 
@@ -20,6 +31,13 @@ class Checkerboard:
         object.__setattr__(self, "pairs_dim", self.pairs_dim.upper())
         object.__setattr__(self, "colors_dim", self.colors_dim.upper())
         object.__setattr__(self, "offset_dim", self.offset_dim.upper())
+
+    def _set_class_name(self, name: str) -> None:
+        """Set the class name for this checkerboard.
+
+        Called by the Generators container when assigned to an attribute.
+        """
+        self.class_name = name
 
     def generate(self) -> str:
         """Return the CUDA / C++ source code for the checkerboard index subclass."""

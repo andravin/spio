@@ -13,19 +13,38 @@ class AsyncStripLoader(GenSpecs):
     This class is used to generate custom strip loader classes that load
     data asynchronously from a global memory tensor to a shared memory
     tensor.
+
+    When used with the Generators container, class_name can be omitted and will
+    be set from the attribute name.
+
+    Attributes:
+        smem_tensor: The shared memory tensor.
+        gmem_tensor: The global memory tensor.
+        minor_axis: The minor axis name.
+        major_axis_size: The major axis size.
+        minor_axis_size: The minor axis size.
+        num_warps: Number of warps.
+        class_name: The name of the generated class (optional with Generators).
     """
 
-    class_name: str
     smem_tensor: Tensor
     gmem_tensor: Tensor
     minor_axis: str
     major_axis_size: int
     minor_axis_size: int
     num_warps: int
+    class_name: str = None
 
     def __post_init__(self):
         """Normalize the minor axis name to upper-case."""
         self.minor_axis = self.minor_axis.upper()
+
+    def _set_class_name(self, name: str) -> None:
+        """Set the class name for this loader.
+
+        Called by the Generators container when assigned to an attribute.
+        """
+        self.class_name = name
 
     def generate(self) -> str:
         """Generate the C++ source code for the custom strip loader class."""

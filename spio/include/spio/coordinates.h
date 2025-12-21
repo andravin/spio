@@ -245,14 +245,19 @@ namespace spio {
             return detail::add_normalized_coordinates(normalize(), other.normalize());
         }
 
-        template <typename... DimInfos>
-        DEVICE constexpr auto operator+(const CompoundIndex<DimInfos...>& idx) const {
-            return *this + idx.coordinates();
+        /// @brief Add a type with coordinates() method (e.g., CompoundIndex types).
+        template <
+            typename T,
+            detail::enable_if_t<detail::has_coordinates_v<T> && !detail::is_dim_like_v<T>, int> = 0>
+        DEVICE constexpr auto operator+(const T& t) const {
+            return *this + t.coordinates();
         }
 
         /// @brief Add a single dimension to coordinates.
-        template <typename Dim> DEVICE constexpr auto operator+(Dim d) const {
-            static_assert(detail::is_dim_like_v<Dim>, "Argument must be a dimension type");
+        template <typename Dim,
+                  detail::enable_if_t<detail::is_dim_like_v<Dim> && !detail::has_coordinates_v<Dim>,
+                                      int> = 0>
+        DEVICE constexpr auto operator+(Dim d) const {
             return *this + make_coordinates(d);
         }
 
@@ -322,34 +327,47 @@ namespace spio {
             return !(*this == other);
         }
 
-        template <typename... DimInfos>
-        DEVICE constexpr bool operator<(const CompoundIndex<DimInfos...>& idx) const {
-            return *this < idx.coordinates();
+        /// @brief Compare with a type that has coordinates() method (e.g., CompoundIndex types).
+        template <
+            typename T,
+            detail::enable_if_t<detail::has_coordinates_v<T> && !detail::is_dim_like_v<T>, int> = 0>
+        DEVICE constexpr bool operator<(const T& t) const {
+            return *this < t.coordinates();
         }
 
-        template <typename... DimInfos>
-        DEVICE constexpr bool operator<=(const CompoundIndex<DimInfos...>& idx) const {
-            return *this <= idx.coordinates();
+        template <
+            typename T,
+            detail::enable_if_t<detail::has_coordinates_v<T> && !detail::is_dim_like_v<T>, int> = 0>
+        DEVICE constexpr bool operator<=(const T& t) const {
+            return *this <= t.coordinates();
         }
 
-        template <typename... DimInfos>
-        DEVICE constexpr bool operator>(const CompoundIndex<DimInfos...>& idx) const {
-            return *this > idx.coordinates();
+        template <
+            typename T,
+            detail::enable_if_t<detail::has_coordinates_v<T> && !detail::is_dim_like_v<T>, int> = 0>
+        DEVICE constexpr bool operator>(const T& t) const {
+            return *this > t.coordinates();
         }
 
-        template <typename... DimInfos>
-        DEVICE constexpr bool operator>=(const CompoundIndex<DimInfos...>& idx) const {
-            return *this >= idx.coordinates();
+        template <
+            typename T,
+            detail::enable_if_t<detail::has_coordinates_v<T> && !detail::is_dim_like_v<T>, int> = 0>
+        DEVICE constexpr bool operator>=(const T& t) const {
+            return *this >= t.coordinates();
         }
 
-        template <typename... DimInfos>
-        DEVICE constexpr bool operator==(const CompoundIndex<DimInfos...>& idx) const {
-            return *this == idx.coordinates();
+        template <
+            typename T,
+            detail::enable_if_t<detail::has_coordinates_v<T> && !detail::is_dim_like_v<T>, int> = 0>
+        DEVICE constexpr bool operator==(const T& t) const {
+            return *this == t.coordinates();
         }
 
-        template <typename... DimInfos>
-        DEVICE constexpr bool operator!=(const CompoundIndex<DimInfos...>& idx) const {
-            return *this != idx.coordinates();
+        template <
+            typename T,
+            detail::enable_if_t<detail::has_coordinates_v<T> && !detail::is_dim_like_v<T>, int> = 0>
+        DEVICE constexpr bool operator!=(const T& t) const {
+            return *this != t.coordinates();
         }
 
         /// @brief Get the number of dimensions in these coordinates.

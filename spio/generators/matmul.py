@@ -31,6 +31,14 @@ class Matmul:
     function_name: str = "tensor_matmul"
     use_zigzag: bool = True  # Add zigzag parameter
 
+    def _set_class_name(self, name: str) -> None:
+        """Set the function name from the attribute name.
+
+        Called by the Generators container when assigned to an attribute.
+        The attribute name becomes the function name for the matmul operation.
+        """
+        self.function_name = name
+
     def generate(self) -> str:
         """Generate fully unrolled matrix multiplication code with zigzag for all dimensions."""
         # Identify dimension categories
