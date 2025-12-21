@@ -3,10 +3,11 @@
 from dataclasses import dataclass
 
 from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
+from .gen_specs import GenSpecs
 
 
 @dataclass
-class Checkerboard:
+class Checkerboard(GenSpecs):
     """CUDA / C++ code generator for checkerboard index classes.
 
     When used with the Generators container, class_name can be omitted and will
@@ -38,6 +39,10 @@ class Checkerboard:
         Called by the Generators container when assigned to an attribute.
         """
         self.class_name = name
+
+    def get_class_name(self) -> str:
+        """Return the class name, or None if not set."""
+        return self.class_name
 
     def generate(self) -> str:
         """Return the CUDA / C++ source code for the checkerboard index subclass."""

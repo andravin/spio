@@ -30,7 +30,7 @@ extern "C" {
         auto b_smem = BSmem::allocate(smem_allocator);
 
         // Get the coordinates for this thread-block.
-        auto block_idx = make_coordinates(BLOCK_I(), BLOCK_J());
+        auto block_idx = BlockIdx();
 
         // Set up matrix A copy from global memorty to shared memory.
         auto a_global_load_idx = ALoadGlobalIndex();

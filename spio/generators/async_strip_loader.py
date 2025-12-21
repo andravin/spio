@@ -46,6 +46,10 @@ class AsyncStripLoader(GenSpecs):
         """
         self.class_name = name
 
+    def get_class_name(self) -> str:
+        """Return the class name, or None if not set."""
+        return self.class_name
+
     def generate(self) -> str:
         """Generate the C++ source code for the custom strip loader class."""
         smem_stride = self.smem_tensor.strides[self.minor_axis]

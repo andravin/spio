@@ -1,13 +1,17 @@
 """Generate CUDA code using generator specifications."""
 
+from itertools import count
 from typing import Iterable, List
 
-from .gen_specs import GenSpecs
 from .dim import Dim, _get_dim_name_and_stride, BUILTIN_DIM_NAMES
 from .fold import Fold
 from .tensor import Tensor
 from .compound_index import CompoundIndex
 from .fragment import Fragment
+from .gen_specs import GenSpecs
+
+# Counter for anonymous class names.
+_anon_counter = count(1)
 
 
 def generate(
@@ -25,6 +29,22 @@ def generate(
     Returns:
         The generated CUDA code as a string.
     """
+
+    # 0. Collect unnamed generators ..
+    anon_genspecs = {
+        used_spec
+        for spec in gen_specs
+        for used_spec in spec.used_generators()
+        if used_spec.get_class_name() is None
+    }
+
+    # .. and assign them class names.
+    for spec in anon_genspecs:
+        _generate_name(spec)
+
+    # Combine all generator specifications.
+    gen_specs = list(gen_specs) + list(anon_genspecs)
+
     # 1. Find explicitly declared Fold specs
     explicit_folds = {
         spec.fold_name: spec for spec in gen_specs if isinstance(spec, Fold)
@@ -178,3 +198,9 @@ def _start_namespace(namespace: str) -> str:
 
 def _end_namespace() -> str:
     return "}\n"
+
+
+def _generate_name(spec: GenSpecs) -> None:
+    """Generate a class name for an unnamed generator specification."""
+    prefix = type(spec).__name__
+    spec._set_class_name(f"_{prefix}_{next(_anon_counter)}")

@@ -47,6 +47,10 @@ class Fold(GenSpecs):
         """
         object.__setattr__(self, "fold_name", name.upper())
 
+    def get_class_name(self) -> str:
+        """Return the fold name, or None if not set."""
+        return self.fold_name
+
     def generate(self):
         dim_class_name = dim_name_to_dim_or_fold_class_name(self.dim_name)
         fold_template_instance = _format_fold_template_instance(

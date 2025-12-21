@@ -3,9 +3,11 @@
 from typing import Dict, Any, Tuple
 from dataclasses import dataclass
 
+from .gen_specs import GenSpecs
+
 
 @dataclass
-class ParamsSpec:
+class ParamsSpec(GenSpecs):
     """CUDA Code generator for constant parameters.
 
     The parameters are defined in a C++ namespace. Parameters may be of type

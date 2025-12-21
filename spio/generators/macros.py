@@ -3,9 +3,11 @@
 from typing import Dict
 from dataclasses import dataclass
 
+from .gen_specs import GenSpecs
+
 
 @dataclass
-class Macro:
+class Macro(GenSpecs):
     """Code generator for macros in CUDA kernel source code.
 
     This class is used to generate macro definitions for the CUDA kernel source code.
@@ -23,6 +25,10 @@ class Macro:
         This method exists for compatibility with the Generators container.
         """
         pass
+
+    def get_class_name(self) -> str:
+        """Return None - Macro doesn't have a class name."""
+        return None
 
     def generate(self) -> str:
         """Generate the macro definitions as a string."""

@@ -5,10 +5,11 @@ from dataclasses import dataclass
 
 from .tensor import Tensor
 from .dim import dim_name_to_dim_or_fold_class_name
+from .gen_specs import GenSpecs
 
 
 @dataclass
-class Matmul:
+class Matmul(GenSpecs):
     """Generates matrix multiplication code for tensor operands.
 
     Performs the operation:
@@ -38,6 +39,10 @@ class Matmul:
         The attribute name becomes the function name for the matmul operation.
         """
         self.function_name = name
+
+    def get_class_name(self) -> str:
+        """Return the function name, or None if not set."""
+        return self.function_name
 
     def generate(self) -> str:
         """Generate fully unrolled matrix multiplication code with zigzag for all dimensions."""

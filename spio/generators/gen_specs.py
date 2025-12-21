@@ -1,6 +1,6 @@
 """Protocol for kernel code generation classes."""
 
-from typing import Protocol
+from typing import Optional, Protocol
 
 
 class GenSpecs(Protocol):
@@ -15,6 +15,23 @@ class GenSpecs(Protocol):
 
     def generate(self) -> str:
         """Generate CUDA source code."""
+
+    def used_generators(self) -> list["GenSpecs"]:
+        """Return a list of generator objects used by this generator.
+
+        This is used to find any generators that need to be assigned class names automatically.
+        Subclasses should override this method if they use other generators.
+        """
+        return []
+
+    def get_class_name(self) -> Optional[str]:
+        """Return the class/type name this generator produces, or None if not yet set.
+
+        Used to detect unnamed generators that need auto-naming.
+        Each subclass should implement this based on its naming convention
+        (e.g., class_name, fold_name, coord_name, etc.).
+        """
+        return None
 
 
 class GenSpecsWithContext(GenSpecs, Protocol):
