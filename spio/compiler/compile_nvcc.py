@@ -7,41 +7,10 @@ nvcc.
 Therefore, nvcc is not requried for Spio to function correctly.
 """
 
-from pathlib import Path
-import os
-import shutil
 import subprocess
 
+from .cuda_paths import nvcc_full_path
 from .arch import sm_from_arch
-
-
-def nvcc_full_path():
-    """Return the path to nvcc or raise FileNotFoundError if not found.
-
-    This function returns the value of the CUDACXX environment variable,
-    if it is set. Else it returns "$CUDA_HOME / bin/ nvcc",  if the
-    CUDA_HOME environment variable is set. Else it returns
-    "/usr/local/cuda/bin/nvcc" if that file exists. Else it returns the
-    result of using the "which" shell command to find "nvcc", if that
-    returns a result. Else it raises a FileNotFoundError.
-    """
-    path = os.environ.get("CUDACXX")
-    if path is not None:
-        return path
-
-    cuda_home = os.environ.get("CUDA_HOME")
-    if cuda_home is not None:
-        return str(Path(cuda_home) / "bin" / "nvcc")
-
-    path = Path("/usr/local/cuda/bin/nvcc")
-    if path.is_file():
-        return str(path)
-
-    path = shutil.which("nvcc")
-    if path is not None:
-        return path
-
-    raise FileNotFoundError("Could not find nvcc.")
 
 
 def compile_with_nvcc(

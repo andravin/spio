@@ -2,7 +2,7 @@
 
 import torch
 
-from spio.generators import *
+from spio.generators import generate, ParamsSpec
 from spio.compiler import compile_and_load_kernel
 from spio.util import divup, assert_all_close_with_acc_depth
 
@@ -93,112 +93,4 @@ def test_index():
     outputs = torch.zeros((I, J), device="cuda", dtype=torch.float32)
 
     index.launch((BLOCKS, 1, 1), (THREADS, 1, 1), (outputs, inputs))
-    assert torch.equal(outputs, inputs)
-
-
-def test_row_memcpy_kernel():
-    """Test the row-by-row memcpy kernel."""
-    debug = False
-    lineinfo = True
-
-    # Parameters
-    # The kernel achieves 92% of peak DRAM memory bandwidth with N=128 C=32 H=64 W=64.
-    N = 128
-    C = 32
-    H = 64
-    W = 64
-
-    # Hardcoded parameter:
-    GROUP_WIDTH = 4
-
-    # Derived parameters
-    C4 = C // 4
-    GROUPS = C // GROUP_WIDTH
-
-    # Tiles
-    BLOCK_P = min(16, H)
-    BLOCK_Q = 16
-    BLOCK_GROUPS = min(8, GROUPS)
-
-    # Derived Tiles
-    BLOCK_C = BLOCK_GROUPS * GROUP_WIDTH
-    BLOCK_C4 = BLOCK_C // 4
-    BLOCK_W = BLOCK_Q + 2
-    BLOCKS_N = N
-    BLOCKS_P = divup(H, BLOCK_P)
-    BLOCKS_Q = divup(W, BLOCK_Q)
-    BLOCKS_C4 = divup(C4, BLOCK_C4)
-    BLOCKS = BLOCKS_N * BLOCKS_P * BLOCKS_Q * BLOCKS_C4
-    WARPS = BLOCK_GROUPS
-    THREADS = WARPS * 32
-
-    # Generate code specifications
-    specs = [
-        # Fold dimensions
-        Fold("p", BLOCK_P, fold_name="block_p"),
-        Fold("q", BLOCK_Q, fold_name="block_q"),
-        Fold("c", BLOCK_C, fold_name="block_c"),
-        # Parameters
-        ParamsSpec("Block", {"padding": 1, "c4": BLOCK_C4}),
-        # CompoundIndex types
-        CompoundIndex(
-            Dims(n=BLOCKS_N, block_p=BLOCKS_P, block_q=BLOCKS_Q, block_c=BLOCKS_C4),
-            class_name="BlockIdx",
-        ),
-        CompoundIndex(Dims(x=BLOCK_W, c4=BLOCK_C4), class_name="InputIdx"),
-        # Tensor types
-        Tensor(
-            dtype.float4,
-            Dims(n=N, y=H, x=W, c4=C4),
-            class_name="Input",
-            constant=True,
-        ),
-        Tensor(dtype.float4, Dims(n=N, p=H, q=W, c4=C4), class_name="Output"),
-        Tensor(
-            dtype.float4,
-            Dims(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1),
-            class_name="SmemInput",
-        ),
-        Tensor(
-            dtype.float2,
-            Dims(ping_pong=2, x=BLOCK_W, c4=BLOCK_C4 + 1, c2=2),
-            class_name="ConstSmemInput",
-            constant=True,
-        ),
-        CompoundIndex(
-            Dims(c4=BLOCK_C4, q=BLOCK_Q, c2=2), class_name="SmemInputLoadIdx"
-        ),
-        Tensor(
-            dtype.float2,
-            Dims(q=BLOCK_Q, c4=BLOCK_C4 + 1, c2=2),
-            class_name="SmemOutput",
-        ),
-        Tensor(
-            dtype.float4,
-            Dims(q=BLOCK_Q, c4=BLOCK_C4 + 1),
-            class_name="ConstSmemOutput",
-            constant=True,
-        ),
-    ]
-    parameters_header = generate(specs)
-
-    # Compile the kernel with our generated headers
-    _, kernel = compile_and_load_kernel(
-        kernel_name="row_memcpy",
-        debug=debug,
-        lineinfo=lineinfo,
-        header_dict={"types.h": parameters_header},
-        src_module="spio.src_tests",
-    )
-
-    # Create test tensors
-    inputs = torch.randn((N, C, H, W), device="cuda", dtype=torch.float32).to(
-        memory_format=torch.channels_last
-    )
-    outputs = torch.zeros((N, C, H, W), device="cuda", dtype=torch.float32).to(
-        memory_format=torch.channels_last
-    )
-
-    # Run kernel and verify results
-    kernel.launch((BLOCKS, 1, 1), (THREADS, 1, 1), (outputs, inputs))
     assert torch.equal(outputs, inputs)

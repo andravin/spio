@@ -196,7 +196,7 @@ extern "C" {
 #pragma unroll R_Size
         for (int r = 0; r < R_Size; ++r) {
             if (r > 0) { __syncthreads(); }
-            for (auto s : range(WARP_S::stride)) {
+            for (auto s : range(S(WARP_S::stride))) {
                 if (warp_s + s >= S_Size) { break; }
                 auto sd2 = s.fold<2>();
                 auto sm2 = s % 2;

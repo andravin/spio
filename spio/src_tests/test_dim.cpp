@@ -122,7 +122,7 @@ UTEST(Fold, dim_copy_constructor) {
 
 UTEST(Fold, step) {
     using I32 = spio::Fold<I, 32>;
-    EXPECT_TRUE(I32::stride == I(32));
+    EXPECT_TRUE(I32::stride == 32);
 }
 
 UTEST(Fold, data_type) {
@@ -135,6 +135,228 @@ UTEST(Module, methods) {
     EXPECT_EQ(M4(10).get(), 2);
     EXPECT_EQ(M4(50).get(), 2);
     EXPECT_TRUE(M4(10).fold<2>().get() == (10 % 4) * 16 / 2);
+}
+
+UTEST(Module, properties) {
+    using M4 = spio::Module<I, 4, 16>;
+    EXPECT_EQ(M4::size, 4);
+    EXPECT_EQ(M4::stride, 16);
+    EXPECT_TRUE((std::is_same<M4::dim_type, I>::value));
+}
+
+UTEST(Module, unfold) {
+    using M4 = spio::Module<I, 4, 16>;
+    EXPECT_EQ(M4(2).unfold().get(), 2 * 16);
+    EXPECT_EQ(M4(0).unfold().get(), 0);
+    EXPECT_EQ(M4(3).unfold().get(), 3 * 16);
+}
+
+UTEST(Module, cast) {
+    using MI4 = spio::Module<I, 4, 16>;
+    using MJ4 = spio::Module<J, 4, 16>;
+    EXPECT_TRUE(MI4(2).cast<J>() == MJ4(2));
+    EXPECT_EQ(MI4(3).cast<J>().get(), 3);
+}
+
+UTEST(Module, construct_from_dim) {
+    using M4 = spio::Module<I, 4, 16>;
+    // Module(DimType dim) constructor: (dim.get() / Stride) % Size
+    EXPECT_EQ(M4(I(32)).get(), (32 / 16) % 4); // = 2
+    EXPECT_EQ(M4(I(64)).get(), (64 / 16) % 4); // = 0
+    EXPECT_EQ(M4(I(80)).get(), (80 / 16) % 4); // = 1
+}
+
+UTEST(Module, arithmetic) {
+    using M4 = spio::Module<I, 4, 16>;
+    EXPECT_TRUE(M4(1) + M4(2) == M4(3));
+    EXPECT_TRUE(M4(3) - M4(1) == M4(2));
+    EXPECT_TRUE(M4(1) - M4(2) == M4(-1));
+}
+
+UTEST(Module, comparison) {
+    using M4 = spio::Module<I, 4, 16>;
+    EXPECT_TRUE(M4(1) < M4(2));
+    EXPECT_TRUE(M4(2) > M4(1));
+    EXPECT_TRUE(M4(1) <= M4(2));
+    EXPECT_TRUE(M4(2) >= M4(1));
+    EXPECT_TRUE(M4(2) == M4(2));
+    EXPECT_TRUE(M4(2) <= M4(2));
+    EXPECT_TRUE(M4(2) >= M4(2));
+    EXPECT_TRUE(M4(1) != M4(2));
+}
+
+UTEST(Module, dim_addition) {
+    using M4 = spio::Module<I, 4, 16>;
+    // Module unfolds to base dim for cross-type arithmetic
+    EXPECT_TRUE(M4(2) + I(8) == I(40)); // 2*16 + 8 = 40
+    EXPECT_TRUE(I(8) + M4(2) == I(40));
+}
+
+UTEST(Module, dim_subtraction) {
+    using M4 = spio::Module<I, 4, 16>;
+    EXPECT_TRUE(M4(2) - I(8) == I(24)); // 2*16 - 8 = 24
+    EXPECT_TRUE(I(40) - M4(2) == I(8)); // 40 - 2*16 = 8
+}
+
+UTEST(Module, fold_addition) {
+    using M4 = spio::Module<I, 4, 16>;
+    using I8 = spio::Fold<I, 8>;
+    // M4(2) unfolds to 32, I8(2) unfolds to 16, result in finer stride (8)
+    EXPECT_TRUE(M4(2) + I8(2) == I8(6)); // 32/8 + 2 = 6
+    EXPECT_TRUE(I8(2) + M4(2) == I8(6));
+}
+
+UTEST(Module, fold_subtraction) {
+    using M4 = spio::Module<I, 4, 16>;
+    using I8 = spio::Fold<I, 8>;
+    EXPECT_TRUE(M4(2) - I8(2) == I8(2)); // 32/8 - 2 = 2
+    EXPECT_TRUE(I8(6) - M4(2) == I8(2)); // 6 - 32/8 = 2
+}
+
+UTEST(Module, dim_comparison) {
+    using M4 = spio::Module<I, 4, 16>;
+    EXPECT_TRUE(M4(2) == I(32)); // 2*16 = 32
+    EXPECT_TRUE(M4(2) < I(33));
+    EXPECT_TRUE(M4(2) > I(31));
+    EXPECT_TRUE(M4(2) <= I(32));
+    EXPECT_TRUE(M4(2) >= I(32));
+    EXPECT_TRUE(M4(2) != I(33));
+}
+
+UTEST(Module, fold_comparison) {
+    using M4 = spio::Module<I, 4, 16>;
+    using I8 = spio::Fold<I, 8>;
+    EXPECT_TRUE(M4(2) == I8(4)); // 2*16 = 4*8
+    EXPECT_TRUE(M4(2) < I8(5));
+    EXPECT_TRUE(M4(2) > I8(3));
+    EXPECT_TRUE(M4(2) <= I8(4));
+    EXPECT_TRUE(M4(2) >= I8(4));
+    EXPECT_TRUE(M4(2) != I8(5));
+}
+
+UTEST(Dim, unfold) {
+    // Dim::unfold() returns itself (stride is 1)
+    EXPECT_TRUE(I(7).unfold() == I(7));
+    EXPECT_EQ(I(42).unfold().get(), 42);
+}
+
+UTEST(Dim, stride_property) {
+    EXPECT_EQ(I::stride, 1);
+    EXPECT_EQ(J::stride, 1);
+}
+
+UTEST(Dim, module_method) {
+    // Dim::module<Size>() returns Module<Derived, Size, 1>
+    auto m = I(10).module<4>();
+    EXPECT_EQ(m.get(), 10 % 4);     // = 2
+    EXPECT_EQ(m.unfold().get(), 2); // stride is 1
+    EXPECT_EQ(decltype(m)::size, 4);
+    EXPECT_EQ(decltype(m)::stride, 1);
+
+    // Test with different values
+    EXPECT_EQ(I(0).module<4>().get(), 0);
+    EXPECT_EQ(I(3).module<4>().get(), 3);
+    EXPECT_EQ(I(4).module<4>().get(), 0);
+    EXPECT_EQ(I(7).module<4>().get(), 3);
+    EXPECT_EQ(I(100).module<8>().get(), 100 % 8);
+}
+
+UTEST(Fold, module_method) {
+    using I8 = spio::Fold<I, 8>;
+    // Fold::module<Size>() returns Module<DimType, Size, Stride>
+    auto m = I8(10).module<4>();
+    EXPECT_EQ(m.get(), 10 % 4);         // = 2
+    EXPECT_EQ(m.unfold().get(), 2 * 8); // stride is 8, so unfold = 16
+    EXPECT_EQ(decltype(m)::size, 4);
+    EXPECT_EQ(decltype(m)::stride, 8);
+
+    // Test with different values
+    EXPECT_EQ(I8(0).module<4>().get(), 0);
+    EXPECT_EQ(I8(3).module<4>().get(), 3);
+    EXPECT_EQ(I8(4).module<4>().get(), 0);
+    EXPECT_EQ(I8(7).module<4>().get(), 3);
+    EXPECT_EQ(I8(100).module<8>().get(), 100 % 8);
+}
+
+UTEST(Fold, module_preserves_stride) {
+    using I16 = spio::Fold<I, 16>;
+    using I32 = spio::Fold<I, 32>;
+
+    // Module from Fold<I, 16> should have stride 16
+    auto m16 = I16(5).module<4>();
+    EXPECT_EQ(decltype(m16)::stride, 16);
+    EXPECT_EQ(m16.unfold().get(), (5 % 4) * 16); // = 16
+
+    // Module from Fold<I, 32> should have stride 32
+    auto m32 = I32(7).module<4>();
+    EXPECT_EQ(decltype(m32)::stride, 32);
+    EXPECT_EQ(m32.unfold().get(), (7 % 4) * 32); // = 96
+}
+
+UTEST(min_max, same_type) {
+    EXPECT_TRUE(spio::min(I(5), I(10)) == I(5));
+    EXPECT_TRUE(spio::max(I(5), I(10)) == I(10));
+    EXPECT_TRUE(spio::min(I(10), I(5)) == I(5));
+    EXPECT_TRUE(spio::max(I(10), I(5)) == I(10));
+}
+
+UTEST(min_max, fold_same_stride) {
+    using I8 = spio::Fold<I, 8>;
+    EXPECT_TRUE(spio::min(I8(5), I8(10)) == I8(5));
+    EXPECT_TRUE(spio::max(I8(5), I8(10)) == I8(10));
+}
+
+UTEST(min_max, module_same_type) {
+    using M4 = spio::Module<I, 4, 16>;
+    EXPECT_TRUE(spio::min(M4(1), M4(3)) == M4(1));
+    EXPECT_TRUE(spio::max(M4(1), M4(3)) == M4(3));
+}
+
+UTEST(min_max, fold_different_stride) {
+    using I8 = spio::Fold<I, 8>;
+    using I16 = spio::Fold<I, 16>;
+    // I8(8) = 64, I16(5) = 80, result in finer stride (8)
+    EXPECT_TRUE(spio::min(I8(8), I16(5)) == I8(8));
+    EXPECT_TRUE(spio::max(I8(8), I16(5)) == I8(10)); // 80/8 = 10
+}
+
+UTEST(min_max, dim_and_fold) {
+    using I8 = spio::Fold<I, 8>;
+    // I8(8) = 64, I(50) = 50
+    EXPECT_TRUE(spio::min(I8(8), I(50)) == I(50));
+    EXPECT_TRUE(spio::max(I8(8), I(50)) == I(64));
+    EXPECT_TRUE(spio::min(I(50), I8(8)) == I(50));
+    EXPECT_TRUE(spio::max(I(50), I8(8)) == I(64));
+}
+
+UTEST(min_max, module_and_dim) {
+    using M4 = spio::Module<I, 4, 16>;
+    // M4(2) unfolds to 32
+    EXPECT_TRUE(spio::min(M4(2), I(50)) == I(32));
+    EXPECT_TRUE(spio::max(M4(2), I(50)) == I(50));
+    EXPECT_TRUE(spio::min(I(50), M4(2)) == I(32));
+    EXPECT_TRUE(spio::max(I(50), M4(2)) == I(50));
+}
+
+UTEST(min_max, module_and_fold) {
+    using M4 = spio::Module<I, 4, 16>;
+    using I8 = spio::Fold<I, 8>;
+    // M4(2) = 32, I8(5) = 40, result in stride 8
+    EXPECT_TRUE(spio::min(M4(2), I8(5)) == I8(4)); // 32/8 = 4
+    EXPECT_TRUE(spio::max(M4(2), I8(5)) == I8(5));
+}
+
+UTEST(cross_type, negative_values) {
+    using I8 = spio::Fold<I, 8>;
+    EXPECT_TRUE(I8(2) - I(20) == I(-4)); // 16 - 20 = -4
+    EXPECT_TRUE(I(10) - I8(2) == I(-6)); // 10 - 16 = -6
+    EXPECT_TRUE(I8(-1) + I(16) == I(8)); // -8 + 16 = 8
+}
+
+UTEST(cross_type, module_negative) {
+    using M4 = spio::Module<I, 4, 16>;
+    EXPECT_TRUE(M4(1) - I(20) == I(-4)); // 16 - 20 = -4
+    EXPECT_TRUE(I(10) - M4(1) == I(-6)); // 10 - 16 = -6
 }
 
 UTEST(range, step_1) {

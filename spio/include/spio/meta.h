@@ -258,36 +258,6 @@ namespace spio {
         // Dimension type traits - single definitions
         // ========================================================================
 
-        // Extract the base dim_type from a Dim, Fold, or Module
-        template <typename T, typename = void> struct get_base_dim_type {
-            using type = T; // For plain Dim types, the type itself is the base
-        };
-
-        template <typename T> struct get_base_dim_type<T, void_t<typename T::dim_type>> {
-            using type = typename T::dim_type; // For Fold and Module, extract dim_type
-        };
-
-        template <typename T> using get_base_dim_type_t = typename get_base_dim_type<T>::type;
-
-        // Check if a type has a dim_type member (i.e., is a Fold or Module)
-        template <typename T, typename = void> struct has_dim_type : false_type {};
-
-        template <typename T> struct has_dim_type<T, void_t<typename T::dim_type>> : true_type {};
-
-        template <typename T> inline constexpr bool has_dim_type_v = has_dim_type<T>::value;
-
-        // Helper to get stride from a dimension type (1 for plain Dim, Stride for Fold/Module)
-        template <typename DimType, typename = void> struct get_dim_stride {
-            static constexpr int value = 1;
-        };
-
-        template <typename DimType>
-        struct get_dim_stride<DimType, void_t<decltype(DimType::stride)>> {
-            static constexpr int value = DimType::stride.get();
-        };
-
-        template <typename T> inline constexpr int get_dim_stride_v = get_dim_stride<T>::value;
-
         // Get the size of a dimension type
         // For base Dims and Folds: unbounded (represented as max int)
         // For Modules: actual compile-time size
@@ -296,7 +266,7 @@ namespace spio {
         };
 
         template <typename T> struct get_dim_size<T, void_t<decltype(T::size)>> {
-            static constexpr int value = T::size.get();
+            static constexpr int value = T::size;
         };
 
         template <typename T> inline constexpr int get_dim_size_v = get_dim_size<T>::value;
@@ -306,9 +276,15 @@ namespace spio {
         inline constexpr bool is_bounded_v = get_dim_size<T>::value != 0x7FFFFFFF;
 
         // Check if two dim-like types are compatible (same base dimension)
+        // Returns false if either type doesn't have dim_type
+        template <typename T, typename U, typename = void> struct dims_compatible : false_type {};
+
         template <typename T, typename U>
-        inline constexpr bool dims_compatible_v =
-            is_same<get_base_dim_type_t<T>, get_base_dim_type_t<U>>::value;
+        struct dims_compatible<T, U, void_t<typename T::dim_type, typename U::dim_type>>
+            : bool_constant<is_same<typename T::dim_type, typename U::dim_type>::value> {};
+
+        template <typename T, typename U>
+        inline constexpr bool dims_compatible_v = dims_compatible<T, U>::value;
 
         // ========================================================================
         // Detection for tensor_type member
@@ -334,7 +310,7 @@ namespace spio {
 
         template <typename BaseDimType, typename Head, typename... Tail>
         struct tuple_contains_base_dim<BaseDimType, tuple<Head, Tail...>>
-            : conditional_t<is_same<get_base_dim_type_t<Head>, BaseDimType>::value, true_type,
+            : conditional_t<is_same<typename Head::dim_type, BaseDimType>::value, true_type,
                             tuple_contains_base_dim<BaseDimType, tuple<Tail...>>> {};
 
         // Get unique base dim_types from a tuple
@@ -346,7 +322,7 @@ namespace spio {
 
         template <typename Head, typename... Tail, typename... ResultTypes>
         struct tuple_unique_base_dims<tuple<Head, Tail...>, tuple<ResultTypes...>> {
-            using BaseDim = get_base_dim_type_t<Head>;
+            using BaseDim = typename Head::dim_type;
             using type = typename tuple_unique_base_dims<
                 tuple<Tail...>,
                 conditional_t<tuple_contains<BaseDim, tuple<ResultTypes...>>::value,
@@ -374,7 +350,7 @@ namespace spio {
         template <typename BaseDimType, typename Head, typename... Tail>
         struct tuple_get_by_base_dim<BaseDimType, tuple<Head, Tail...>> {
             template <typename TupleType> DEVICE static constexpr auto& get(TupleType& t) {
-                if constexpr (is_same<get_base_dim_type_t<Head>, BaseDimType>::value) {
+                if constexpr (is_same<typename Head::dim_type, BaseDimType>::value) {
                     return t.first;
                 } else {
                     return tuple_get_by_base_dim<BaseDimType, tuple<Tail...>>::get(t.rest);
@@ -383,7 +359,7 @@ namespace spio {
 
             template <typename TupleType>
             DEVICE static constexpr const auto& get(const TupleType& t) {
-                if constexpr (is_same<get_base_dim_type_t<Head>, BaseDimType>::value) {
+                if constexpr (is_same<typename Head::dim_type, BaseDimType>::value) {
                     return t.first;
                 } else {
                     return tuple_get_by_base_dim<BaseDimType, tuple<Tail...>>::get(t.rest);
@@ -402,7 +378,7 @@ namespace spio {
 
         template <typename Head, typename... Tail, typename OtherBaseDims, typename... ResultTypes>
         struct tuple_exclude_base_dims<tuple<Head, Tail...>, OtherBaseDims, tuple<ResultTypes...>> {
-            using head_base = get_base_dim_type_t<Head>;
+            using head_base = typename Head::dim_type;
             static constexpr bool should_exclude = tuple_contains<head_base, OtherBaseDims>::value;
             using type = typename tuple_exclude_base_dims<
                 tuple<Tail...>, OtherBaseDims,
@@ -425,7 +401,7 @@ namespace spio {
 
         template <typename Head, typename... Tail, typename OtherTuple, typename... ResultTypes>
         struct tuple_keep_base_dims<tuple<Head, Tail...>, OtherTuple, tuple<ResultTypes...>> {
-            using head_base = get_base_dim_type_t<Head>;
+            using head_base = typename Head::dim_type;
             static constexpr bool should_keep =
                 tuple_contains_base_dim<head_base, OtherTuple>::value;
             using type = typename tuple_keep_base_dims<
@@ -457,7 +433,7 @@ namespace spio {
 
         template <typename BaseDim, typename First, typename... Rest>
         struct tuple_find_by_base_dim<BaseDim, tuple<First, Rest...>> {
-            using first_base = get_base_dim_type_t<First>;
+            using first_base = typename First::dim_type;
             static constexpr bool matches = is_same<first_base, BaseDim>::value;
             using type =
                 conditional_t<matches, First,
@@ -522,7 +498,7 @@ namespace spio {
         // Recursive case: check if first DimInfo's base dim is in BaseDims
         template <typename FirstInfo, typename... RestInfos, typename BaseDimsTuple>
         struct keep_dim_infos_by_base<tuple<FirstInfo, RestInfos...>, BaseDimsTuple> {
-            using first_base_dim = get_base_dim_type_t<typename FirstInfo::dim_type>;
+            using first_base_dim = typename FirstInfo::dim_type::dim_type;
             using rest_result =
                 typename keep_dim_infos_by_base<tuple<RestInfos...>, BaseDimsTuple>::type;
 
@@ -540,8 +516,8 @@ namespace spio {
 
         // Compare two DimInfos with same base dim, keep the one with larger stride
         template <typename InfoA, typename InfoB> struct coarser_dim_info {
-            static constexpr int stride_a = get_dim_stride<typename InfoA::dim_type>::value;
-            static constexpr int stride_b = get_dim_stride<typename InfoB::dim_type>::value;
+            static constexpr int stride_a = InfoA::dim_type::stride;
+            static constexpr int stride_b = InfoB::dim_type::stride;
             using type = conditional_t<(stride_a >= stride_b), InfoA, InfoB>;
         };
 

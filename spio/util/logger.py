@@ -2,14 +2,15 @@
 
 import os
 
-TRUTHS = ["true", "1", "yes", "y", "t"]
-env_value = os.environ.get("SPIO_LOGGER", "0").lower()
+from .env import env_var_is_true
 
-# pylint: disable=C0103
-if env_value in TRUTHS:
-    log_level = 1
-elif env_value.isdigit():
+env_value = os.environ.get("SPIO_LOGGER", "0")
+if env_value.isdigit():
     log_level = int(env_value)
+    if log_level < 0:
+        raise ValueError("Log level cannot be negative.")
+elif env_var_is_true("SPIO_LOGGER"):
+    log_level = 1
 else:
     log_level = 0
 

@@ -56,7 +56,7 @@ namespace spio {
 
         template <typename First, typename... Rest, typename CoordsTuple2>
         struct coords_share_base_dim<tuple<First, Rest...>, CoordsTuple2> {
-            using first_base = get_base_dim_type_t<First>;
+            using first_base = typename First::dim_type;
             static constexpr bool value =
                 tuple_contains_base_dim<first_base, CoordsTuple2>::value ||
                 coords_share_base_dim<tuple<Rest...>, CoordsTuple2>::value;
@@ -75,7 +75,7 @@ namespace spio {
         template <typename DimType, typename Compare, typename... ADims, typename... BDims>
         DEVICE constexpr bool compare_dim(const Coordinates<ADims...>& a,
                                           const Coordinates<BDims...>& b, Compare cmp) {
-            using base_dim = get_base_dim_type_t<DimType>;
+            using base_dim = typename DimType::dim_type;
             if constexpr (tuple_contains_base_dim<base_dim, tuple<BDims...>>::value) {
                 return cmp(a.template get<DimType>(), coords_get_by_base_dim<base_dim>(b));
             } else {
@@ -137,7 +137,7 @@ namespace spio {
         template <typename DimType, typename... ADims, typename... BDims>
         DEVICE constexpr auto process_from_a_normalized(const Coordinates<ADims...>& a,
                                                         const Coordinates<BDims...>& b) {
-            using base_dim = get_base_dim_type_t<DimType>;
+            using base_dim = typename DimType::dim_type;
             if constexpr (tuple_contains_base_dim<base_dim, tuple<BDims...>>::value) {
                 return a.template get<DimType>() + coords_get_by_base_dim<base_dim>(b);
             } else {

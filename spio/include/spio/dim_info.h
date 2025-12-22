@@ -11,11 +11,11 @@ namespace spio {
         template <typename... Ts> struct product_sizes;
 
         template <typename T, typename... Ts> struct product_sizes<T, Ts...> {
-            static constexpr int value = T::module_type::size.get() * product_sizes<Ts...>::value;
+            static constexpr int value = T::size * product_sizes<Ts...>::value;
         };
 
         template <typename T> struct product_sizes<T> {
-            static constexpr int value = T::module_type::size.get();
+            static constexpr int value = T::size;
         };
 
         // Add a new trait to identify dummy dimensions
@@ -24,18 +24,28 @@ namespace spio {
         };
     }
 
-    /// @brief The private dimension type for linear offsets.
-    SPIO_DIM(_OffsetDim);
-
     /// @brief Store information about a tensor dimension.
     /// @tparam DimType the dimension type
     /// @tparam Size the size of the dimension
     /// @tparam Stride the stride of the dimension
     template <typename DimType, int Size, int Stride> struct DimInfo {
         using dim_type = DimType;
+        static constexpr int size = Size;
+        static constexpr int stride = Stride;
 
-        /// @brief  How this dimension folds the tensor's linear offset dimension.
-        using module_type = Module<_OffsetDim, Size, Stride>;
+        DEVICE static constexpr int dim_to_offset(DimType dim) {
+            return (dim.get() % size) * stride;
+        }
+
+        DEVICE static constexpr auto offset_to_dim(unsigned offset) {
+            using dim_base_type = typename DimType::dim_type;
+            constexpr int dim_stride = DimType::stride;
+            // Unsigned arithmetic generates smaller code for division/modulus.
+            constexpr unsigned usize = size;
+            constexpr unsigned ustride = stride;
+            auto value = (offset / ustride) % usize;
+            return Module<dim_base_type, size, dim_stride>(value);
+        }
     };
 
     namespace detail {
@@ -99,13 +109,11 @@ namespace spio {
         /// @tparam DimType the dimension type
         /// @tparam DimInfos the dimension infos
         template <typename DimType, typename... DimInfos> struct dimension_size {
-            static constexpr DimType value =
-                find_dim_info<DimType, DimInfos...>::info::module_type::size.get();
+            static constexpr DimType value = find_dim_info<DimType, DimInfos...>::info::size;
         };
 
         template <typename DimType, typename... DimInfos> struct dimension_stride {
-            static constexpr DimType value =
-                find_dim_info<DimType, DimInfos...>::info::module_type::stride.get();
+            static constexpr DimType value = find_dim_info<DimType, DimInfos...>::info::stride;
         };
 
         template <typename FromDim, typename ToDim, typename DimInfo>
