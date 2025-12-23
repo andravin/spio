@@ -11,6 +11,7 @@ import pytest
 import spio.compiler
 from spio.generators import *
 from spio.generators import GENERATORS
+from spio.util import env_var_is_true
 
 DIM_EXAMPLES = [
     "01_commutativity",
@@ -20,8 +21,7 @@ DIM_EXAMPLES = [
     "05_compound_index",
 ]
 
-TRUTHS = ["true", "1", "yes", "y", "t"]
-ENABLE_CPP_TESTS = os.environ.get("SPIO_ENABLE_CPP_TESTS", "false").lower() in TRUTHS
+ENABLE_CPP_TESTS = env_var_is_true("SPIO_ENABLE_CPP_TESTS")
 
 UTEST_HEADER = '#include "utest.h"'
 

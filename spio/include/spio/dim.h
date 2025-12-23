@@ -9,46 +9,16 @@ namespace spio {
     template <class DimType, int Stride> class Fold;
     template <class DimType, int Size, int Stride> class Module;
 
-    /// @brief A base class for tensor dimensions using CRTP.
-    /// Spio uses "typed tensors" which means that each tensor dimensions is a unique types.
-    /// This prevents accidental mixing of different dimensions in index arithmetic
-    /// expressions or subscripting operations.
-    /// Normally, all dimensions classes referenced by custom tensors and indexes are
-    /// generated automatically by the code generation system.
-    /// @tparam Derived The derived dimension type (CRTP pattern)
-    template <typename Derived> class Dim {
+    template <typename Derived> class BaseDim {
+        int _i;
+
     public:
-        DEVICE constexpr Dim() : _i(0) {}
+        DEVICE constexpr BaseDim() : _i(0) {}
 
-        constexpr Dim(const Dim& other) = default;
-
-        constexpr Dim& operator=(const Dim& other) = default;
-
-        template <int Stride>
-        DEVICE constexpr Dim(const Fold<Derived, Stride> folded_dim)
-            : _i(folded_dim.unfold().get()) {}
-
-        // TODO: make explicit to prevent accidental conversion.
-        // But doing so will break a lot of code.
-        DEVICE constexpr Dim(int i) : _i(i) {}
+        DEVICE constexpr BaseDim(int i) : _i(i) {}
 
         DEVICE constexpr int get() const {
             return _i;
-        }
-
-        /// @brief Fold the dimension by a given stride.
-        /// @tparam Stride the stride to fold by.
-        /// @return a Fold object that is the result of folding the current dimension by the given
-        /// stride.
-        template <int Stride> DEVICE constexpr Fold<Derived, Stride> fold() const {
-            return Fold<Derived, Stride>(static_cast<const Derived&>(*this));
-        }
-
-        /// @brief Cast the dimension to a new dimension type.
-        /// @tparam NewDimType the type to cast the dimension to.
-        /// @return the same dimension index value in a new dimension type.
-        template <class NewDimType> DEVICE constexpr NewDimType cast() const {
-            return NewDimType(_i);
         }
 
         // Same-type arithmetic (Derived op Derived)
@@ -96,21 +66,74 @@ namespace spio {
         DEVICE constexpr bool operator!=(Derived other) const {
             return _i != other._i;
         }
+    };
 
-    private:
-        int _i; // Removed 'const' to allow assignment
+    /// @brief A base class for tensor dimensions using CRTP.
+    /// Spio uses "typed tensors" which means that each tensor dimensions is a unique types.
+    /// This prevents accidental mixing of different dimensions in index arithmetic
+    /// expressions or subscripting operations.
+    /// Normally, all dimensions classes referenced by custom tensors and indexes are
+    /// generated automatically by the code generation system.
+    /// @tparam Derived The derived dimension type (CRTP pattern)
+    template <typename Derived> class Dim : public BaseDim<Derived> {
+    public:
+        using dim_type = Derived;
+        constexpr static int stride = 1;
+
+        using Base = BaseDim<Derived>;
+
+        using Base::BaseDim;
+
+        using Base::get;
+
+        constexpr Dim(const Dim& other) = default;
+
+        constexpr Dim& operator=(const Dim& other) = default;
+
+        template <int Stride>
+        DEVICE constexpr Dim(const Fold<Derived, Stride> folded_dim)
+            : Base(folded_dim.unfold().get()) {}
+
+        /// @brief Fold the dimension by a given stride.
+        /// @tparam Stride the stride to fold by.
+        /// @return a Fold object that is the result of folding the current dimension by the given
+        /// stride.
+        template <int Stride> DEVICE constexpr auto fold() const {
+            if constexpr (Stride == 1) {
+                return static_cast<const Derived&>(*this);
+            } else {
+                return Fold<Derived, Stride>(static_cast<const Derived&>(*this));
+            }
+        }
+
+        /// @brief Unfold the dimension to its base type.
+        /// @return itself, since Dim is already the base type with stride 1.
+        DEVICE constexpr Derived unfold() const {
+            return static_cast<const Derived&>(*this);
+        }
+
+        template <int Size> DEVICE constexpr auto module() const {
+            return Module<Derived, Size, 1>(get());
+        }
+
+        /// @brief Cast the dimension to a new dimension type.
+        /// @tparam NewDimType the type to cast the dimension to.
+        /// @return the same dimension index value in a new dimension type.
+        template <class NewDimType> DEVICE constexpr NewDimType cast() const {
+            return NewDimType(get());
+        }
     };
 
     /// @brief A folded dimension with stride.
-    template <class DimType, int Stride> class Fold : public Dim<Fold<DimType, Stride>> {
+    template <class DimType, int Stride> class Fold : public BaseDim<Fold<DimType, Stride>> {
         static_assert(Stride > 0, "Fold stride must be positive");
 
     public:
         using dim_type = DimType;
-        constexpr static dim_type stride = Stride;
+        constexpr static int stride = Stride;
 
-        using Base = Dim<Fold<DimType, Stride>>;
-        using Base::Dim;
+        using Base = BaseDim<Fold<DimType, Stride>>;
+        using Base::BaseDim;
         using Base::get;
 
         explicit DEVICE constexpr Fold(const DimType dim) : Base(dim.get() / Stride) {}
@@ -123,13 +146,21 @@ namespace spio {
             return DimType(get() * Stride);
         }
 
-        template <int NewStride> DEVICE constexpr Fold<DimType, NewStride> fold() const {
-            if constexpr (Stride > NewStride) {
+        template <int NewStride> DEVICE constexpr auto fold() const {
+            if constexpr (NewStride == 1) {
+                return unfold();
+            } else if constexpr (Stride > NewStride) {
+                static_assert(Stride % NewStride == 0,
+                              "New stride must evenly divide the current stride");
                 constexpr int relative_stride = Stride / NewStride;
                 return Fold<DimType, NewStride>(get() * relative_stride);
             } else {
                 return Fold<DimType, NewStride>(unfold());
             }
+        }
+
+        template <int Size> DEVICE constexpr auto module() const {
+            return Module<DimType, Size, Stride>(get());
         }
 
         template <class NewDimType> DEVICE constexpr auto cast() const -> Fold<NewDimType, Stride> {
@@ -139,33 +170,26 @@ namespace spio {
 
     /// @brief A dimension with both size and stride (bounded).
     template <class DimType, int Size, int Stride>
-    class Module : public Dim<Module<DimType, Size, Stride>> {
+    class Module : public BaseDim<Module<DimType, Size, Stride>> {
         static_assert(Size > 0, "Module size must be positive");
         static_assert(Stride > 0, "Module stride must be positive");
 
     public:
         using dim_type = DimType;
-        constexpr static dim_type stride = Stride;
-        constexpr static dim_type size = Size;
+        constexpr static int stride = Stride;
+        constexpr static int size = Size;
 
-        using Base = Dim<Module<DimType, Size, Stride>>;
+        using Base = BaseDim<Module<DimType, Size, Stride>>;
 
-        DEVICE constexpr Module() : Base(0) {}
-
-        DEVICE constexpr Module(int i) : Base(i % Size) {}
-
+        using Base::BaseDim;
         using Base::get;
+
+        explicit DEVICE constexpr Module(int i) : Base(i % Size) {}
 
         explicit DEVICE constexpr Module(const DimType dim) : Base((dim.get() / Stride) % Size) {}
 
-        template <int NewStride> DEVICE constexpr Fold<DimType, NewStride> fold() const {
-            if constexpr (Stride > NewStride) {
-                constexpr int relative_stride = Stride / NewStride;
-                return Fold<DimType, NewStride>(get() * relative_stride);
-            } else {
-                return Fold<DimType, NewStride>(unfold());
-            }
-        }
+        explicit DEVICE constexpr Module(const Fold<DimType, Stride> folded_dim)
+            : Base(folded_dim.get() % Size) {}
 
         DEVICE constexpr auto to_fold() const {
             return fold<Stride>();
@@ -173,6 +197,22 @@ namespace spio {
 
         DEVICE constexpr DimType unfold() const {
             return DimType(get() * Stride);
+        }
+
+        template <int NewStride> DEVICE constexpr auto fold() const {
+            if constexpr (NewStride == 1) {
+                return unfold();
+            } else if constexpr (Stride > NewStride) {
+                constexpr int relative_stride = Stride / NewStride;
+                return Fold<DimType, NewStride>(get() * relative_stride);
+            } else {
+                return Fold<DimType, NewStride>(unfold());
+            }
+        }
+
+        template <class NewDimType>
+        DEVICE constexpr auto cast() const -> Module<NewDimType, Size, Stride> {
+            return Module<NewDimType, Size, Stride>(get());
         }
     };
 
@@ -182,20 +222,11 @@ namespace spio {
     // ========================================================================
 
     namespace detail {
-        // Convert any dim-like type to its base value
-        template <typename T> DEVICE constexpr int to_base_value(T d) {
-            if constexpr (has_dim_type_v<T>) {
-                return d.get() * get_dim_stride_v<T>;
-            } else {
-                return d.get();
-            }
-        }
-
         // Result type: use the finer (smaller) stride
         template <typename T, typename U> struct arithmetic_result_type {
-            using base_type = get_base_dim_type_t<T>;
-            static constexpr int t_stride = get_dim_stride_v<T>;
-            static constexpr int u_stride = get_dim_stride_v<U>;
+            using base_type = typename T::dim_type;
+            static constexpr int t_stride = T::stride;
+            static constexpr int u_stride = U::stride;
             static constexpr int result_stride = (t_stride < u_stride) ? t_stride : u_stride;
             using type =
                 conditional_t<result_stride == 1, base_type, Fold<base_type, result_stride>>;
@@ -207,63 +238,89 @@ namespace spio {
         // Check if this is a cross-type operation (not same type, but compatible base)
         template <typename T, typename U>
         inline constexpr bool is_cross_type_op_v = dims_compatible_v<T, U> && !is_same<T, U>::value;
+
+        // Cross-type arithmetic helper
+        template <typename Op, typename T, typename U>
+        DEVICE constexpr auto cross_type_arithmetic(T lhs, U rhs, Op op) {
+            using result_type = arithmetic_result_t<T, U>;
+            constexpr int result_stride = result_type::stride;
+            auto a = lhs.template fold<result_stride>().get();
+            auto b = rhs.template fold<result_stride>().get();
+            return result_type(op(a, b));
+        }
+
+        // Cross-type comparison helper
+        template <typename Op, typename T, typename U>
+        DEVICE constexpr bool cross_type_compare(T lhs, U rhs, Op op) {
+            using result_type = arithmetic_result_t<T, U>;
+            constexpr int result_stride = result_type::stride;
+            auto a = lhs.template fold<result_stride>().get();
+            auto b = rhs.template fold<result_stride>().get();
+            return op(a, b);
+        }
     }
 
-    // Cross-type addition
+    // Cross-type arithmetic operators
     template <typename T, typename U,
               detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
     DEVICE constexpr auto operator+(T lhs, U rhs) {
-        using result_type = detail::arithmetic_result_t<T, U>;
-        constexpr int result_stride = detail::get_dim_stride_v<result_type>;
-        int base_result = detail::to_base_value(lhs) + detail::to_base_value(rhs);
-        return result_type(base_result / result_stride);
+        return detail::cross_type_arithmetic(lhs, rhs, [](int a, int b) { return a + b; });
     }
 
-    // Cross-type subtraction
     template <typename T, typename U,
               detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
     DEVICE constexpr auto operator-(T lhs, U rhs) {
-        using result_type = detail::arithmetic_result_t<T, U>;
-        constexpr int result_stride = detail::get_dim_stride_v<result_type>;
-        int base_result = detail::to_base_value(lhs) - detail::to_base_value(rhs);
-        return result_type(base_result / result_stride);
+        return detail::cross_type_arithmetic(lhs, rhs, [](int a, int b) { return a - b; });
     }
 
-    // Cross-type comparisons
+    // Cross-type comparison operators
     template <typename T, typename U,
               detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
     DEVICE constexpr bool operator<(T lhs, U rhs) {
-        return detail::to_base_value(lhs) < detail::to_base_value(rhs);
+        return detail::cross_type_compare(lhs, rhs, [](int a, int b) { return a < b; });
     }
 
     template <typename T, typename U,
               detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
     DEVICE constexpr bool operator<=(T lhs, U rhs) {
-        return detail::to_base_value(lhs) <= detail::to_base_value(rhs);
+        return detail::cross_type_compare(lhs, rhs, [](int a, int b) { return a <= b; });
     }
 
     template <typename T, typename U,
               detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
     DEVICE constexpr bool operator>(T lhs, U rhs) {
-        return detail::to_base_value(lhs) > detail::to_base_value(rhs);
+        return detail::cross_type_compare(lhs, rhs, [](int a, int b) { return a > b; });
     }
 
     template <typename T, typename U,
               detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
     DEVICE constexpr bool operator>=(T lhs, U rhs) {
-        return detail::to_base_value(lhs) >= detail::to_base_value(rhs);
+        return detail::cross_type_compare(lhs, rhs, [](int a, int b) { return a >= b; });
     }
 
     template <typename T, typename U,
               detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
     DEVICE constexpr bool operator==(T lhs, U rhs) {
-        return detail::to_base_value(lhs) == detail::to_base_value(rhs);
+        return detail::cross_type_compare(lhs, rhs, [](int a, int b) { return a == b; });
     }
 
     template <typename T, typename U,
               detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
     DEVICE constexpr bool operator!=(T lhs, U rhs) {
-        return detail::to_base_value(lhs) != detail::to_base_value(rhs);
+        return detail::cross_type_compare(lhs, rhs, [](int a, int b) { return a != b; });
+    }
+
+    // Cross-type min/max functions
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
+    DEVICE constexpr auto min(T lhs, U rhs) {
+        return detail::cross_type_arithmetic(lhs, rhs, [](int a, int b) { return a < b ? a : b; });
+    }
+
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_cross_type_op_v<T, U>, int> = 0>
+    DEVICE constexpr auto max(T lhs, U rhs) {
+        return detail::cross_type_arithmetic(lhs, rhs, [](int a, int b) { return a > b ? a : b; });
     }
 
     // ========================================================================

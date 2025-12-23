@@ -1,31 +1,19 @@
 """Compile kernels in parallel using a process pool."""
 
 from multiprocessing import Pool
-from contextvars import ContextVar
 from functools import partial
-import os
 import signal
 from typing import List, Any, Tuple, TYPE_CHECKING
 
 from ..cuda.driver import DeviceAttributes
 
 from .compile_kernel import compile_kernel
+from .flags import workers, lineinfo, debug
 
 if TYPE_CHECKING:
     from ..kernels import Kernel, KernelFactory, Params
 
-
-TRUTHS = ["true", "1", "yes", "y", "t"]
 LONG_TIMEOUT = 999
-DEFAULT_WORKERS = 1
-
-default_lineinfo = os.environ.get("SPIO_LINEINFO", "False").lower() in TRUTHS
-default_debug = os.environ.get("SPIO_DEBUG", "False").lower() in TRUTHS
-workers = int(os.environ.get("SPIO_WORKERS", f"{DEFAULT_WORKERS}"))
-
-lineinfo = ContextVar("lineinfo", default=default_lineinfo)
-debug = ContextVar("debug", default=default_debug)
-
 # Let the pool worker processes ignore SIGINT.
 # Reference:
 # https://stackoverflow.com/questions/11312525/catch-ctrlc-sigint-and-exit-multiprocesses-gracefully-in-python

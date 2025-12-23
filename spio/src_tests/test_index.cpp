@@ -11,7 +11,7 @@ UTEST(Index1D, get) {
     using Idx = CompoundIndex<DimInfo<I, 16, 1>>;
     for (unsigned offset = 0; offset < 16; ++offset) {
         Idx idx(offset);
-        EXPECT_EQ(idx.get<I>(), offset);
+        EXPECT_EQ(idx.get<I>().get(), offset);
     }
 }
 
@@ -20,8 +20,8 @@ UTEST(Index2D, get) {
     using Idx = CompoundIndex<DimInfo<I, 32, 8>, DimInfo<J, 8, 1>>;
     for (unsigned offset = 0; offset < 256; ++offset) {
         Idx idx(offset);
-        EXPECT_EQ(idx.get<I>(), offset / 8);
-        EXPECT_EQ(idx.get<J>(), offset % 8);
+        EXPECT_EQ(idx.get<I>().get(), offset / 8);
+        EXPECT_EQ(idx.get<J>().get(), offset % 8);
     }
 }
 
@@ -34,9 +34,9 @@ UTEST(Index3D, get) {
 
     for (unsigned offset = 0; offset < 16 * 8 * 4; ++offset) {
         Idx idx(offset);
-        EXPECT_EQ(idx.get<I>(), offset / (8 * 4));
-        EXPECT_EQ(idx.get<J>(), (offset / 4) % 8);
-        EXPECT_EQ(idx.get<K>(), offset % 4);
+        EXPECT_EQ(idx.get<I>().get(), offset / (8 * 4));
+        EXPECT_EQ(idx.get<J>().get(), (offset / 4) % 8);
+        EXPECT_EQ(idx.get<K>().get(), offset % 4);
     }
 }
 

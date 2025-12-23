@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import torch
 
 from spio.generators import *
-from spio.compiler import compile_and_load_kernel
+from spio.compiler import compile_and_load_kernel, lineinfo, count_instructions
 from spio.util import divup, assert_all_close_with_acc_depth, SixteenChannelsLast
 
 
@@ -42,8 +42,9 @@ def test_mma_checkerboard_16c_kernel():
         source_file_name="mma_checkerboard_16c.cu",
         header_dict={"types.h": generate(specs)},
         src_module="spio.src_tests",
-        lineinfo=True,
+        lineinfo=lineinfo.get(),
         max_registers=max_registers,
+        count_instructions=count_instructions.get(),
     )
     mma_kernel_16c.launch(grid, block, (C_16c, A_16c, B_16c))
     C = SixteenChannelsLast.unformat(C_16c)
@@ -163,7 +164,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     # Output transpose through shared memory
     g.CStoreSmem = Tensor(
         dtype.half2,
-        Dims(warp_i=warps_m, j8=block_x8, i16=warp_m16, i=-1, j2=-1),
+        Dims(warp_i=warps_m, j8=block_x8, i=config.warp_m, j2=-1),
         strides=Strides(j8=(config.warp_m + 1) * 4),
     )
     g.CLoadSmem = Tensor(

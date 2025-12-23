@@ -17,7 +17,7 @@ namespace spio {
                                           detail::dims_compatible_v<DimLike, OffsetType>,
                                       int> = 0>
         DEVICE constexpr CompoundIndexBase(DimLike dim)
-            : _offset(detail::to_base_value(dim) / detail::get_dim_stride_v<OffsetType>) {}
+            : _offset(dim.unfold().get() / OffsetType::stride) {}
 
         /// @brief Construct from Coordinates by summing matching dimensions and folding to
         /// OffsetType
@@ -40,7 +40,7 @@ namespace spio {
         template <typename... CoordDims>
         DEVICE static constexpr OffsetType
         offset_from_coords(const Coordinates<CoordDims...>& coords) {
-            using offset_base = detail::get_base_dim_type_t<OffsetType>;
+            using offset_base = typename OffsetType::dim_type;
             using matching = detail::tuple_keep_base_dims_t<detail::tuple<CoordDims...>,
                                                             detail::tuple<offset_base>>;
 
@@ -51,8 +51,9 @@ namespace spio {
             // Sum all matching dims - addition handles stride normalization
             auto summed = sum_matching(coords, matching{});
             // Convert to base value and fold to OffsetType's stride
-            int base_value = detail::to_base_value(summed);
-            return OffsetType(base_value / detail::get_dim_stride_v<OffsetType>);
+            constexpr int offset_stride = OffsetType::stride;
+            auto offset_value = summed.template fold<offset_stride>();
+            return offset_value.template cast<OffsetType>();
         }
 
         template <typename... CoordDims, typename... MatchingDims>

@@ -6,11 +6,9 @@
 #include "spio/dim.h"
 #include "spio/dim_info.h"
 #include "spio/meta.h"
+#include "spio/coordinates.h"
 
 namespace spio {
-
-    // Forward declaration of Coordinates
-    template <typename... Dims> struct Coordinates;
 
     /// @brief Compound index for mapping a linear offset to multidimensional coordinates
     /// @details This class is the inverse of Tensor - it maps a linear offset
@@ -39,13 +37,8 @@ namespace spio {
         /// @tparam DimType The dimension type to extract
         /// @return A typed dimension value
         template <typename DimType> DEVICE constexpr auto get() const {
-            constexpr unsigned size = dim_traits::dimension_size<DimType, DimInfos...>::value.get();
-            constexpr unsigned stride =
-                dim_traits::dimension_stride<DimType, DimInfos...>::value.get();
-            auto value = (offset().get() / stride) % size;
-            using dim_base_type = detail::get_base_dim_type_t<DimType>;
-            constexpr int dim_stride = detail::get_dim_stride<DimType>::value;
-            return Module<dim_base_type, size, dim_stride>(value);
+            using dim_info = typename dim_traits::find_dim_info<DimType, DimInfos...>::info;
+            return dim_info::offset_to_dim(offset().get());
         }
 
         // Alternative method form if you prefer function syntax

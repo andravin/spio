@@ -7,7 +7,7 @@ import torch
 
 from .. import primary_context_guard
 from ..generators import generate, GenSpecs
-from ..compiler import compile_kernel, load_kernel
+from ..compiler import compile_kernel, load_kernel, count_instructions
 from ..util import check_channels_last
 from ..cuda.driver import FunctionAttributes
 from .kernel_util import get_first_device_in_args
@@ -87,8 +87,15 @@ class Kernel:
         """Compile the kernel."""
         self.cubin = compile_kernel(*self.compiler_args)
 
-    def load(self, device_ordinal=0, clear_cubin=True):
+    def load(
+        self,
+        device_ordinal: int = 0,
+        clear_cubin: bool = True,
+    ):
         """Load the compile kernel binary into a device.
+
+        Also counts kernel SASS instructions and prints it to stdout if the SPIO_COUNT_INSTRUCTIONS
+        environment variable is set to a truthy value.
 
         Args:
             device_ordinal (int, optional): The device ordinal to load the kernel onto.
@@ -100,6 +107,7 @@ class Kernel:
             kernel_name=self.kernel_name,
             cubin=self.cubin,
             device_ordinal=device_ordinal,
+            count_instructions=count_instructions.get(),
         )
         if self.kernel_spec.function_attributes is not None:
             self.function.set_attributes(self.kernel_spec.function_attributes)

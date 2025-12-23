@@ -62,10 +62,10 @@ namespace spio {
         struct update_dim_info<DimType, SliceSize, tuple<FirstInfo, RestInfos...>,
                                tuple<ResultTypes...>> {
             static constexpr bool is_match = is_same<DimType, typename FirstInfo::dim_type>::value;
-            using updated_info = conditional_t<is_match,
-                                               DimInfo<typename FirstInfo::dim_type, SliceSize,
-                                                       FirstInfo::module_type::stride.get()>,
-                                               FirstInfo>;
+            using updated_info =
+                conditional_t<is_match,
+                              DimInfo<typename FirstInfo::dim_type, SliceSize, FirstInfo::stride>,
+                              FirstInfo>;
             using type = typename update_dim_info<DimType, SliceSize, tuple<RestInfos...>,
                                                   tuple<ResultTypes..., updated_info>>::type;
         };
@@ -93,8 +93,8 @@ namespace spio {
         template <typename FirstDim, typename... RestDims>
         struct calculate_storage_size<FirstDim, RestDims...> {
             // Get size and stride for this dimension
-            static constexpr int size = FirstDim::module_type::size.get();
-            static constexpr int stride = FirstDim::module_type::stride.get();
+            static constexpr int size = FirstDim::size;
+            static constexpr int stride = FirstDim::stride;
 
             // Calculate max offset for this dimension plus rest of dims
             static constexpr int value =
@@ -107,8 +107,8 @@ namespace spio {
 
         // Compare two DimInfos with same base dim, keep the one with smaller stride (finest)
         template <typename InfoA, typename InfoB> struct finer_dim_info {
-            static constexpr int stride_a = get_dim_stride<typename InfoA::dim_type>::value;
-            static constexpr int stride_b = get_dim_stride<typename InfoB::dim_type>::value;
+            static constexpr int stride_a = InfoA::dim_type::stride;
+            static constexpr int stride_b = InfoB::dim_type::stride;
             using type = conditional_t<(stride_a <= stride_b), InfoA, InfoB>;
         };
 
@@ -180,25 +180,20 @@ namespace spio {
         // Compute offset contribution from a single coordinate dimension to a single DimInfo
         template <typename CoordDim, typename Info> struct compute_dim_offset {
             using TargetDimType = typename Info::dim_type;
-            using CoordBaseDim = get_base_dim_type_t<CoordDim>;
-            using TargetBaseDim = get_base_dim_type_t<TargetDimType>;
+            using CoordBaseDim = typename CoordDim::dim_type;
+            using TargetBaseDim = typename TargetDimType::dim_type;
 
             static constexpr bool same_base = is_same<CoordBaseDim, TargetBaseDim>::value;
-            static constexpr int coord_stride = get_dim_stride<CoordDim>::value;
-            static constexpr int target_stride = get_dim_stride<TargetDimType>::value;
-            static constexpr int target_size = Info::module_type::size.get();
-            static constexpr int mem_stride = Info::module_type::stride.get();
+            static constexpr int target_stride = TargetDimType::stride;
 
-            // Compute the offset contribution from coordinate value to this dimension
-            DEVICE static constexpr int compute(int coord_value) {
+            // Compute the offset contribution from coordinate to this dimension
+            DEVICE static constexpr int compute(CoordDim coord) {
                 if constexpr (!same_base) {
                     return 0;
                 } else {
-                    // Convert coordinate value to base units
-                    int base_value = coord_value * coord_stride;
-                    // Fold to target dimension
-                    int folded_value = (base_value / target_stride) % target_size;
-                    return folded_value * mem_stride;
+                    // Fold coordinate to target stride and convert to memory offset
+                    auto target_folded = coord.template fold<target_stride>();
+                    return Info::dim_to_offset(target_folded);
                 }
             }
         };
@@ -207,16 +202,16 @@ namespace spio {
         template <typename CoordDim, typename InfosTuple> struct sum_coord_to_infos;
 
         template <typename CoordDim> struct sum_coord_to_infos<CoordDim, tuple<>> {
-            DEVICE static constexpr int compute(int) {
+            DEVICE static constexpr int compute(CoordDim) {
                 return 0;
             }
         };
 
         template <typename CoordDim, typename FirstInfo, typename... RestInfos>
         struct sum_coord_to_infos<CoordDim, tuple<FirstInfo, RestInfos...>> {
-            DEVICE static constexpr int compute(int coord_value) {
-                return compute_dim_offset<CoordDim, FirstInfo>::compute(coord_value) +
-                       sum_coord_to_infos<CoordDim, tuple<RestInfos...>>::compute(coord_value);
+            DEVICE static constexpr int compute(CoordDim coord) {
+                return compute_dim_offset<CoordDim, FirstInfo>::compute(coord) +
+                       sum_coord_to_infos<CoordDim, tuple<RestInfos...>>::compute(coord);
             }
         };
 
@@ -233,7 +228,7 @@ namespace spio {
         struct compute_total_offset_impl<tuple<FirstCoord, RestCoords...>, InfosTuple> {
             template <typename Coords> DEVICE static constexpr int compute(const Coords& coords) {
                 int this_offset = sum_coord_to_infos<FirstCoord, InfosTuple>::compute(
-                    coords.template get<FirstCoord>().get());
+                    coords.template get<FirstCoord>());
                 int rest_offset =
                     compute_total_offset_impl<tuple<RestCoords...>, InfosTuple>::compute(coords);
                 return this_offset + rest_offset;
@@ -245,21 +240,6 @@ namespace spio {
                                                         const tuple<DimInfos...>& /* infos_tag */) {
             return compute_total_offset_impl<tuple<CoordDims...>, tuple<DimInfos...>>::compute(
                 coords);
-        }
-
-        // ========================================================================
-        // Fold a dimension value to a target dimension type (same base)
-        // ========================================================================
-
-        template <typename TargetDim, typename SourceDim>
-        DEVICE constexpr TargetDim fold_to_target(SourceDim src) {
-            static_assert(
-                is_same<get_base_dim_type_t<TargetDim>, get_base_dim_type_t<SourceDim>>::value,
-                "Cannot fold dimensions with different base types");
-            constexpr int src_stride = get_dim_stride<SourceDim>::value;
-            constexpr int tgt_stride = get_dim_stride<TargetDim>::value;
-            // Convert to base units, then to target units
-            return TargetDim((src.get() * src_stride) / tgt_stride);
         }
 
         // ========================================================================
@@ -296,14 +276,15 @@ namespace spio {
         DEVICE constexpr auto
         add_subscript_dim_to_cursor_coords(SubDim sub_dim,
                                            const Coordinates<CursorDims...>& cursor_coords) {
-            using sub_base = get_base_dim_type_t<SubDim>;
+            using sub_base = typename SubDim::dim_type;
 
             if constexpr (tuple_contains_base_dim<sub_base, tuple<CursorDims...>>::value) {
                 // Find which cursor dimension matches this base
                 using matching_cursor_dim =
                     typename tuple_find_by_base_dim<sub_base, tuple<CursorDims...>>::type;
                 // Fold subscript dim to cursor dim's type and add
-                auto folded = fold_to_target<matching_cursor_dim>(sub_dim);
+                constexpr int matching_dim_stride = matching_cursor_dim::stride;
+                auto folded = sub_dim.template fold<matching_dim_stride>();
                 auto current = cursor_coords.template get<matching_cursor_dim>();
                 // Create new coordinates with the updated value
                 return update_coord_value<matching_cursor_dim>(cursor_coords, current + folded);
@@ -405,7 +386,7 @@ namespace spio {
         template <typename SourceDim>
         using matching_dim_infos_t =
             detail::keep_dim_infos_by_base_t<detail::tuple<DimInfos...>,
-                                             detail::tuple<detail::get_base_dim_type_t<SourceDim>>>;
+                                             detail::tuple<typename SourceDim::dim_type>>;
 
         template <typename DimsTuple> struct any_coordinate_matches_impl;
 
@@ -447,7 +428,7 @@ namespace spio {
         }
 
         template <typename DimType> DEVICE Cursor& step(DimType d = 1) {
-            _coords = detail::apply_subscript_to_cursor(_coords, make_coordinates(d));
+            _coords = detail::add_subscript_dim_to_cursor_coords(d, _coords);
             return *this;
         }
 
@@ -498,8 +479,7 @@ namespace spio {
 
         /// @brief Increment the cursor in a specific dimension type.
         template <typename DimType> DEVICE BaseCursor& step(DimType d = 1) {
-            constexpr int stride =
-                dim_traits::find_dim_info<DimType, DimInfos...>::info::module_type::stride.get();
+            constexpr int stride = dim_traits::find_dim_info<DimType, DimInfos...>::info::stride;
             Base::reset(Base::get() + d.get() * stride);
             return *this;
         }
@@ -555,13 +535,13 @@ namespace spio {
         // Fails to compile if the exact dimension does not exist in the tensor.
         template <typename DimType> DEVICE static constexpr DimType size() {
             using info = typename dim_traits::find_dim_info<DimType, DimInfos...>::info;
-            return DimType(info::module_type::size.get());
+            return DimType(info::size);
         }
 
         // Get the total extent of the tensor in the requested dimension's base type.
         // Returns the size of the coarsest fold, converted to the requested dimension type.
         template <typename DimType> DEVICE static constexpr DimType extent() {
-            using RequestedBaseDim = detail::get_base_dim_type_t<DimType>;
+            using RequestedBaseDim = typename DimType::dim_type;
             using matching_infos =
                 detail::keep_dim_infos_by_base_t<detail::tuple<DimInfos...>,
                                                  detail::tuple<RequestedBaseDim>>;
@@ -636,7 +616,7 @@ namespace spio {
         template <typename... Infos>
         DEVICE static constexpr auto make_sizes_from_infos(detail::tuple<Infos...>) {
             return Coordinates<typename Infos::dim_type...>(
-                typename Infos::dim_type(Infos::module_type::size.get())...);
+                typename Infos::dim_type(Infos::size)...);
         }
 
         /// @brief Base case for loading data from a source cursor.
@@ -650,7 +630,7 @@ namespace spio {
                   typename... RestDimInfos>
         DEVICE static void load_impl(DstCursorType dst, SrcCursorType src) {
             using FirstDimType = typename FirstDimInfo::dim_type;
-            auto size = FirstDimType(FirstDimInfo::module_type::size.get());
+            auto size = FirstDimType(FirstDimInfo::size);
             for (auto i : range(size)) {
                 load_impl<decltype(dst[i]), decltype(src[i]), RestDimInfos...>(dst[i], src[i]);
             }
@@ -666,7 +646,7 @@ namespace spio {
         template <typename F, typename CursorType, typename FirstDimInfo, typename... RestDimInfos>
         DEVICE static void apply_impl(CursorType obj, F func) {
             using FirstDimType = typename FirstDimInfo::dim_type;
-            auto size = FirstDimType(FirstDimInfo::module_type::size.get());
+            auto size = FirstDimType(FirstDimInfo::size);
             for (auto i : range(size)) {
                 apply_impl<F, decltype(obj[i]), RestDimInfos...>(obj[i], func);
             }

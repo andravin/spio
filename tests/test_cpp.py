@@ -7,7 +7,6 @@ work in both C++ and CUDA programs.
 
 from subprocess import CalledProcessError
 from tempfile import NamedTemporaryFile
-import os
 from typing import Callable
 
 from importlib_resources import files as importlib_resources_files
@@ -15,11 +14,10 @@ import pytest
 
 import spio.generators as gen
 import spio.compiler
+from spio.util import env_var_is_true
 
 
-TRUTHS = ["true", "1", "yes", "y", "t"]
-
-ENABLE_CPP_TESTS = os.environ.get("SPIO_ENABLE_CPP_TESTS", "false").lower() in TRUTHS
+ENABLE_CPP_TESTS = env_var_is_true("SPIO_ENABLE_CPP_TESTS")
 
 UTEST_HEADER = '#include "utest.h"'
 

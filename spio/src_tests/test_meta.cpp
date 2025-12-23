@@ -354,63 +354,46 @@ UTEST(Meta, make_index_sequence_five) {
 }
 
 // ============================================================================
-// get_base_dim_type_t
+// T::dim_type
 // ============================================================================
 
-UTEST(Meta, get_base_dim_type_plain_dim) {
-    using Result = get_base_dim_type_t<I>;
+UTEST(Meta, dim_type_plain_dim) {
+    using Result = I::dim_type;
     EXPECT_TRUE((is_same<Result, I>::value));
 }
 
-UTEST(Meta, get_base_dim_type_fold) {
+UTEST(Meta, dim_type_fold) {
     using FoldI8 = Fold<I, 8>;
-    using Result = get_base_dim_type_t<FoldI8>;
+    using Result = FoldI8::dim_type;
     EXPECT_TRUE((is_same<Result, I>::value));
 }
 
-UTEST(Meta, get_base_dim_type_different_folds_same_base) {
+UTEST(Meta, dim_type_different_folds_same_base) {
     using FoldI4 = Fold<I, 4>;
     using FoldI8 = Fold<I, 8>;
-    using Result4 = get_base_dim_type_t<FoldI4>;
-    using Result8 = get_base_dim_type_t<FoldI8>;
+    using Result4 = FoldI4::dim_type;
+    using Result8 = FoldI8::dim_type;
     EXPECT_TRUE((is_same<Result4, I>::value));
     EXPECT_TRUE((is_same<Result8, I>::value));
     EXPECT_TRUE((is_same<Result4, Result8>::value));
 }
 
 // ============================================================================
-// has_dim_type
+// dim_type::stride
 // ============================================================================
 
-UTEST(Meta, has_dim_type_plain_dim) {
-    EXPECT_FALSE(has_dim_type<I>::value);
+UTEST(Meta, dim_stride_plain_dim) {
+    EXPECT_EQ(I::stride, 1);
 }
 
-UTEST(Meta, has_dim_type_fold) {
+UTEST(Meta, dim_stride_fold_8) {
     using FoldI8 = Fold<I, 8>;
-    EXPECT_TRUE(has_dim_type<FoldI8>::value);
+    EXPECT_EQ(FoldI8::stride, 8);
 }
 
-UTEST(Meta, has_dim_type_non_dim) {
-    EXPECT_FALSE(has_dim_type<int>::value);
-}
-
-// ============================================================================
-// get_dim_stride
-// ============================================================================
-
-UTEST(Meta, get_dim_stride_plain_dim) {
-    EXPECT_EQ(get_dim_stride<I>::value, 1);
-}
-
-UTEST(Meta, get_dim_stride_fold_8) {
-    using FoldI8 = Fold<I, 8>;
-    EXPECT_EQ(get_dim_stride<FoldI8>::value, 8);
-}
-
-UTEST(Meta, get_dim_stride_fold_4) {
+UTEST(Meta, dim_stride_fold_4) {
     using FoldJ4 = Fold<J, 4>;
-    EXPECT_EQ(get_dim_stride<FoldJ4>::value, 4);
+    EXPECT_EQ(FoldJ4::stride, 4);
 }
 
 // ============================================================================
@@ -496,10 +479,10 @@ UTEST(Meta, tuple_get_by_base_dim_fold) {
 }
 
 UTEST(Meta, tuple_get_by_base_dim_mutable) {
-    using TupleType = tuple<int, float>;
-    tuple<int, float> t(1, 2.5f);
-    tuple_get_by_base_dim<int, TupleType>::get(t) = 100;
-    EXPECT_EQ((tuple_get_by_base_dim<int, TupleType>::get(t)), 100);
+    using TupleType = tuple<I, J>;
+    tuple<I, J> t(I(1), J(2));
+    tuple_get_by_base_dim<I, TupleType>::get(t) = I(100);
+    EXPECT_EQ((tuple_get_by_base_dim<I, TupleType>::get(t)), I(100));
 }
 
 UTEST(Meta, tuple_get_by_base_dim_const) {

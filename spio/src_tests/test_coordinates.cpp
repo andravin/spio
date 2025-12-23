@@ -943,16 +943,16 @@ UTEST(CoordinatesRange, module_type_properties) {
     using ModuleJ = decltype(coord.get<spio::Module<J, 4, 1>>());
 
     // Verify compile-time size properties
-    static_assert(spio::detail::remove_reference_t<ModuleI>::size.get() == 3,
+    static_assert(spio::detail::remove_reference_t<ModuleI>::size == 3,
                   "ModuleI should have size 3");
-    static_assert(spio::detail::remove_reference_t<ModuleJ>::size.get() == 4,
+    static_assert(spio::detail::remove_reference_t<ModuleJ>::size == 4,
                   "ModuleJ should have size 4");
 
     // Verify compile-time stride properties
     // Note: The stride in Module from CompoundIndex::get() is the dim_type stride (1 for base dims)
-    static_assert(spio::detail::remove_reference_t<ModuleI>::stride.get() == 1,
+    static_assert(spio::detail::remove_reference_t<ModuleI>::stride == 1,
                   "ModuleI should have stride 1");
-    static_assert(spio::detail::remove_reference_t<ModuleJ>::stride.get() == 1,
+    static_assert(spio::detail::remove_reference_t<ModuleJ>::stride == 1,
                   "ModuleJ should have stride 1");
 }
 
@@ -973,14 +973,14 @@ UTEST(CoordinatesRange, module_type_with_fold) {
     using ActualModuleI = decltype(coord.get<ModuleI>());
     using ActualModuleJ = decltype(coord.get<ModuleJ>());
 
-    static_assert(spio::detail::remove_reference_t<ActualModuleI>::size.get() == 2,
+    static_assert(spio::detail::remove_reference_t<ActualModuleI>::size == 2,
                   "ModuleI should have size 2");
-    static_assert(spio::detail::remove_reference_t<ActualModuleI>::stride.get() == 8,
+    static_assert(spio::detail::remove_reference_t<ActualModuleI>::stride == 8,
                   "ModuleI should have stride 8 (from Fold)");
 
-    static_assert(spio::detail::remove_reference_t<ActualModuleJ>::size.get() == 3,
+    static_assert(spio::detail::remove_reference_t<ActualModuleJ>::size == 3,
                   "ModuleJ should have size 3");
-    static_assert(spio::detail::remove_reference_t<ActualModuleJ>::stride.get() == 1,
+    static_assert(spio::detail::remove_reference_t<ActualModuleJ>::stride == 1,
                   "ModuleJ should have stride 1");
 }
 

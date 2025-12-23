@@ -78,7 +78,7 @@ extern "C" {
         constexpr unsigned COMPUTE_STAGE = 1 << 1;
         constexpr unsigned NUM_STAGES = 2;
         auto num_p =
-            spio::min(BLOCK_P::stride, Output::size<P>() - block_idx.get<BLOCK_P>().unfold());
+            spio::min(P(BLOCK_P::stride), Output::size<P>() - block_idx.get<BLOCK_P>().unfold());
         int num_y = num_p.get() + Weights::size<R>().get() - 1;
         int num_iters = num_y + NUM_STAGES - 1;
         bool ping_pong = false;
