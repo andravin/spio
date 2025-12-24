@@ -66,9 +66,59 @@ class Fragment(GenSpecs):
         return f"using {self.class_name} = {fragment_class};\n"
 
     @property
+    def load_index(self) -> "FragmentLoadIndex":
+        """Return the load index generator."""
+        return FragmentLoadIndex(self)
+
+    @property
+    def compound_index(self) -> "FragmentCompoundIndex":
+        """Return the compound index generator."""
+        return FragmentCompoundIndex(self)
+
+    @property
     def dim_names(self) -> Tuple[str, str]:
         """Return the names of the dimensions."""
         return (self.row, self.col)
+
+
+class FragmentLoadIndex(GenSpecs):
+    """Wrapper for a fragment load index type."""
+
+    def __init__(self, fragment: Fragment):
+        """Initialize the load index with the given fragment."""
+        self.fragment = fragment
+
+    def get_class_name(self) -> str:
+        """Return the class name of the load index."""
+        return self.fragment.get_class_name() + "::load_index_type"
+
+    def used_generators(self) -> list[GenSpecs]:
+        """Return a list of generator class-names used by this generator."""
+        return []
+
+    def generate(self) -> str:
+        """Generate the load index type code as a type alias."""
+        return ""  # Load index type is defined within the fragment class.
+
+
+class FragmentCompoundIndex(GenSpecs):
+    """Wrapper for a fragment compound index type."""
+
+    def __init__(self, fragment: Fragment):
+        """Initialize the compound index with the given fragment."""
+        self.fragment = fragment
+
+    def get_class_name(self) -> str:
+        """Return the class name of the compound index."""
+        return self.fragment.get_class_name() + "::compound_index_type"
+
+    def used_generators(self) -> list[GenSpecs]:
+        """Return a list of generator class-names used by this generator."""
+        return []
+
+    def generate(self) -> str:
+        """Generate the compound index type code as a type alias."""
+        return ""  # Compound index type is defined within the fragment class.`
 
 
 def header() -> str:

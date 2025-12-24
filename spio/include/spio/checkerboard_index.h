@@ -3,6 +3,7 @@
 
 #include "spio/macros.h"
 #include "spio/dim.h"
+#include "spio/dim_info.h"
 #include "spio/compound_index_base.h"
 #include "spio/coordinates.h"
 
@@ -37,7 +38,7 @@ namespace spio {
     /// values of x will have zero bank conflicts.
     ///
     ///                          Rank
-    ///             0        2        4        6
+    ///              0        2        4        6
     ///         +--------+--------+--------+--------+
     ///       0 | (0, 0) | (0, 1) | (1, 0) | (1, 1) |
     ///         +--------+--------+--------+--------+
@@ -46,23 +47,38 @@ namespace spio {
     ///      16 | (4, 0) | (4, 1) | (5, 0) | (5, 1) |
     ///         +--------+--------+--------+--------+
     ///      24 | (6, 1) | (6, 0) | (7, 1) | (7, 0) |
-    /// Row     +--------+--------+--------+--------+
-    ///      32 | (8, 0) | (8, 1) | (9, 0) | (9, 1) |
-    ///         +--------+--------+--------+--------+
-    ///      40 |(10, 1) |(10, 0) |(11, 1) |(11, 0) |
-    ///       + --------+--------+--------+--------
-    ///      48 |(12, 0) |(12, 1) |(13, 0) |(13, 1) |
-    ///         +--------+--------+--------+--------+
-    ///      56 |(14, 1) |(14, 0) |(15, 1) |(15, 0) |
     ///         +--------+--------+--------+--------+
     ///
     /// @tparam ranks the number of column-ranks in the checkerboard.
     /// @tparam PairDim the dimension type for the pair index
     /// @tparam ColorDim the dimension type for the color index
-    template <int ranks, typename PairDim, typename ColorDim, typename OffsetDim>
+    template <int ranks, typename PairDim, typename ColorDim, typename OffsetDim, int Size = 32>
     class CheckerboardIndex : public CompoundIndexBase<OffsetDim> {
     public:
         using CompoundIndexBase<OffsetDim>::offset;
+
+        //
+        // Derived dimension interface.
+        //
+        static constexpr int size = Size;
+        static constexpr int num_colors = 2;
+        static constexpr int num_pairs = Size / num_colors;
+
+        using input_dims =
+            detail::tuple<DimSize<PairDim, num_pairs>, DimSize<ColorDim, num_colors>>;
+        using output_dims = detail::tuple<DimSize<OffsetDim, size>>;
+
+        using input_coordinates = Coordinates<PairDim, ColorDim>;
+
+        DEVICE static constexpr auto compute_coordinates(const input_coordinates& coords) {
+            return CheckerboardIndex(coords.template get<PairDim>(),
+                                     coords.template get<ColorDim>())
+                .coordinates();
+        }
+
+        //
+        // Constructors
+        //
 
         // Explicit int constructor
         explicit DEVICE constexpr CheckerboardIndex(int offset = 0)
@@ -94,17 +110,18 @@ namespace spio {
         /// @tparam Dim The dimension type to retrieve
         /// @return The dimension value with the proper type
         template <typename Dim> DEVICE constexpr auto get() const {
-            if constexpr (std::is_same_v<Dim, PairDim>) {
+            if constexpr (detail::is_same<Dim, PairDim>::value) {
                 return PairDim(offset().get() >> 1);
-            } else if constexpr (std::is_same_v<Dim, ColorDim>) {
+            } else if constexpr (detail::is_same<Dim, ColorDim>::value) {
                 const int row =
                     static_cast<unsigned>(offset().get()) / static_cast<unsigned>(ranks);
                 return ColorDim((offset().get() & 1) ^ (row & 1));
-            } else if constexpr (std::is_same_v<Dim, OffsetDim>) {
+            } else if constexpr (detail::is_same<Dim, OffsetDim>::value) {
                 return offset();
             } else {
-                static_assert(std::is_same_v<Dim, PairDim> || std::is_same_v<Dim, ColorDim> ||
-                                  std::is_same_v<Dim, OffsetDim>,
+                static_assert(detail::is_same<Dim, PairDim>::value ||
+                                  detail::is_same<Dim, ColorDim>::value ||
+                                  detail::is_same<Dim, OffsetDim>::value,
                               "Invalid dimension type for CheckerboardIndex");
                 return Dim(0);
             }

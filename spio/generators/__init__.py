@@ -4,9 +4,9 @@ from .generators import generate
 from .generators_class import Generators
 from .gen_specs import GenSpecs
 from .compound_index import CompoundIndex
-from .tensor import Tensor
+from .tensor import Tensor, CursorWithImplicitDims
 from .fragment_type import FragmentType
-from .data_type import dtype
+from .data_type import dtype, get_dtype_veclen
 from .fragment import Fragment
 from .fragment_index import FragmentIndex, FragmentLoadIndex
 from .macros import Macro
@@ -19,6 +19,7 @@ from .dims import Dims, Strides
 from .matmul import Matmul
 from .built_in import BuiltIn
 from .coordinates import Coordinates
+from .derived_dimension import DerivedDimension
 
 GENERATORS = [
     "Tensor",

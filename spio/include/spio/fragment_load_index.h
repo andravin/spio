@@ -3,7 +3,9 @@
 
 #include "spio/macros.h"
 #include "spio/compound_index_base.h"
+#include "spio/coordinates.h"
 #include "spio/dim.h"
+#include "spio/dim_info.h"
 
 /// @file
 /// @brief CompoundIndex classes for matrix multiply-accumulate (MMA) fragments.
@@ -115,6 +117,22 @@ namespace spio {
         DEVICE inline constexpr Fold<ColDim, 8> col8() const {
             return get<Fold<ColDim, 8>>();
         }
+
+        /// @brief Get coordinates for this load index
+        DEVICE constexpr auto coordinates() const {
+            return make_coordinates(get<RowDim>(), get<Fold<ColDim, 8>>());
+        }
+
+        ///
+        // Derived dimensions interface
+        //
+        using input_dims = detail::tuple<DimSize<OffsetType, 32>>;
+        using output_dims = detail::tuple<DimSize<RowDim, 16>, DimSize<Fold<ColDim, 8>, 1>>;
+        using input_coordinates = Coordinates<OffsetType>;
+
+        DEVICE static constexpr auto compute_coordinates(const input_coordinates& coords) {
+            return MMA_A_M16_K8_F16_LoadIndex(coords.template get<OffsetType>()).coordinates();
+        }
     };
 
     /// @brief Indices for A-matrix shape M16 x K16 x float16 for use with ldmatrix.
@@ -150,6 +168,22 @@ namespace spio {
 
         DEVICE inline constexpr Fold<ColDim, 8> col8() const {
             return get<Fold<ColDim, 8>>();
+        }
+
+        /// @brief Get coordinates for this load index
+        DEVICE constexpr auto coordinates() const {
+            return make_coordinates(get<RowDim>(), get<Fold<ColDim, 8>>());
+        }
+
+        ///
+        // Derived dimensions interface
+        //
+        using input_dims = detail::tuple<DimSize<OffsetType, 32>>;
+        using output_dims = detail::tuple<DimSize<RowDim, 16>, DimSize<Fold<ColDim, 8>, 2>>;
+        using input_coordinates = Coordinates<OffsetType>;
+
+        DEVICE static constexpr auto compute_coordinates(const input_coordinates& coords) {
+            return MMA_A_M16_K16_F16_LoadIndex(coords.template get<OffsetType>()).coordinates();
         }
     };
 
@@ -187,6 +221,22 @@ namespace spio {
         DEVICE inline constexpr Fold<RowDim, 8> row8() const {
             return get<Fold<RowDim, 8>>();
         }
+
+        /// @brief Get coordinates for this load index
+        DEVICE constexpr auto coordinates() const {
+            return make_coordinates(get<ColDim>(), get<Fold<RowDim, 8>>());
+        }
+
+        ///
+        // Derived dimensions interface
+        //
+        using input_dims = detail::tuple<DimSize<OffsetType, 32>>;
+        using output_dims = detail::tuple<DimSize<ColDim, 8>, DimSize<Fold<RowDim, 8>, 1>>;
+        using input_coordinates = Coordinates<OffsetType>;
+
+        DEVICE static constexpr auto compute_coordinates(const input_coordinates& coords) {
+            return MMA_B_N8_K8_F16_LoadIndex(coords.template get<OffsetType>()).coordinates();
+        }
     };
 
     /// @brief Indices for B-matrix shape N8 x K16 x float16 for use with ldmatrix.
@@ -223,6 +273,22 @@ namespace spio {
         DEVICE inline constexpr Fold<RowDim, 8> row8() const {
             return get<Fold<RowDim, 8>>();
         }
+
+        /// @brief Get coordinates for this load index
+        DEVICE constexpr auto coordinates() const {
+            return make_coordinates(get<ColDim>(), get<Fold<RowDim, 8>>());
+        }
+
+        ///
+        // Derived dimensions interface
+        //
+        using input_dims = detail::tuple<DimSize<OffsetType, 32>>;
+        using output_dims = detail::tuple<DimSize<ColDim, 8>, DimSize<Fold<RowDim, 8>, 2>>;
+        using input_coordinates = Coordinates<OffsetType>;
+
+        DEVICE static constexpr auto compute_coordinates(const input_coordinates& coords) {
+            return MMA_B_N8_K16_F16_LoadIndex(coords.template get<OffsetType>()).coordinates();
+        }
     };
 
     /// @brief Indices for B-matrix shape N16 x K16 x float16 for use with ldmatrix.
@@ -258,6 +324,22 @@ namespace spio {
 
         DEVICE inline constexpr Fold<RowDim, 8> row8() const {
             return get<Fold<RowDim, 8>>();
+        }
+
+        /// @brief Get coordinates for this load index
+        DEVICE constexpr auto coordinates() const {
+            return make_coordinates(get<ColDim>(), get<Fold<RowDim, 8>>());
+        }
+
+        ///
+        // Derived dimensions interface
+        //
+        using input_dims = detail::tuple<DimSize<OffsetType, 32>>;
+        using output_dims = detail::tuple<DimSize<ColDim, 16>, DimSize<Fold<RowDim, 8>, 2>>;
+        using input_coordinates = Coordinates<OffsetType>;
+
+        DEVICE static constexpr auto compute_coordinates(const input_coordinates& coords) {
+            return MMA_B_N16_K16_F16_LoadIndex(coords.template get<OffsetType>()).coordinates();
         }
     };
 }

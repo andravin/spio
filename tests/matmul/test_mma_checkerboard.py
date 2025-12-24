@@ -2,11 +2,16 @@
 
 from dataclasses import dataclass
 
-
+import pytest
 import torch
 
 from spio.generators import *
-from spio.compiler import compile_and_load_kernel, lineinfo, count_instructions
+from spio.compiler import (
+    compile_and_load_kernel,
+    lineinfo,
+    count_instructions,
+    print_disasm,
+)
 from spio.util import divup, assert_all_close_with_acc_depth, SixteenChannelsLast
 
 
@@ -19,10 +24,15 @@ class MmaConfig:
     chunk_k16: int = 2
 
 
-def test_mma_checkerboard_16c_kernel():
+@pytest.mark.parametrize(
+    "m, n, k",
+    [
+        (8192, 1024, 1024),
+        (8192 - 32, 1024, 1024 + 32),
+    ],
+)
+def test_mma_checkerboard_16c_kernel(m, n, k):
     """Compile and run a GPU kernel that tests tensor core mma with checkerboard layout for smem."""
-
-    m, n, k = (8192, 1024, 1024)
 
     # TODO: fix for warp_m=64, warp_n=32
     config = MmaConfig(warp_m=32, warp_n=64, chunk_k16=2)
@@ -37,14 +47,17 @@ def test_mma_checkerboard_16c_kernel():
     B_16c = SixteenChannelsLast.format(B_trans)
     C_16c = SixteenChannelsLast.format(C)
 
+    generated_code = generate(specs)
+
     _, mma_kernel_16c = compile_and_load_kernel(
         kernel_name="mma_checkerboard_16c",
         source_file_name="mma_checkerboard_16c.cu",
-        header_dict={"types.h": generate(specs)},
+        header_dict={"types.h": generated_code},
         src_module="spio.src_tests",
         lineinfo=lineinfo.get(),
         max_registers=max_registers,
         count_instructions=count_instructions.get(),
+        print_disasm=print_disasm.get(),
     )
     mma_kernel_16c.launch(grid, block, (C_16c, A_16c, B_16c))
     C = SixteenChannelsLast.unformat(C_16c)
@@ -90,40 +103,57 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     # Use the Generators container for cleaner spec definitions
     g = Generators()
 
-    # Fold dimensions
-    g.BlockIdx = Coordinates(
+    # Thread-block coordinates.
+    BlockIdx = Coordinates(
         Fold("i", block_x, init=BuiltIn.BLOCK_IDX_Y),
         Fold("j", block_x, init=BuiltIn.BLOCK_IDX_X),
     )
+
+    # Fold dimensions
     g.warp_i = Fold("i", config.warp_m)
     g.warp_j = Fold("j", config.warp_n)
     g.k_chunk = Fold("k", k_chunk)
     g.k_double_chunk = Fold("k", k_double_chunk)
 
+    # Load indices
+    ALoadGlobalIndex = CompoundIndex(Dims(i=block_x, k8=2), init=BuiltIn.THREAD_IDX_X)
+    BLoadGlobalIndex = CompoundIndex(Dims(j=block_x, k8=2), init=BuiltIn.THREAD_IDX_X)
+
+    # The index that defines which output tile each warp computes.
+    # Also provies the LANE dimension for each thread.
+    g.ComputeIndex = CompoundIndex(
+        Dims(warp_i=warps_m, warp_j=warps_n, lane=32), init=BuiltIn.THREAD_IDX_X
+    )
+
     # Global memory tensors
-    g.AGlobal = Tensor(dtype.uint4, Dims(k16=k16, i=m, k8=-1), constant=True)
-    g.BGlobal = Tensor(dtype.uint4, Dims(k16=k16, j=n, k8=-1), constant=True)
-    g.CGlobal = Tensor(dtype.uint4, Dims(j16=j16, i=m, j8=-1))
+    g.AGlobal = Tensor(
+        dtype.half8, Dims(k16=k16, i=m, k8=-1), constant=True
+    ).implicit_dim(ALoadGlobalIndex, BlockIdx)
+    g.BGlobal = Tensor(
+        dtype.half8, Dims(k16=k16, j=n, k8=-1), constant=True
+    ).implicit_dim(BLoadGlobalIndex, BlockIdx)
+    g.CGlobal = Tensor(dtype.half8, Dims(j16=j16, i=m, j8=-1)).implicit_dim(
+        BlockIdx, g.ComputeIndex
+    )
 
     # Shared memory tensors
     g.ASmem = Tensor(
-        dtype.uint4,
-        Dims(k_chunk=2, k16=config.chunk_k16, i16=block_x16, swizzle=32),
+        dtype.half8,
+        Dims(
+            k_chunk=2,
+            k16=config.chunk_k16,
+            i16=block_x16,
+            swizzle=Checkerboard(pairs_dim="i", colors_dim="k8", size=32),
+        ),
     )
     g.BSmem = Tensor(
-        dtype.uint4,
-        Dims(k_chunk=2, k16=config.chunk_k16, j16=block_x16, swizzle=32),
-    )
-
-    # Load indices
-    g.ALoadGlobalIndex = CompoundIndex(
-        Dims(i16=block_x16, i=-1, k8=2), init=BuiltIn.THREAD_IDX_X
-    )
-    g.BLoadGlobalIndex = CompoundIndex(
-        Dims(j16=block_x16, j=-1, k8=2), init=BuiltIn.THREAD_IDX_X
-    )
-    g.ComputeIndex = CompoundIndex(
-        Dims(warp_i=warps_m, warp_j=warps_n, lane=32), init=BuiltIn.THREAD_IDX_X
+        dtype.half8,
+        Dims(
+            k_chunk=2,
+            k16=config.chunk_k16,
+            j16=block_x16,
+            swizzle=Checkerboard(pairs_dim="j", colors_dim="k8", size=32),
+        ),
     )
 
     # Async loaders
@@ -149,6 +179,15 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     g.BFragment = Fragment(FragmentType.N16_K16_F16_B, "k", "j")
     g.CFragment = Fragment(FragmentType.M16_N16_F32_C, "i", "j")
 
+    g.ALoadSmem = g.ASmem.derive_dim(g.AFragment.load_index).implicit_dim(
+        g.ComputeIndex
+    )
+    g.BLoadSmem = g.BSmem.derive_dim(g.BFragment.load_index).implicit_dim(
+        g.ComputeIndex
+    )
+    g.AStoreSmem = g.ASmem.implicit_dim(ALoadGlobalIndex)
+    g.BStoreSmem = g.BSmem.implicit_dim(BLoadGlobalIndex)
+
     # Register tensors (use fragment type names as data types)
     g.AReg = Tensor(g.AFragment, Dims(k16=config.chunk_k16, i16=warp_m16))
     g.BReg = Tensor(g.BFragment, Dims(k16=config.chunk_k16, j16=warp_n16))
@@ -157,22 +196,16 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     # Matmul operation
     g.mma = Matmul(g.AReg, g.BReg, g.CReg, g.CReg, function_name="mma")
 
-    # Swizzle patterns
-    g.ASwizzle = Checkerboard(pairs_dim="i", colors_dim="k8", offset_dim="swizzle")
-    g.BSwizzle = Checkerboard(pairs_dim="j", colors_dim="k8", offset_dim="swizzle")
-
-    # Output transpose through shared memory
-    g.CStoreSmem = Tensor(
+    # Transpose output through shared memory
+    g.CSmem = Tensor(
         dtype.half2,
         Dims(warp_i=warps_m, j8=block_x8, i=config.warp_m, j2=-1),
         strides=Strides(j8=(config.warp_m + 1) * 4),
     )
-    g.CLoadSmem = Tensor(
-        dtype.uint4,
-        Dims(warp_i=warps_m, j8=block_x8, i=config.warp_m),
-        strides=Strides(j8=(config.warp_m + 1)),
-        constant=True,
+    g.CStoreSmem = g.CSmem.derive_dim(g.CFragment.compound_index).implicit_dim(
+        g.ComputeIndex
     )
+    g.CLoadSmem = g.CSmem.vector_length(8, constant=True).implicit_dim(g.ComputeIndex)
     g.CLoadSmemIndex = CompoundIndex(Dims(i=config.warp_m, j8=warp_n8))
 
     # Macro for loop unrolling

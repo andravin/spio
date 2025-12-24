@@ -4,6 +4,7 @@
 #include "spio/macros.h"
 #include "spio/compound_index_base.h"
 #include "spio/dim.h"
+#include "spio/dim_info.h"
 #include "spio/coordinates.h"
 
 // Add basic type trait support if not available
@@ -248,6 +249,23 @@ namespace spio {
 
         DEVICE inline constexpr Module<ColDim, 4, 2> col2_mod4() const {
             return get<Module<ColDim, 4, 2>>();
+        }
+
+        ///
+        // Derived dimensions interface
+        //
+        // Input: LANE (0-31)
+        // Output: base row position (0-7) and column mod 4 (fragment-independent coordinates)
+        //
+        // The fragment-dependent coordinates (which 8x8 block within 16x16) are handled
+        // by the tensor indexing [i16][j16] on CReg, not by this derived dimension.
+        using input_dims = detail::tuple<DimSize<LANE, 32>>;
+        using output_dims = detail::tuple<DimSize<RowDim, 8>, DimSize<Module<ColDim, 4, 2>, 4>>;
+        using input_coordinates = Coordinates<LANE>;
+
+        DEVICE static constexpr auto compute_coordinates(const input_coordinates& coords) {
+            auto idx = MMA_C_88_F32_Index(coords.template get<LANE>());
+            return make_coordinates(idx.row(), idx.col2_mod4());
         }
     };
 }

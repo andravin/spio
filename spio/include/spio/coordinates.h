@@ -162,6 +162,13 @@ namespace spio {
             return add_normalized_coordinates_impl(a, b, b_only{});
         }
 
+        // Concatenate two coordinate sets without normalization.
+        template <typename... ADims, typename... BDims>
+        DEVICE constexpr auto concat_coordinates(const Coordinates<ADims...>& a,
+                                                 const Coordinates<BDims...>& b) {
+            return make_coordinates(a.template get<ADims>()..., b.template get<BDims>()...);
+        }
+
         // ========================================================================
         // coords_get_by_base_dim implementations
         // ========================================================================

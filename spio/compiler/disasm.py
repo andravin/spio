@@ -7,18 +7,8 @@ from tempfile import NamedTemporaryFile
 from .cuda_paths import nvdisasm_full_path
 
 
-def disasm_count_instructions(cubin, kernel_name: str) -> int:
-    """Return the number of SASS instructions in the given cubin.
-
-    This is a high-level measure of efficient code generation. Regressions in
-    the efficiency of address calculations often show up as increases in the
-    instruction count.
-
-    Does not count any trailing NOP instructions.
-    Does count any branch instruction after the EXIT instruction.
-
-    https://docs.nvidia.com/cuda/cuda-binary-utilities/index.html#json-format
-    """
+def _disasm(cubin) -> dict:
+    """Disassemble the given cubin and return the JSON output."""
     with NamedTemporaryFile(suffix=".cubin") as cubin_file:
         cubin_file.write(cubin)
         cubin_file.flush()
@@ -30,6 +20,27 @@ def disasm_count_instructions(cubin, kernel_name: str) -> int:
 
     # Parse JSON output and count SASS instructions in the specified kernel.
     data = json.loads(output)
+    return data
+
+
+def disasm(
+    cubin,
+    kernel_name: str,
+    print_disasm: bool = False,
+) -> int:
+    """Return the number of SASS instructions in the given cubin.
+
+    This is a high-level measure of efficient code generation. Regressions in
+    the efficiency of address calculations often show up as increases in the
+    instruction count.
+
+    Does not count any trailing NOP instructions.
+    Does count any branch instruction after the EXIT instruction.
+
+    https://docs.nvidia.com/cuda/cuda-binary-utilities/index.html#json-format
+    """
+    data = _disasm(cubin)
+
     # The JSON structure is: [metadata, [function1, function2, ...]]
     functions = data[1]
     for func in functions:
@@ -38,6 +49,13 @@ def disasm_count_instructions(cubin, kernel_name: str) -> int:
             # Strip trailing NOP instructions (alignment padding)
             while instructions and instructions[-1]["opcode"] == "NOP":
                 instructions = instructions[:-1]
-            return len(instructions)
+            num_instructions = len(instructions)
+            if print_disasm:
+                for i, instr in enumerate(instructions):
+                    addr = instr.get("address", i * 16)
+                    opcode = instr["opcode"]
+                    operands = instr.get("operands", "")
+                    print(f"{i:4d}  0x{addr:04x}:  {opcode} {operands}")
+            return num_instructions
 
     raise ValueError(f"Kernel '{kernel_name}' not found in cubin")
