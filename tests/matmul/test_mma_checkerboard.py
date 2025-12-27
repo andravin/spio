@@ -128,11 +128,11 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     # Global memory tensors
     g.AGlobal = Tensor(
         dtype.half8, Dims(k16=k16, i=m, k8=-1), constant=True
-    ).implicit_dim(ALoadGlobalIndex, BlockIdx)
+    ).initializer(ALoadGlobalIndex, BlockIdx)
     g.BGlobal = Tensor(
         dtype.half8, Dims(k16=k16, j=n, k8=-1), constant=True
-    ).implicit_dim(BLoadGlobalIndex, BlockIdx)
-    g.CGlobal = Tensor(dtype.half8, Dims(j16=j16, i=m, j8=-1)).implicit_dim(
+    ).initializer(BLoadGlobalIndex, BlockIdx)
+    g.CGlobal = Tensor(dtype.half8, Dims(j16=j16, i=m, j8=-1)).initializer(
         BlockIdx, g.ComputeIndex
     )
 
@@ -179,16 +179,14 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     g.BFragment = Fragment(FragmentType.N16_K16_F16_B, "k", "j")
     g.CFragment = Fragment(FragmentType.M16_N16_F32_C, "i", "j")
 
-    g.ALoadSmem = g.ASmem.derive_dim(g.AFragment.load_index).implicit_dim(
-        g.ComputeIndex
-    )
-    g.BLoadSmem = g.BSmem.derive_dim(g.BFragment.load_index).implicit_dim(
-        g.ComputeIndex
-    )
-    g.AStoreSmem = g.ASmem.implicit_dim(ALoadGlobalIndex)
-    g.BStoreSmem = g.BSmem.implicit_dim(BLoadGlobalIndex)
+    # Load and store views for the shared memory tensors.
+    g.ALoadSmem = g.ASmem.derive_dim(g.AFragment.load_index).initializer(g.ComputeIndex)
+    g.BLoadSmem = g.BSmem.derive_dim(g.BFragment.load_index).initializer(g.ComputeIndex)
+    g.AStoreSmem = g.ASmem.initializer(ALoadGlobalIndex)
+    g.BStoreSmem = g.BSmem.initializer(BLoadGlobalIndex)
 
-    # Register tensors (use fragment type names as data types)
+    # Local memory tensors (i.e. registers)
+    # - Each tensor "element" is itself a matrix fragment.
     g.AReg = Tensor(g.AFragment, Dims(k16=config.chunk_k16, i16=warp_m16))
     g.BReg = Tensor(g.BFragment, Dims(k16=config.chunk_k16, j16=warp_n16))
     g.CReg = Tensor(g.CFragment, Dims(i16=warp_m16, j16=warp_n16))
@@ -202,10 +200,10 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         Dims(warp_i=warps_m, j8=block_x8, i=config.warp_m, j2=-1),
         strides=Strides(j8=(config.warp_m + 1) * 4),
     )
-    g.CStoreSmem = g.CSmem.derive_dim(g.CFragment.compound_index).implicit_dim(
+    g.CStoreSmem = g.CSmem.derive_dim(g.CFragment.compound_index).initializer(
         g.ComputeIndex
     )
-    g.CLoadSmem = g.CSmem.vector_length(8, constant=True).implicit_dim(g.ComputeIndex)
+    g.CLoadSmem = g.CSmem.vector_length(8, constant=True).initializer(g.ComputeIndex)
     g.CLoadSmemIndex = CompoundIndex(Dims(i=config.warp_m, j8=warp_n8))
 
     # Macro for loop unrolling

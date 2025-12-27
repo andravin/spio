@@ -1,18 +1,13 @@
 #include "spio.cuh"
 
 // Include generated dimension and tensor classes.
+// See tests/matmul/test_mma_checkerboard.py for details on the generation.
 #include "types.h"
 
 extern "C" {
     using namespace spio;
 
-    /// Test matrix multiplication with checkerboard layout.
-    ///
-    /// This kernel uses the checkerboard layout in shared memory
-    /// when loading the A and B matrices.
-    ///
-    /// The checkerboard is a 16x2 grid with a vector
-    /// of 8 half2 elements per cell. See checkerboard_index.h for details.
+    /// Test matrix multiplication using typed tensors with dimensional projection.
     ///
     /// - c_ptr: result matrix with float16 precision.
     /// - a_ptr: operand A matrix with float16 precision and format K16 x I x 16K
@@ -25,21 +20,23 @@ extern "C" {
                                         CSmem::storage_size() / 4)];
         auto smem_allocator = StackAllocator(smem);
 
-        // Allocate shared memory for the A and B matrices.
+        // Set up views of global memory matrices A and B.
+        auto a_global = AGlobal(a_ptr);
+        auto b_global = BGlobal(b_ptr);
+
+        // Set up loaders for A and B.
+        auto a_loader = ALoader(a_global.inbounds());
+        auto b_loader = BLoader(b_global.inbounds());
+
+        // Allocate shared memory for A and B.
         auto a_smem = ASmem::allocate(smem_allocator);
         auto b_smem = BSmem::allocate(smem_allocator);
 
-        // Set up matrix A copy from global memorty to shared memory.
-        auto a_global = AGlobal(a_ptr);
+        // Set up store ..
         auto a_store_smem = AStoreSmem(a_smem.get()).rebase();
-        auto a_loader = ALoader(a_global.inbounds());
-
-        // Set up matrix B copy from global memory to shared memory.
-        auto b_global = BGlobal(b_ptr);
         auto b_store_smem = BStoreSmem(b_smem.get()).rebase();
-        auto b_loader = BLoader(b_global.inbounds());
 
-        // Set up loads from shared memory to registers for A and B.
+        // .. and load views of the shared memory for A and B.
         auto a_load_smem = ALoadSmem(a_smem.base_ptr()).rebase();
         auto b_load_smem = BLoadSmem(b_smem.base_ptr()).rebase();
 
@@ -54,6 +51,7 @@ extern "C" {
         auto c_reg = CReg(c_data);
         c_reg.zero();
 
+        // Get the main loop parameters.
         constexpr auto step = a_reg.extent<K16>();
         constexpr auto size = a_global.extent<K>();
 

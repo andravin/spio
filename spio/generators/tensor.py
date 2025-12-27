@@ -199,7 +199,7 @@ class Tensor(GenSpecsWithContext):
             derived_dims=self.derived_dims,
         )
 
-    def implicit_dim(
+    def initializer(
         self, *implicit_dims: GenSpecsWithContext
     ) -> "CursorWithImplicitDims":
         """Return a CursorWithImplicitDims that applies implicit subscripts at construction.

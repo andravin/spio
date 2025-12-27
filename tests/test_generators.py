@@ -218,7 +218,7 @@ class TestCursorWithImplicitDims:
         g = Generators()
         g.AGlobal = Tensor(dtype.half, Dims(warp=4, lane=32, i=8))
         g.ALoadIndex = CompoundIndex(Dims(warp=4, lane=32))
-        g.AGlobalLoader = g.AGlobal.implicit_dim(g.ALoadIndex)
+        g.AGlobalLoader = g.AGlobal.initializer(g.ALoadIndex)
 
         assert g.AGlobalLoader.class_name == "AGlobalLoader"
         assert g.AGlobalLoader.tensor is g.AGlobal
@@ -233,7 +233,7 @@ class TestCursorWithImplicitDims:
         g.AGlobal = Tensor(dtype.half, Dims(warp=4, lane=32, i=8))
         g.WarpIdx = CompoundIndex(Dims(warp=4))
         g.LaneIdx = CompoundIndex(Dims(lane=32))
-        g.AGlobalLoader = g.AGlobal.implicit_dim(g.WarpIdx, g.LaneIdx)
+        g.AGlobalLoader = g.AGlobal.initializer(g.WarpIdx, g.LaneIdx)
 
         code = generate(g)
         assert "return AGlobal(ptr)[WarpIdx()][LaneIdx()];" in code
@@ -243,7 +243,7 @@ class TestCursorWithImplicitDims:
         g = Generators()
         g.AGlobal = Tensor(dtype.half, Dims(warp=4, lane=32), constant=True)
         g.ALoadIndex = CompoundIndex(Dims(warp=4, lane=32))
-        g.AGlobalLoader = g.AGlobal.implicit_dim(g.ALoadIndex)
+        g.AGlobalLoader = g.AGlobal.initializer(g.ALoadIndex)
 
         code = generate(g)
         assert "DEVICE auto AGlobalLoader(const __half* ptr)" in code
@@ -254,7 +254,7 @@ class TestCursorWithImplicitDims:
         g.AGlobal = Tensor(dtype.half, Dims(i=8))
         g.Idx1 = CompoundIndex(Dims(j=4))
         g.Idx2 = CompoundIndex(Dims(k=2))
-        g.AGlobalLoader = g.AGlobal.implicit_dim(g.Idx1, g.Idx2)
+        g.AGlobalLoader = g.AGlobal.initializer(g.Idx1, g.Idx2)
 
         used = g.AGlobalLoader.used_generators()
         assert g.AGlobal in used
