@@ -52,7 +52,6 @@ extern "C" {
         c_reg.zero();
 
         // Get the main loop parameters.
-        constexpr auto step = a_reg.extent<K16>();
         constexpr auto size = a_global.extent<K>();
 
         // Prefetch the first k_chunk of data from A and B.
@@ -60,8 +59,8 @@ extern "C" {
             a_loader.copy_async(a_store_smem.get(), a_global.get());
             b_loader.copy_async(b_store_smem.get(), b_global.get());
             __pipeline_commit();
-            a_global.step(step);
-            b_global.step(step);
+            a_global.step(K_CHUNK(1));
+            b_global.step(K_CHUNK(1));
         }
 
         // Main computation loop with pipelined memory operations.
