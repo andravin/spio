@@ -37,8 +37,8 @@ extern "C" {
         auto b_store_smem = BStoreSmem(b_smem.get()).rebase();
 
         // .. and load views of the shared memory for A and B.
-        auto a_load_smem = ALoadSmem(a_smem.base_ptr()).rebase();
-        auto b_load_smem = BLoadSmem(b_smem.base_ptr()).rebase();
+        auto a_load_smem = ALoadSmem(a_smem.get()).rebase();
+        auto b_load_smem = BLoadSmem(b_smem.get()).rebase();
 
         // Allocate registers for the local matrices.
         AReg::data_type a_data[AReg::storage_size()];
@@ -51,7 +51,7 @@ extern "C" {
         auto c_reg = CReg(c_data);
         c_reg.zero();
 
-        // Get the main loop parameters.
+        // Get the size of the main loop.
         constexpr auto size = a_global.extent<K>();
 
         // Prefetch the first k_chunk of data from A and B.
