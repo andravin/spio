@@ -8,6 +8,7 @@ from importlib_resources.abc import Traversable
 from ..cuda.nvrtc_ctypes import Program
 
 from .arch import sm_from_arch
+from ..util import time_function
 
 
 def _find_cuda_runtime_include_dir() -> str:
@@ -17,6 +18,7 @@ def _find_cuda_runtime_include_dir() -> str:
 CUDA_RUNTIME_INCLUDE_PATH = _find_cuda_runtime_include_dir()
 
 
+@time_function("spio: compile_cuda", timer_log_level=2)
 def compile_cuda(
     src_file: Traversable,
     includes: List[str] = None,
@@ -51,12 +53,12 @@ def compile_cuda(
         options.append("-lineinfo")
     if max_registers is not None:
         options.append(f"-maxrregcount={max_registers}")
-    
+
     # --extended-lambda or --expt-extended-lambda are supposed to allow adding __device__ labels
     # to lambda expressions, but it did not work for me. So I'm using -default-device instead.
     if default_device:
         options.append("-default-device")
-    
+
     options += [f"-I{path}" for path in includes]
 
     if header_dict is not None:

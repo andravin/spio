@@ -1,8 +1,11 @@
 """This file implements the Dims class."""
 
-from typing import Dict, Union, Generator, Tuple, List
+from typing import Dict, Generator, List, Tuple, Union
 
-from .subindex_protocol import SubindexProtocol
+from .derived_dimension import DerivedDimension
+
+# Type alias for dimension values: either an integer size or a derived dimension generator
+DimValue = Union[int, DerivedDimension]
 
 
 def _parse_dim_name_and_fold(name: str) -> Tuple[str, int]:
@@ -25,8 +28,8 @@ def _parse_dim_name_and_fold(name: str) -> Tuple[str, int]:
 
 
 def _compute_fold_sizes(
-    dims: Dict[str, Union[int, "SubindexProtocol"]],
-) -> Dict[str, Union[int, "SubindexProtocol"]]:
+    dims: Dict[str, DimValue],
+) -> Dict[str, DimValue]:
     """Compute automatic fold sizes for dimensions specified as -1.
 
     Args:
@@ -41,7 +44,7 @@ def _compute_fold_sizes(
             doesn't match the computed value.
     """
     # Group dimensions by base name
-    base_dim_folds: Dict[str, List[Tuple[str, int, Union[int, SubindexProtocol]]]] = {}
+    base_dim_folds: Dict[str, List[Tuple[str, int, DimValue]]] = {}
     for name, size in dims.items():
         base_name, fold_factor = _parse_dim_name_and_fold(name)
         if base_name not in base_dim_folds:
@@ -65,7 +68,7 @@ def _compute_fold_sizes(
         # Compute sizes for remaining folds
         for i in range(1, len(folds_sorted)):
             name, fold_factor, specified_size = folds_sorted[i]
-            prev_name, prev_fold, prev_size = folds_sorted[i - 1]
+            prev_name, prev_fold, _prev_size = folds_sorted[i - 1]
 
             # Computed size = ratio of fold factors
             computed_size = prev_fold // fold_factor
@@ -91,7 +94,7 @@ def _compute_fold_sizes(
 class Dims:
     """A class to represent the dimensions of a tensor."""
 
-    def __init__(self, **dims: Dict[str, Union[int, SubindexProtocol]]):
+    def __init__(self, **dims: Dict[str, DimValue]):
         """Initialize the Dims object with the given dimensions and sizes.
 
         Dimensions with size -1 will have their sizes computed automatically based
@@ -108,7 +111,7 @@ class Dims:
         Args:
             **dims: Keyword arguments representing the dimensions. Each dimension
                 is specified as a name-value pair, where the name is a string
-                and the value is an integer or a SubindexProtocol object.
+                and the value is an integer or a DerivedDimension.
 
                 Names can include fold factors (e.g., 'k8', 'k4', 'k'). K8 means a fold
                 of dimension K with fold factor 8.
@@ -122,7 +125,7 @@ class Dims:
         normalized = {key.upper(): value for key, value in dims.items()}
         self._dims = _compute_fold_sizes(normalized)
 
-    def items(self) -> Generator[Tuple[str, Union[int, SubindexProtocol]], None, None]:
+    def items(self) -> Generator[Tuple[str, DimValue], None, None]:
         """Get the dimensions as a generator of (name, value) pairs."""
         return self._dims.items()
 
@@ -130,11 +133,11 @@ class Dims:
         """Get the names of the dimensions."""
         return self._dims.keys()
 
-    def values(self) -> Generator[Union[int, SubindexProtocol], None, None]:
+    def values(self) -> Generator[DimValue, None, None]:
         """Get the values of the dimensions."""
         return self._dims.values()
 
-    def __getitem__(self, key) -> Union[int, SubindexProtocol]:
+    def __getitem__(self, key) -> DimValue:
         """Get the value of a dimension by its name."""
         return self._dims[key]
 
@@ -191,5 +194,9 @@ def compute_full_strides(
             stride = given_strides[name]
         all_strides[name] = stride
         # Compute the default stride of the next dimension.
-        stride *= value
+        if isinstance(value, DerivedDimension):
+            dim_size = value.size
+        else:
+            dim_size = value
+        stride *= dim_size
     return all_strides

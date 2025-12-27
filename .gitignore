@@ -32,3 +32,6 @@ build/
 driver.c
 
 spio.egg-info/
+
+# Disassembly
+*.sass

@@ -121,6 +121,25 @@ namespace spio {
             int start = partition_idx.template get<PartitionDim>().get();
             return PartitionRange<CompoundIndex, stride>(start, size());
         }
+
+        // ========================================================================
+        // Derived dimensions interface
+        // ========================================================================
+        //
+        // Input: OFFSET (0 to total_size-1)
+        // Output: All dimensions from DimInfos
+        //
+        // This allows CompoundIndex to be used as a derived dimension type,
+        // enabling cursor subscripting with linear offsets that automatically
+        // expand to multi-dimensional coordinates.
+
+        using input_dims = detail::tuple<DimSize<OFFSET, total_size>>;
+        using output_dims = detail::tuple<DimSize<typename DimInfos::dim_type, DimInfos::size>...>;
+        using input_coordinates = Coordinates<OFFSET>;
+
+        DEVICE static constexpr auto compute_coordinates(const input_coordinates& coords) {
+            return CompoundIndex(coords.template get<OFFSET>()).coordinates();
+        }
     };
 }
 

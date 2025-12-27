@@ -208,3 +208,55 @@ class TestGeneratorsPreservesOrder:
 
         names = list(g.keys())
         assert names == ["First", "Second", "Third"]
+
+
+class TestCursorWithImplicitDims:
+    """Test the CursorWithImplicitDims generator."""
+
+    def test_implicit_dim_single(self):
+        """implicit_dim with single dimension should generate correct factory."""
+        g = Generators()
+        g.AGlobal = Tensor(dtype.half, Dims(warp=4, lane=32, i=8))
+        g.ALoadIndex = CompoundIndex(Dims(warp=4, lane=32))
+        g.AGlobalLoader = g.AGlobal.implicit_dim(g.ALoadIndex)
+
+        assert g.AGlobalLoader.class_name == "AGlobalLoader"
+        assert g.AGlobalLoader.tensor is g.AGlobal
+
+        code = generate(g)
+        assert "DEVICE auto AGlobalLoader(__half* ptr)" in code
+        assert "return AGlobal(ptr)[ALoadIndex()];" in code
+
+    def test_implicit_dim_multiple(self):
+        """implicit_dim with multiple dimensions should chain subscripts."""
+        g = Generators()
+        g.AGlobal = Tensor(dtype.half, Dims(warp=4, lane=32, i=8))
+        g.WarpIdx = CompoundIndex(Dims(warp=4))
+        g.LaneIdx = CompoundIndex(Dims(lane=32))
+        g.AGlobalLoader = g.AGlobal.implicit_dim(g.WarpIdx, g.LaneIdx)
+
+        code = generate(g)
+        assert "return AGlobal(ptr)[WarpIdx()][LaneIdx()];" in code
+
+    def test_implicit_dim_constant_tensor(self):
+        """implicit_dim with constant tensor should use const pointer."""
+        g = Generators()
+        g.AGlobal = Tensor(dtype.half, Dims(warp=4, lane=32), constant=True)
+        g.ALoadIndex = CompoundIndex(Dims(warp=4, lane=32))
+        g.AGlobalLoader = g.AGlobal.implicit_dim(g.ALoadIndex)
+
+        code = generate(g)
+        assert "DEVICE auto AGlobalLoader(const __half* ptr)" in code
+
+    def test_implicit_dim_used_generators(self):
+        """implicit_dim's used_generators should include tensor and all dims."""
+        g = Generators()
+        g.AGlobal = Tensor(dtype.half, Dims(i=8))
+        g.Idx1 = CompoundIndex(Dims(j=4))
+        g.Idx2 = CompoundIndex(Dims(k=2))
+        g.AGlobalLoader = g.AGlobal.implicit_dim(g.Idx1, g.Idx2)
+
+        used = g.AGlobalLoader.used_generators()
+        assert g.AGlobal in used
+        assert g.Idx1 in used
+        assert g.Idx2 in used

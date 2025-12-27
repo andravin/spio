@@ -52,8 +52,8 @@ class AsyncStripLoader(GenSpecs):
 
     def generate(self) -> str:
         """Generate the C++ source code for the custom strip loader class."""
-        smem_stride = self.smem_tensor.strides[self.minor_axis]
-        gmem_stride = self.gmem_tensor.strides[self.minor_axis]
+        smem_stride = _resolve_tensor(self.smem_tensor).strides[self.minor_axis]
+        gmem_stride = _resolve_tensor(self.gmem_tensor).strides[self.minor_axis]
         params = self._gen_strip_loader_params()
         base_params = _make_args_list(smem_stride, gmem_stride, f"{params}::num_loads")
         base = f"spio::AsyncStripLoader<{base_params}>"
@@ -61,7 +61,6 @@ class AsyncStripLoader(GenSpecs):
 class {self.class_name} : public {base}
 {{
     static constexpr int active_warps = {params}::active_warps;
-
     using Base = {base};
     using Base::Base;
 }};
@@ -77,3 +76,8 @@ class {self.class_name} : public {base}
 def _make_args_list(*args):
     sep = ", "
     return sep.join(str(arg) for arg in args)
+
+
+def _resolve_tensor(tensor) -> Tensor:
+    """Helper to get the tensor from a Tensor or TensorRef."""
+    return tensor.tensor if hasattr(tensor, "tensor") else tensor

@@ -22,36 +22,26 @@ extern "C" {
 
         // Create a shared memory allocator for the kernel.
         __shared__ uint4 smem[spio::max(ASmem::storage_size() + BSmem::storage_size(),
-                                        CLoadSmem::storage_size())];
+                                        CSmem::storage_size() / 4)];
         auto smem_allocator = StackAllocator(smem);
 
         // Allocate shared memory for the A and B matrices.
         auto a_smem = ASmem::allocate(smem_allocator);
         auto b_smem = BSmem::allocate(smem_allocator);
 
-        // Get the coordinates for this thread-block.
-        auto block_idx = BlockIdx();
-
         // Set up matrix A copy from global memorty to shared memory.
-        auto a_global_load_idx = ALoadGlobalIndex();
-        auto a_global = AGlobal(a_ptr)[block_idx][a_global_load_idx].rebase();
-        auto a_store_smem = ASmem(a_smem)[a_global_load_idx][ASwizzle(a_global_load_idx)].rebase();
-        auto a_loader = ALoader(block_idx + a_global_load_idx < AGlobal::extents());
+        auto a_global = AGlobal(a_ptr);
+        auto a_store_smem = AStoreSmem(a_smem.get()).rebase();
+        auto a_loader = ALoader(a_global.inbounds());
 
         // Set up matrix B copy from global memory to shared memory.
-        auto b_global_load_idx = BLoadGlobalIndex();
-        auto b_global = BGlobal(b_ptr)[block_idx][b_global_load_idx].rebase();
-        auto b_store_smem = BSmem(b_smem)[b_global_load_idx][BSwizzle(b_global_load_idx)].rebase();
-        auto b_loader = BLoader(block_idx + b_global_load_idx < BGlobal::extents());
-
-        // Get the coordinates of the output tile this thread will compute.
-        auto compute_idx = ComputeIndex();
+        auto b_global = BGlobal(b_ptr);
+        auto b_store_smem = BStoreSmem(b_smem.get()).rebase();
+        auto b_loader = BLoader(b_global.inbounds());
 
         // Set up loads from shared memory to registers for A and B.
-        auto a_load_smem =
-            ASmem(a_smem)[compute_idx][ASwizzle(AFragment::load_index_type(compute_idx))].rebase();
-        auto b_load_smem =
-            BSmem(b_smem)[compute_idx][BSwizzle(BFragment::load_index_type(compute_idx))].rebase();
+        auto a_load_smem = ALoadSmem(a_smem.base_ptr()).rebase();
+        auto b_load_smem = BLoadSmem(b_smem.base_ptr()).rebase();
 
         // Allocate registers for the local matrices.
         AReg::data_type a_data[AReg::storage_size()];
@@ -64,8 +54,8 @@ extern "C" {
         auto c_reg = CReg(c_data);
         c_reg.zero();
 
-        constexpr auto step = AReg::extent<K16>();
-        constexpr auto size = AGlobal::extent<K>();
+        constexpr auto step = a_reg.extent<K16>();
+        constexpr auto size = a_global.extent<K>();
 
         // Prefetch the first k_chunk of data from A and B.
         if constexpr (size > K(0)) {
@@ -89,13 +79,11 @@ extern "C" {
                 // memory to shared memory asynchronously.
                 if (k_double_chunk + k_chunk + K_CHUNK(1) < size) {
                     // Copy into the back-buffer.
-                    a_loader.copy_async(a_store_smem[(k_chunk + 1) % 2].get(), a_global.get());
-                    b_loader.copy_async(b_store_smem[(k_chunk + 1) % 2].get(), b_global.get());
+                    a_loader.copy_async(a_store_smem[(k_chunk + 1) % 2].get(),
+                                        a_global[k_double_chunk + k_chunk].get());
+                    b_loader.copy_async(b_store_smem[(k_chunk + 1) % 2].get(),
+                                        b_global[k_double_chunk + k_chunk].get());
                 }
-
-                // Advance the global memory tiles.
-                a_global.step(step);
-                b_global.step(step);
 
                 // Synchronize on the previous iteration's global memory copy.
                 __pipeline_commit();
@@ -116,6 +104,7 @@ extern "C" {
 
         // Final computation for any leftover iteration.
         if constexpr (K_DOUBLE_CHUNK(size) < size) {
+            __syncthreads();
             a_reg.load(a_load_smem);
             b_reg.load(b_load_smem);
             mma(a_reg, b_reg, c_reg, c_reg);
@@ -125,11 +114,10 @@ extern "C" {
         // Allocate shared memory for transposing the output matrix.
         a_smem.deallocate(smem_allocator);
         b_smem.deallocate(smem_allocator);
-        auto c_smem = CStoreSmem::allocate(smem_allocator);
+        auto c_smem = CSmem::allocate(smem_allocator);
 
         // Transfer outputs from registers to shared memory, converting from float32 to float16.
-        auto c_idx = CReg::data_type::compound_index_type(compute_idx);
-        auto c_store_smem = c_smem[compute_idx][c_idx].rebase();
+        auto c_store_smem = CStoreSmem(c_smem.get()).rebase();
         for (auto e : range(c_reg)) {
             auto c_fragments = *c_reg[e];
             for (auto f : range(c_fragments)) {
@@ -139,12 +127,10 @@ extern "C" {
 
         // Transfer outputs from shared memory to global memory.
         // Since each warp transfers its own transposed tile, no synchronization is needed.
-        auto c_global = CGlobal(c_ptr)[block_idx][compute_idx].rebase();
-        auto c_load_smem =
-            CLoadSmem(reinterpret_cast<const uint4*>(c_smem.get()))[compute_idx].rebase();
-        auto world_idx = block_idx + compute_idx;
-        for (auto p : CLoadSmemIndex::partition<LANE>(compute_idx)) {
-            if (world_idx + p < CGlobal::extents()) { *c_global[p] = *c_load_smem[p]; }
+        auto c_global = CGlobal(c_ptr);
+        auto c_load_smem = CLoadSmem(reinterpret_cast<const uint4*>(c_smem.get())).rebase();
+        for (auto p : CLoadSmemIndex::partition<LANE>(ComputeIndex())) {
+            if (c_global[p].inbounds()) { *c_global[p] = *c_load_smem[p]; }
         }
     }
 }

@@ -7,7 +7,12 @@ import torch
 
 from .. import primary_context_guard
 from ..generators import generate, GenSpecs
-from ..compiler import compile_kernel, load_kernel, count_instructions
+from ..compiler import (
+    compile_kernel,
+    load_kernel,
+    count_instructions,
+    print_disasm,
+)
 from ..util import check_channels_last
 from ..cuda.driver import FunctionAttributes
 from .kernel_util import get_first_device_in_args
@@ -108,6 +113,7 @@ class Kernel:
             cubin=self.cubin,
             device_ordinal=device_ordinal,
             count_instructions=count_instructions.get(),
+            print_disasm=print_disasm.get(),
         )
         if self.kernel_spec.function_attributes is not None:
             self.function.set_attributes(self.kernel_spec.function_attributes)

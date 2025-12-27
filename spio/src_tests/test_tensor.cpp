@@ -1,3 +1,4 @@
+#include "spio/checkerboard_index.h"
 #include "dim_test_common.h"
 #include "spio/tensor.h"
 #include "spio/dim.h"
@@ -11,6 +12,7 @@ TEST_DIM(I);
 TEST_DIM(J);
 TEST_DIM(K);
 TEST_DIM(M);
+TEST_DIM(CHECKERS);
 
 // 2D tensor creation helper
 template <typename DataType, typename HeightDimType, typename WidthDimType, int HeightSize,
@@ -259,6 +261,111 @@ UTEST(Tensor, tensor_extent_different_fold_levels) {
     EXPECT_EQ(tensor.extent<M16>(), M16(4));
 }
 
+UTEST(Cursor, cursor_size_simple) {
+    // Test Cursor::size() with simple dimensions
+    constexpr int Height = 16;
+    constexpr int Width = 32;
+
+    using T = Tensor<float, DimInfo<H, Height, Width>, DimInfo<W, Width, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Get a cursor by subscripting
+    auto cursor = tensor[H(0)];
+
+    // Cursor should have same size as tensor for each dimension
+    EXPECT_EQ(cursor.size<H>(), H(Height));
+    EXPECT_EQ(cursor.size<W>(), W(Width));
+}
+
+UTEST(Cursor, cursor_size_folded) {
+    // Test Cursor::size() with folded dimensions
+    using K8 = Fold<K, 8>;
+
+    constexpr int k8_size = 8;
+    constexpr int k_size = 8;
+
+    using T = Tensor<float, DimInfo<K8, k8_size, k_size>, DimInfo<K, k_size, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    auto cursor = tensor[K(0)];
+
+    // Cursor should report correct sizes for each dimension
+    EXPECT_EQ(cursor.size<K8>(), K8(k8_size));
+    EXPECT_EQ(cursor.size<K>(), K(k_size));
+}
+
+UTEST(Cursor, cursor_extent_matches_tensor) {
+    // Verify Cursor::extent() returns same values as Tensor::extent()
+    using K8 = Fold<K, 8>;
+
+    constexpr int k8_size = 8;
+    constexpr int k_size = 8;
+    constexpr int m_size = 16;
+
+    using T = Tensor<float, DimInfo<K8, k8_size, m_size * k_size>, DimInfo<M, m_size, k_size>,
+                     DimInfo<K, k_size, 1>>;
+
+    float data[T::storage_size()];
+    auto tensor = T(data);
+    auto cursor = tensor[M(5)];
+
+    // Cursor extent should match tensor extent
+    EXPECT_EQ(cursor.extent<K>(), tensor.extent<K>());
+    EXPECT_EQ(cursor.extent<K8>(), tensor.extent<K8>());
+    EXPECT_EQ(cursor.extent<M>(), tensor.extent<M>());
+
+    // Verify actual values
+    EXPECT_EQ(cursor.extent<K>(), K(64));  // 8 * 8 = 64
+    EXPECT_EQ(cursor.extent<K8>(), K8(8)); // coarsest K8 size
+    EXPECT_EQ(cursor.extent<M>(), M(16));
+}
+
+UTEST(Cursor, cursor_extent_different_fold_levels) {
+    // Test Cursor::extent() at different fold levels (mirrors tensor test)
+    using M4 = Fold<M, 4>;
+    using M16 = Fold<M, 16>;
+
+    using T = Tensor<float, DimInfo<M16, 4, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+    auto cursor = tensor[M16(0)];
+
+    EXPECT_EQ(cursor.size<M16>(), M16(4));
+
+    // extent<M>() should return M(64)
+    EXPECT_EQ(cursor.extent<M>(), M(64));
+
+    // extent<M4>() should return M4(16) since 64 / 4 = 16
+    EXPECT_EQ(cursor.extent<M4>(), M4(16));
+
+    // extent<M16>() should return M16(4) since 64 / 16 = 4
+    EXPECT_EQ(cursor.extent<M16>(), M16(4));
+}
+
+UTEST(Cursor, cursor_type_alias_extent) {
+    // Test using Cursor type alias for extent (common pattern in kernels)
+    using K8 = Fold<K, 8>;
+
+    constexpr int k8_size = 8;
+    constexpr int k_size = 8;
+
+    using T = Tensor<float, DimInfo<K8, k8_size, k_size>, DimInfo<K, k_size, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    auto cursor = tensor[K(0)];
+    using CursorType = decltype(cursor);
+
+    // Static method call on type alias (kernel pattern)
+    constexpr auto extent_k = CursorType::extent<K>();
+    EXPECT_EQ(extent_k, K(64));
+
+    constexpr auto extent_k8 = CursorType::extent<K8>();
+    EXPECT_EQ(extent_k8, K8(8));
+}
+
 UTEST(Tensor, subscript_projection_onto_folds) {
     // Test subscripting a tensor with multiple folds of the same base dimension
     // Ensure that projection of a dimension ontofolds works correctly
@@ -454,4 +561,185 @@ UTEST(Tensor, deferred_folding_with_step) {
         cursor.step(K(5));
         accumulated_k += 5;
     }
+}
+
+UTEST(Tensor, checkerboardindex_derived_dim_subscript) {
+    // CheckerboardIndex<8, I, K8, CHECKERS, 16> will have input_dims: I(8), K8(2), output_dim:
+    // CHECKERS(16)
+    using K8 = Fold<K, 8>;
+    constexpr int Ranks = 8;
+    constexpr int Size = 16;
+    using Checkerboard = CheckerboardIndex<Ranks, I, K8, CHECKERS, Size>;
+
+    // Tensor with derived dimension AND its output DimInfo
+    // The derived dim's output_dims is DimSize<CHECKERS, 16>, so we need DimInfo<CHECKERS, 16, 1>
+    float data[Size];
+    for (int i = 0; i < Size; ++i)
+        data[i] = static_cast<float>(i);
+    Tensor<float, Checkerboard, DimInfo<CHECKERS, Size, 1>> tensor(data);
+
+    // Test subscript with input_dims (PairDim, ColorDim)
+    for (int idx = 0; idx < Size; ++idx) {
+        auto i = idx / 2;
+        auto k8 = idx % 2;
+        auto coords = make_coordinates(I(i), K8(k8));
+
+        // Compute expected offset using CheckerboardIndex logic
+        Checkerboard expected_idx{I(i), K8(k8)};
+        int expected_offset = expected_idx.offset().get();
+        EXPECT_EQ(*tensor[coords], data[expected_offset]);
+    }
+}
+
+UTEST(Tensor, checkerboardindex_derived_dim_subscript_with_coarse_fold) {
+    using K8 = Fold<K, 8>;
+    using K64 = Fold<K, 64>;
+    constexpr int Ranks = 8;
+    constexpr int Size = 16;
+    using Checkerboard = CheckerboardIndex<Ranks, I, K8, CHECKERS, Size>;
+
+    using MyTensor = Tensor<float, Checkerboard, DimInfo<K64, 4, Size>, DimInfo<CHECKERS, Size, 1>>;
+    MyTensor::data_type data[MyTensor::storage_size()];
+    MyTensor tensor(data);
+    for (int i = 0; i < MyTensor::storage_size(); ++i)
+        data[i] = static_cast<float>(i);
+
+    for (int k64 = 0; k64 < 4; ++k64) {
+        for (int idx = 0; idx < Size; ++idx) {
+            auto i = idx / 2;
+            auto k8 = idx % 2;
+            auto coords = make_coordinates(K64(k64), I(i), K8(k8));
+
+            // Compute expected offset using CheckerboardIndex logic
+            Checkerboard expected_idx{I(i), K8(k8)};
+            int expected_offset = expected_idx.offset().get();
+            EXPECT_EQ(*tensor[coords], data[k64 * 16 + expected_offset]);
+        }
+    }
+
+    for (int k8 = 0; k8 < 4 * (64 / 8); ++k8) {
+        for (int i = 0; i < 8; ++i) {
+            auto coords = make_coordinates(I(i), K8(k8));
+
+            // Compute expected offset using CheckerboardIndex logic
+            Checkerboard expected_idx{I(i), K8(k8 % 2)};
+            int expected_offset = expected_idx.offset().get();
+            auto k64 = k8 / 8;
+            EXPECT_EQ(*tensor[coords], data[k64 * 16 + expected_offset]);
+        }
+    }
+}
+
+UTEST(Tensor, checkerboardindex_derived_dim_subscript_with_static_dim_mixing) {
+    using K8 = Fold<K, 8>;
+    using K64 = Fold<K, 64>;
+    using I16 = Fold<I, 16>;
+    constexpr int Ranks = 8;
+    constexpr int Size = 32;
+    using Checkerboard = CheckerboardIndex<Ranks, I, K8, CHECKERS, Size>;
+
+    using MyTensor = Tensor<float, Checkerboard, DimInfo<I16, 4, Size * 4>, DimInfo<K64, 4, Size>,
+                            DimInfo<CHECKERS, Size, 1>>;
+    float data[MyTensor::storage_size()];
+    MyTensor tensor(data);
+    for (int i = 0; i < MyTensor::storage_size(); ++i)
+        data[i] = static_cast<float>(i);
+
+    for (int k8 = 0; k8 < 4 * (64 / 8); ++k8) {
+        for (int i = 0; i < 64; ++i) {
+            auto coords = make_coordinates(I(i), K8(k8));
+
+            // Compute expected offset using CheckerboardIndex logic
+            Checkerboard expected_idx{I(i % 16), K8(k8 % 2)};
+            int expected_offset = expected_idx.offset().get();
+            auto k64 = k8 / 8;
+            auto i16 = i / 16;
+            EXPECT_EQ(*tensor[coords], data[i16 * 4 * Size + k64 * Size + expected_offset]);
+        }
+    }
+}
+
+// Test using coarse folds to subscript a tensor with both fine folds and derived dimensions
+// This mirrors the kernel scenario: WARP_J(0 or 1) subscripting a tensor with J16 and Checkerboard
+UTEST(Tensor, checkerboardindex_with_coarse_fold_subscript) {
+    using K8 = Fold<K, 8>;
+    using J16 = Fold<J, 16>;
+    using J64 = Fold<J, 64>; // Like WARP_J in the kernel
+    constexpr int Ranks = 8;
+    constexpr int Size = 32;
+    using Checkerboard = CheckerboardIndex<Ranks, J, K8, CHECKERS, Size>;
+
+    // Tensor layout mirrors BSmem: J16 dimension (tiles) + Checkerboard (swizzled storage)
+    // J16 has 8 tiles to cover j64=0 and j64=1 (each j64 spans 4 J16 tiles)
+    using MyTensor = Tensor<float, Checkerboard, DimInfo<J16, 8, Size>, DimInfo<CHECKERS, Size, 1>>;
+
+    float data[MyTensor::storage_size()];
+    MyTensor tensor(data);
+    for (int i = 0; i < MyTensor::storage_size(); ++i)
+        data[i] = static_cast<float>(i);
+
+    // Debug: print storage size and first failures
+    int failure_count = 0;
+    constexpr int max_failures = 5;
+
+    // Test 1: Subscript with J64 (like WARP_J(0) and WARP_J(1))
+    for (int j64 = 0; j64 < 2; ++j64) {
+        for (int j = 0; j < 16; ++j) {
+            for (int k8 = 0; k8 < 2; ++k8) {
+                auto coarse_coords = make_coordinates(J64(j64));
+                auto fine_coords = make_coordinates(J(j), K8(k8));
+
+                int j16_idx = j64 * 4 + j / 16;
+                Checkerboard expected_idx{J(j % 16), K8(k8)};
+                int expected_offset = expected_idx.offset().get();
+                int expected_data_idx = j16_idx * Size + expected_offset;
+
+                auto cursor1 = tensor[coarse_coords];
+                auto cursor2 = cursor1[fine_coords];
+
+                // Debug: compute actual pointer offset
+                int actual_offset = static_cast<int>(cursor2.get() - data);
+
+                if (*cursor2 != data[expected_data_idx] && failure_count < max_failures) {
+                    printf("FAIL: j64=%d j=%d k8=%d | expected_idx=%d actual_offset=%d | "
+                           "j16_idx=%d checkerboard_offset=%d\n",
+                           j64, j, k8, expected_data_idx, actual_offset, j16_idx, expected_offset);
+                    printf("  cursor1.coords: J16=%d\n", cursor1.coordinates().get<J16>().get());
+                    printf("  cursor2.coords: J16=%d CHECKERS=%d\n",
+                           cursor2.coordinates().get<J16>().get(),
+                           cursor2.coordinates().get<CHECKERS>().get());
+                    failure_count++;
+                }
+                EXPECT_EQ(*cursor2, data[expected_data_idx]);
+            }
+        }
+    }
+}
+
+// Test dimensional projection: subscript with coordinates containing extra dimensions
+// that don't exist in the tensor. The tensor should ignore non-matching dimensions.
+UTEST(Tensor, dimensional_projection_ignores_extra_dims) {
+    // Tensor A has dimensions I × K (like a matrix)
+    using A = Tensor<float, DimInfo<I, 16, 1>, DimInfo<K, 32, 16>>;
+
+    float data[A::storage_size()];
+    for (size_t i = 0; i < A::storage_size(); ++i) {
+        data[i] = static_cast<float>(i + 1);
+    }
+    auto a = A(data);
+
+    // Create coordinates with I, J, and K - but tensor A only has I and K
+    // J should be ignored when subscripting
+    auto origin = make_coordinates(I(5), J(99)); // J=99 should be ignored
+
+    // a[origin] should only apply I(5), ignoring J
+    auto a_tile = a[origin];
+
+    // Verify by comparing with explicit subscript
+    EXPECT_EQ(*a_tile[K(7)], *a[I(5)][K(7)]);
+
+    // Also test with coordinates that have all three dims
+    auto world = make_coordinates(I(3), J(42), K(10));
+    // Should match a[I(3)][K(10)], ignoring J
+    EXPECT_EQ(*a[world], *a[I(3)][K(10)]);
 }

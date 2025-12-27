@@ -8,7 +8,7 @@ from importlib_resources import files as importlib_resources_files
 from .. import primary_context_guard
 from ..cuda.driver import Module, Function
 from .compile import compile_cuda
-from .disasm import disasm_count_instructions
+from .disasm import disasm
 
 
 def compile_kernel(
@@ -56,6 +56,7 @@ def load_kernel(
     cubin: str = None,
     device_ordinal: int = 0,
     count_instructions: bool = False,
+    print_disasm: bool = False,
 ) -> Tuple[Module, Function]:
     """Load a compiled CUDA kernel from cubin.
 
@@ -64,9 +65,10 @@ def load_kernel(
         cubin (str): The CUDA binary.
         device_ordinal (int): The device number on which to load the kernel.
         count_instructions (bool): Whether to count instructions in the kernel.
+        print_disasm (bool): Whether to print instructions in the kernel.
     """
-    if count_instructions:
-        num_instructions = disasm_count_instructions(cubin, kernel_name)
+    if count_instructions or print_disasm:
+        num_instructions = disasm(cubin, kernel_name, print_disasm=print_disasm)
         print()
         print(f"Kernel {kernel_name} has {num_instructions} SASS instructions.")
 
@@ -88,6 +90,7 @@ def compile_and_load_kernel(
     lineinfo: bool = False,
     max_registers: int = None,
     count_instructions: bool = False,
+    print_disasm: bool = False,
 ):
     """Compile and load a CUDA kernel."""
     arch = torch.cuda.get_device_capability(device_ordinal)
@@ -109,4 +112,5 @@ def compile_and_load_kernel(
         cubin,
         device_ordinal=device_ordinal,
         count_instructions=count_instructions,
+        print_disasm=print_disasm,
     )

@@ -4,10 +4,11 @@ from dataclasses import dataclass
 
 from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
 from .gen_specs import GenSpecs
+from .derived_dimension import DerivedDimension, SupportsOutputDimName
 
 
 @dataclass
-class Checkerboard(GenSpecs):
+class Checkerboard(GenSpecs, DerivedDimension, SupportsOutputDimName):
     """CUDA / C++ code generator for checkerboard index classes.
 
     When used with the Generators container, class_name can be omitted and will
@@ -25,6 +26,7 @@ class Checkerboard(GenSpecs):
     colors_dim: str
     class_name: str = None
     offset_dim: str = "LANE"
+    size: int = 32
     ranks: int = 8
 
     def __post_init__(self):
@@ -43,6 +45,10 @@ class Checkerboard(GenSpecs):
     def get_class_name(self) -> str:
         """Return the class name, or None if not set."""
         return self.class_name
+
+    def set_output_dim_name(self, name: str) -> None:
+        """Set the output dimension name for this checkerboard."""
+        self.offset_dim = name
 
     def generate(self) -> str:
         """Return the CUDA / C++ source code for the checkerboard index subclass."""

@@ -26,6 +26,13 @@ namespace spio {
         using true_type = bool_constant<true>;
         using false_type = bool_constant<false>;
 
+        // Minimal is_void type trait for CUDA/NVRTC compatibility
+        template <typename T> struct is_void : false_type {};
+
+        template <> struct is_void<void> : true_type {};
+
+        template <typename T> inline constexpr bool is_void_v = is_void<T>::value;
+
         template <typename...> using void_t = void;
 
         template <typename T> T&& declval();
@@ -241,6 +248,19 @@ namespace spio {
         template <typename Tuple1, typename Tuple2>
         using tuple_filter_out_t = typename tuple_filter_out<Tuple1, Tuple2>::type;
 
+        // Check if two tuples share any exact type (not just base dims)
+        template <typename Tuple1, typename Tuple2> struct tuples_share_type;
+
+        template <typename Tuple2> struct tuples_share_type<tuple<>, Tuple2> : false_type {};
+
+        template <typename Head, typename... Tail, typename Tuple2>
+        struct tuples_share_type<tuple<Head, Tail...>, Tuple2>
+            : conditional_t<tuple_contains_v<Head, Tuple2>, true_type,
+                            tuples_share_type<tuple<Tail...>, Tuple2>> {};
+
+        template <typename Tuple1, typename Tuple2>
+        inline constexpr bool tuples_share_type_v = tuples_share_type<Tuple1, Tuple2>::value;
+
         // index_sequence implementation for CUDA RTC compatibility
         template <std::size_t... Is> struct index_sequence {};
 
@@ -367,7 +387,8 @@ namespace spio {
             }
         };
 
-        // Filter tuple to keep only types whose base dim is NOT in the other tuple's base dims
+        // Filter tuple to keep only types whose base dim is NOT in the other tuple's base
+        // dims
         template <typename Tuple, typename OtherBaseDims, typename Result = tuple<>>
         struct tuple_exclude_base_dims;
 

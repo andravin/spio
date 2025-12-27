@@ -270,3 +270,122 @@ UTEST(LoadIndexToCheckerboard, mma_b_full_chain) {
         EXPECT_EQ(checkers.offset(), Checkers::compute_offset(expected_j, expected_k8));
     }
 }
+
+// ============================================================================
+// Derived dimensions interface tests
+// ============================================================================
+
+UTEST(MMA_A_M16_K8_F16_LoadIndex, derived_dims_interface) {
+    using LoadIdx = MMA_A_M16_K8_F16_LoadIndex<I, K>;
+
+    // Verify input/output dims type aliases exist and have correct structure
+    static_assert(detail::tuple_size<LoadIdx::input_dims>::value == 1);
+    static_assert(detail::tuple_size<LoadIdx::output_dims>::value == 2);
+
+    for (int lane = 0; lane < 32; ++lane) {
+        // Use compute_coordinates static method
+        typename LoadIdx::input_coordinates input_coords{LANE(lane)};
+        auto output_coords = LoadIdx::compute_coordinates(input_coords);
+
+        // Compare with direct construction
+        LoadIdx idx(lane);
+        auto out_i = output_coords.template get<I>().get();
+        auto out_k8 = output_coords.template get<K8>().get();
+        EXPECT_EQ(out_i, idx.get<I>().get());
+        EXPECT_EQ(out_k8, idx.get<K8>().get());
+    }
+}
+
+UTEST(MMA_A_M16_K16_F16_LoadIndex, derived_dims_interface) {
+    using LoadIdx = MMA_A_M16_K16_F16_LoadIndex<I, K>;
+
+    static_assert(detail::tuple_size<LoadIdx::input_dims>::value == 1);
+    static_assert(detail::tuple_size<LoadIdx::output_dims>::value == 2);
+
+    for (int lane = 0; lane < 32; ++lane) {
+        typename LoadIdx::input_coordinates input_coords{LANE(lane)};
+        auto output_coords = LoadIdx::compute_coordinates(input_coords);
+
+        LoadIdx idx(lane);
+        auto out_i = output_coords.template get<I>().get();
+        auto out_k8 = output_coords.template get<K8>().get();
+        EXPECT_EQ(out_i, idx.get<I>().get());
+        EXPECT_EQ(out_k8, idx.get<K8>().get());
+    }
+}
+
+UTEST(MMA_B_N8_K8_F16_LoadIndex, derived_dims_interface) {
+    using LoadIdx = MMA_B_N8_K8_F16_LoadIndex<K, J>;
+
+    static_assert(detail::tuple_size<LoadIdx::input_dims>::value == 1);
+    static_assert(detail::tuple_size<LoadIdx::output_dims>::value == 2);
+
+    for (int lane = 0; lane < 32; ++lane) {
+        typename LoadIdx::input_coordinates input_coords{LANE(lane)};
+        auto output_coords = LoadIdx::compute_coordinates(input_coords);
+
+        LoadIdx idx(lane);
+        auto out_j = output_coords.template get<J>().get();
+        auto out_k8 = output_coords.template get<K8>().get();
+        EXPECT_EQ(out_j, idx.get<J>().get());
+        EXPECT_EQ(out_k8, idx.get<K8>().get());
+    }
+}
+
+UTEST(MMA_B_N8_K16_F16_LoadIndex, derived_dims_interface) {
+    using LoadIdx = MMA_B_N8_K16_F16_LoadIndex<K, J>;
+
+    static_assert(detail::tuple_size<LoadIdx::input_dims>::value == 1);
+    static_assert(detail::tuple_size<LoadIdx::output_dims>::value == 2);
+
+    for (int lane = 0; lane < 32; ++lane) {
+        typename LoadIdx::input_coordinates input_coords{LANE(lane)};
+        auto output_coords = LoadIdx::compute_coordinates(input_coords);
+
+        LoadIdx idx(lane);
+        auto out_j = output_coords.template get<J>().get();
+        auto out_k8 = output_coords.template get<K8>().get();
+        EXPECT_EQ(out_j, idx.get<J>().get());
+        EXPECT_EQ(out_k8, idx.get<K8>().get());
+    }
+}
+
+UTEST(MMA_B_N16_K16_F16_LoadIndex, derived_dims_interface) {
+    using LoadIdx = MMA_B_N16_K16_F16_LoadIndex<K, J>;
+
+    static_assert(detail::tuple_size<LoadIdx::input_dims>::value == 1);
+    static_assert(detail::tuple_size<LoadIdx::output_dims>::value == 2);
+
+    for (int lane = 0; lane < 32; ++lane) {
+        typename LoadIdx::input_coordinates input_coords{LANE(lane)};
+        auto output_coords = LoadIdx::compute_coordinates(input_coords);
+
+        LoadIdx idx(lane);
+        auto out_j = output_coords.template get<J>().get();
+        auto out_k8 = output_coords.template get<K8>().get();
+        EXPECT_EQ(out_j, idx.get<J>().get());
+        EXPECT_EQ(out_k8, idx.get<K8>().get());
+    }
+}
+
+UTEST(MMA_C_88_F32_Index, derived_dims_interface) {
+    using CIdx = MMA_C_88_F32_Index<I, J>;
+
+    // Verify input/output dims type aliases
+    static_assert(detail::tuple_size<CIdx::input_dims>::value == 1);
+    static_assert(detail::tuple_size<CIdx::output_dims>::value == 2);
+
+    for (int lane = 0; lane < 32; ++lane) {
+        typename CIdx::input_coordinates input_coords{LANE(lane)};
+        auto output_coords = CIdx::compute_coordinates(input_coords);
+
+        // Compare with base_coord() which returns the same fragment-independent coordinates
+        CIdx idx(lane);
+        auto base = idx.base_coord();
+
+        auto out_i = output_coords.template get<I>().get();
+        auto out_j2m4 = output_coords.template get<J2M4>().get();
+        EXPECT_EQ(out_i, base.template get<I>().get());
+        EXPECT_EQ(out_j2m4, base.template get<J2M4>().get());
+    }
+}

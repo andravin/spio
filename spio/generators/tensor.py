@@ -1,14 +1,15 @@
 """Code generator for custom tensor classes in CUDA source code."""
 
-from typing import Dict, Union, Generator, List
-from dataclasses import dataclass
+from typing import Dict, Union, Generator, List, Tuple
+from dataclasses import dataclass, field
 
 from .dim import dim_name_to_dim_or_fold_class_name
 from .dims import Dims, Strides, compute_full_strides
 from .fragment_type import FragmentType
 from .fragment import Fragment
-from .data_type import dtype
+from .data_type import dtype, get_dtype_veclen, get_dtype_with_veclen
 from .gen_specs import GenSpecsWithContext
+from .derived_dimension import DerivedDimension, SupportsOutputDimName
 
 
 @dataclass
@@ -32,6 +33,7 @@ class Tensor(GenSpecsWithContext):
         class_name (str): The name of the custom tensor class (optional with Generators).
         strides (Strides): An optional dictionary mapping dimension names to their strides.
         constant (bool): Whether the tensor is constant.
+        derived_dims (List[DerivedDimension]): List of derived dimensions used in dims.
     """
 
     data_type: Union[dtype, FragmentType, str]
@@ -39,6 +41,7 @@ class Tensor(GenSpecsWithContext):
     class_name: str = None
     strides: Strides = None
     constant: bool = False
+    derived_dims: List[DerivedDimension] = None
 
     def __post_init__(self):
         if isinstance(self.dims, dict):
@@ -51,6 +54,9 @@ class Tensor(GenSpecsWithContext):
                     raise ValueError(
                         f"Stride name '{stride_name}' not found in dims {list(self.dims.keys())}."
                     )
+        for name, value in self.dims.items():
+            if isinstance(value, (DerivedDimension, SupportsOutputDimName)):
+                value.set_output_dim_name(name)
         self.strides = compute_full_strides(self.dims, self.strides)
 
     def _set_class_name(self, name: str) -> None:
@@ -72,7 +78,154 @@ class Tensor(GenSpecsWithContext):
             data_type_name,
             self.dims,
             self.strides,
+            derived_dims=self.derived_dims,
         )
+
+    def used_generators(self) -> list[GenSpecsWithContext]:
+        """Return a list of generator class-names used by this generator.
+
+        This is used to find any generators that need to be assigned class names automatically.
+        Subclasses should override this method if they use other generators.
+        """
+        used_gens = []
+        for dim_value in self.dims.values():
+            if isinstance(dim_value, DerivedDimension):
+                used_gens.append(dim_value)
+        if self.derived_dims:
+            used_gens.extend(self.derived_dims)
+        return used_gens
+
+    def derive_dim(self, derived_dim: DerivedDimension) -> "Tensor":
+        """Return a new Tensor with an additional derived dimension.
+
+        Duplicate this tensor and add the given derived dimension to its derived_dims list.
+        """
+        new_derived_dims = list(self.derived_dims) if self.derived_dims else []
+        new_derived_dims.append(derived_dim)
+        return Tensor(
+            data_type=self.data_type,
+            dims=self.dims,
+            class_name=None,
+            strides=self.strides,
+            constant=self.constant,
+            derived_dims=new_derived_dims,
+        )
+
+    def vector_length(self, width: int, constant: bool = None) -> "Tensor":
+        """Return a new Tensor with a different vector width.
+
+        This method creates a new tensor with a wider vector type, adjusting
+        the dimension with stride=1 to account for the increased vector size.
+
+        Args:
+            width: The new vector width (e.g., 8 for half8).
+            constant: Whether the new tensor is constant. If None, inherits from self.
+
+        Returns:
+            A new Tensor with the adjusted dtype, dims, and strides.
+
+        Raises:
+            ValueError: If the width ratio does not divide the stride-1 dimension's size.
+
+        Example:
+            Given a tensor with dtype.half2 and dims (warp_i, j8, i, j2=4),
+            calling with_vector_width(8) returns a tensor with dtype.half8
+            and dims (warp_i, j8, i), with strides divided by 4.
+        """
+        if not isinstance(self.data_type, dtype):
+            raise ValueError(
+                f"with_vector_width requires a dtype, got {self.data_type}"
+            )
+
+        current_veclen = get_dtype_veclen(self.data_type)
+        if width <= current_veclen:
+            raise ValueError(
+                f"New width {width} must be greater than current vector length {current_veclen}"
+            )
+
+        if width % current_veclen != 0:
+            raise ValueError(
+                f"New width {width} must be a multiple of current vector length {current_veclen}"
+            )
+
+        width_ratio = width // current_veclen
+
+        # Find the dimension with stride=1
+        stride1_dim = None
+        for name, stride in self.strides.items():
+            if stride == 1:
+                stride1_dim = name
+                break
+
+        if stride1_dim is None:
+            raise ValueError("No dimension with stride=1 found")
+
+        stride1_size = self.dims[stride1_dim]
+        if stride1_size % width_ratio != 0:
+            raise ValueError(
+                f"Width ratio {width_ratio} must divide the size of dimension "
+                f"'{stride1_dim}' ({stride1_size})"
+            )
+
+        # Build new dims and strides
+        new_dims_dict = {}
+        new_strides_dict = {}
+
+        for name, size in self.dims.items():
+            if name == stride1_dim:
+                new_size = size // width_ratio
+                if new_size > 1:
+                    # Reduce dimension size
+                    new_dims_dict[name] = new_size
+                    new_strides_dict[name] = 1
+                # If new_size == 1, eliminate the dimension entirely
+            else:
+                new_dims_dict[name] = size
+                # Divide stride by width_ratio
+                new_strides_dict[name] = self.strides[name] // width_ratio
+
+        new_dims = Dims(**new_dims_dict)
+        new_strides = Strides(**new_strides_dict) if new_strides_dict else None
+
+        # Get the new dtype with the target vector length
+        new_dtype = get_dtype_with_veclen(self.data_type, width)
+
+        return Tensor(
+            data_type=new_dtype,
+            dims=new_dims,
+            class_name=None,
+            strides=new_strides,
+            constant=self.constant if constant is None else constant,
+            derived_dims=self.derived_dims,
+        )
+
+    def implicit_dim(
+        self, *implicit_dims: GenSpecsWithContext
+    ) -> "CursorWithImplicitDims":
+        """Return a CursorWithImplicitDims that applies implicit subscripts at construction.
+
+        Implicit dimensions are subscripts that are automatically applied when
+        the cursor is created, using default-constructed index types. This is
+        useful for absorbing thread-specific indexing (e.g., based on THREAD_IDX_X)
+        into the cursor factory.
+
+        Args:
+            *implicit_dims: Generator specs for the implicit dimension types.
+                Each must be a generator with a class_name that will be
+                default-constructed and used as a subscript.
+
+        Returns:
+            A CursorWithImplicitDims generator that produces a factory function.
+
+        Example:
+            g.AGlobalLoader = g.AGlobal.implicit_dim(g.ALoadGlobalIndex)
+
+            Generates:
+            auto AGlobalLoader(const half* ptr) {
+                return AGlobal(ptr)[ALoadGlobalIndex()];
+            }
+        """
+        return CursorWithImplicitDims(tensor=self, implicit_dims=list(implicit_dims))
 
     @property
     def size(self) -> int:
@@ -107,20 +260,114 @@ class Tensor(GenSpecsWithContext):
         )
 
 
+@dataclass
+class CursorWithImplicitDims(GenSpecsWithContext):
+    """Code generator for a cursor factory with implicit dimension subscripts.
+
+    This class generates a factory function that constructs a tensor cursor
+    and applies default-constructed subscripts for each implicit dimension.
+    Implicit dimensions are evaluated once when the factory is called, making
+    them ideal for thread-specific indexing (e.g., using THREAD_IDX_X).
+
+    Unlike derived dimensions (which affect template parameters and match
+    during subscripting), implicit dimensions are simply subscripts applied
+    at cursor construction time.
+
+    Attributes:
+        tensor: The base Tensor to create cursors from.
+        implicit_dims: List of generators for the implicit dimension types.
+        class_name: The name of the factory function (optional with Generators).
+
+    Example:
+        g.AGlobalLoader = g.AGlobal.implicit_dim(g.ALoadGlobalIndex)
+
+        Generates:
+        auto AGlobalLoader(const half* ptr) {
+            return AGlobal(ptr)[ALoadGlobalIndex()];
+        }
+    """
+
+    tensor: "Tensor"
+    implicit_dims: List[GenSpecsWithContext] = field(default_factory=list)
+    class_name: str = None
+
+    def _set_class_name(self, name: str) -> None:
+        """Set the function name for this cursor factory.
+
+        Called by the Generators container when assigned to an attribute.
+        """
+        self.class_name = name
+
+    def get_class_name(self) -> str:
+        """Return the function name, or None if not set."""
+        return self.class_name
+
+    def used_generators(self) -> list[GenSpecsWithContext]:
+        """Return the tensor and implicit dimension generators."""
+        used = [self.tensor] + list(self.implicit_dims)
+        for dim in self.implicit_dims:
+            if hasattr(dim, "used_generators"):
+                used.extend(dim.used_generators())
+        return used
+
+    def generate_with_context(self, user_data_types: List[str] = None) -> str:
+        """Generate the C++ factory function."""
+        if self.class_name is None:
+            raise ValueError("CursorWithImplicitDims requires a class_name")
+
+        tensor_class_name = self.tensor.get_class_name()
+        if tensor_class_name is None:
+            raise ValueError("Tensor must have a class_name set")
+
+        data_type_name = self.tensor._get_data_type_name(user_data_types)
+
+        # Build the subscript chain
+        subscript_chain = ""
+        for implicit_dim in self.implicit_dims:
+            dim_class_name = implicit_dim.get_class_name()
+            if dim_class_name is None:
+                raise ValueError("Implicit dimension must have a class_name set")
+            subscript_chain += f"[{dim_class_name}()]"
+
+        return (
+            f"DEVICE auto {self.class_name}({data_type_name}* ptr) {{\n"
+            f"    return {tensor_class_name}(ptr){subscript_chain};\n"
+            f"}}\n"
+        )
+
+    @property
+    def strides(self) -> Strides:
+        """Return the strides of the underlying tensor."""
+        return self.tensor.strides
+
+
 def _generate_tensor(
     class_name: str,
     data_type_name: str,
     dims: Dims,
     strides: Dict[str, int],
+    derived_dims: List[DerivedDimension] = None,
 ) -> str:
     """Generate a using statement for a Tensor template instantiation."""
-    dim_infos = []
 
-    for name, size_value in dims.items():
-        size_str = str(size_value)
-        stride = strides[name]
+    # Make a shallow copy of the derived_dims argument to avoid modifying it.
+    derived_dims = list(derived_dims) if derived_dims else []
+
+    dim_infos = []
+    for name, dim_value in dims.items():
+        if isinstance(dim_value, DerivedDimension):
+            size = dim_value.size
+            derived_dims.append(dim_value)
+        else:
+            size = dim_value
         dim_class = dim_name_to_dim_or_fold_class_name(name)
+        size_str = str(size)
+        stride = strides[name]
         dim_infos.append(f"spio::DimInfo<{dim_class}, {size_str}, {stride}>")
+
+    # Add derived dimension class names after all DimInfo entries
+    for derived_dim in derived_dims:
+        dim_infos.append(derived_dim.get_class_name())
 
     # More concise formatting with line breaks only for longer declarations
     if len(dim_infos) <= 3:

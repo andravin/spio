@@ -8,6 +8,7 @@ work in both C++ and CUDA programs.
 from subprocess import CalledProcessError
 from tempfile import NamedTemporaryFile
 from typing import Callable
+import os
 
 from importlib_resources import files as importlib_resources_files
 import pytest
@@ -44,10 +45,9 @@ CPP_SOURCES = [
 
 TEST_SOURCES = []
 
-CPP_TESTS_FILTER = None
-
 # Select specific C++ unit tests with a filter like this:
-# CPP_TESTS_FILTER = "Tensor.subscript_multiple_folds_with_carry"
+# "Tensor.checkerboardindex_derived_dim_subscript"
+CPP_TESTS_FILTER = os.environ.get("SPIO_CPP_TESTS_FILTER", None)
 
 
 @pytest.mark.skipif(
@@ -692,6 +692,301 @@ UTEST(ExplicitFold, matching_explicit_sizes)
 
 
 @_cpp_test
+def _test_with_vector_width():
+    """Test the with_vector_width() method for Tensor.
+
+    This tests that a tensor with dtype.float and dims (a, b, c, d=4) can be
+    transformed to dtype.float4 with dims (a, b, c) by eliminating the stride-1
+    dimension and adjusting strides.
+    """
+    # Original tensor: float with dims (warp=4, j4=16, i=32, j=4)
+    # Stride for j4 is (32 + 1) * 4 = 132 (with padding for bank conflicts)
+    original = gen.Tensor(
+        gen.dtype.float,
+        gen.Dims(warp=4, j4=16, i=32, j=4),
+        strides=gen.Strides(j4=132),
+    )
+
+    # with_vector_width(4) should:
+    # - Change dtype to float4 (veclen 4 vs 1, ratio = 4)
+    # - Eliminate j dimension (size 4 / ratio 4 = 1)
+    # - Divide all strides by 4: j4 stride becomes 132/4 = 33
+    wide_tensor = original.vector_length(4, constant=True)
+
+    generated_code = gen.generate(
+        [
+            gen.Tensor(
+                original.data_type,
+                original.dims,
+                class_name="OriginalTensor",
+                strides=original.strides,
+            ),
+            gen.Tensor(
+                wide_tensor.data_type,
+                wide_tensor.dims,
+                class_name="WideTensor",
+                strides=wide_tensor.strides,
+                constant=True,
+            ),
+        ],
+        namespace="WithVectorWidth_GenCode",
+    )
+
+    return f"""
+{generated_code}
+
+UTEST(WithVectorWidth, dimensions_and_strides)
+{{
+    using namespace WithVectorWidth_GenCode;
+
+    // Original tensor has 4 dimensions
+    EXPECT_EQ(OriginalTensor::size<WARP>().get(), 4);
+    EXPECT_EQ(OriginalTensor::size<J4>().get(), 16);
+    EXPECT_EQ(OriginalTensor::size<I>().get(), 32);
+    EXPECT_EQ(OriginalTensor::size<J>().get(), 4);
+
+    // Wide tensor has 3 dimensions (j eliminated since 4/4=1)
+    EXPECT_EQ(WideTensor::size<WARP>().get(), 4);
+    EXPECT_EQ(WideTensor::size<J4>().get(), 16);
+    EXPECT_EQ(WideTensor::size<I>().get(), 32);
+}}
+
+UTEST(WithVectorWidth, storage_layout)
+{{
+    using namespace WithVectorWidth_GenCode;
+
+    // Both tensors should access the same memory with different element types
+    // Storage size should be the same in terms of bytes
+    // Original: uses float (4 bytes), Wide: uses float4 (16 bytes)
+    // Wide storage_size should be 1/4 of original (in elements)
+
+    constexpr auto orig_storage = OriginalTensor::storage_size();
+    constexpr auto wide_storage = WideTensor::storage_size();
+
+    // storage_size is in elements, so wide should be 1/4 of original
+    EXPECT_EQ(orig_storage, wide_storage * 4);
+}}
+
+UTEST(WithVectorWidth, memory_access)
+{{
+    using namespace WithVectorWidth_GenCode;
+
+    // Verify that both tensors can index the same underlying data
+    float orig_data[OriginalTensor::storage_size()];
+    OriginalTensor orig_tensor(orig_data);
+
+    // Cast to float4 for wide tensor (same memory, different view)
+    const float4* wide_data = reinterpret_cast<const float4*>(orig_data);
+    WideTensor wide_tensor(wide_data);
+
+    // Access pattern: for each (warp, j4, i) in wide tensor,
+    // this should correspond to 4 consecutive j values in original
+    for (auto warp : range(WideTensor::size<WARP>())) {{
+        for (auto j4 : range(WideTensor::size<J4>())) {{
+            for (auto i : range(WideTensor::size<I>())) {{
+                // Get wide tensor pointer (use .get() to get pointer from Cursor)
+                const float4* wide_ptr = wide_tensor[warp][j4][i].get();
+
+                // Get original tensor pointer at j=0
+                float* orig_ptr = orig_tensor[warp][j4][i][J(0)].get();
+
+                // They should point to the same memory
+                EXPECT_EQ(reinterpret_cast<const void*>(wide_ptr),
+                          reinterpret_cast<const void*>(orig_ptr));
+            }}
+        }}
+    }}
+}}
+"""
+
+
+@_cpp_test
+def _test_cursor_inbounds():
+    """Test the Cursor::inbounds() method.
+
+    This tests that inbounds() correctly checks if cursor coordinates
+    are within the tensor extents.
+    """
+    specs = [
+        gen.Tensor(
+            gen.dtype.float,
+            gen.Dims(i=8, j=16),
+            class_name="Tensor2D",
+        ),
+    ]
+
+    generated_code = gen.generate(specs, namespace="CursorInbounds_GenCode")
+
+    return f"""
+{generated_code}
+
+UTEST(CursorInbounds, basic)
+{{
+    using namespace CursorInbounds_GenCode;
+
+    float data[Tensor2D::storage_size()];
+    Tensor2D tensor(data);
+
+    // Cursor at origin should be inbounds
+    auto cursor = tensor[I(0)][J(0)];
+    EXPECT_TRUE(cursor.inbounds());
+
+    // Cursor at last valid position should be inbounds
+    auto last = tensor[I(7)][J(15)];
+    EXPECT_TRUE(last.inbounds());
+
+    // Cursor at i=8 should be out of bounds
+    auto oob_i = tensor[I(8)][J(0)];
+    EXPECT_FALSE(oob_i.inbounds());
+
+    // Cursor at j=16 should be out of bounds
+    auto oob_j = tensor[I(0)][J(16)];
+    EXPECT_FALSE(oob_j.inbounds());
+
+    // Cursor at both out of bounds
+    auto oob_both = tensor[I(8)][J(16)];
+    EXPECT_FALSE(oob_both.inbounds());
+}}
+
+UTEST(CursorInbounds, extents)
+{{
+    using namespace CursorInbounds_GenCode;
+
+    float data[Tensor2D::storage_size()];
+    Tensor2D tensor(data);
+
+    // Verify extents() returns the correct values
+    auto ext = tensor[I(0)][J(0)].extents();
+    auto i_ext = ext.template get<I>();
+    auto j_ext = ext.template get<J>();
+    EXPECT_EQ(i_ext.get(), 8);
+    EXPECT_EQ(j_ext.get(), 16);
+}}
+
+UTEST(CursorInbounds, extent_single_dim)
+{{
+    using namespace CursorInbounds_GenCode;
+
+    // Test extent<DimType>() static method
+    using CursorType = decltype(Tensor2D(nullptr)[I(0)]);
+    auto i_extent = CursorType::extent<I>();
+    auto j_extent = CursorType::extent<J>();
+    EXPECT_EQ(i_extent.get(), 8);
+    EXPECT_EQ(j_extent.get(), 16);
+}}
+
+UTEST(CursorInbounds, partial_subscript)
+{{
+    using namespace CursorInbounds_GenCode;
+
+    float data[Tensor2D::storage_size()];
+    Tensor2D tensor(data);
+
+    // Cursor with only one dimension subscripted
+    // Should be inbounds if that dimension is valid
+    auto partial = tensor[I(5)];
+    EXPECT_TRUE(partial.inbounds());
+
+    // Cursor with one dimension out of bounds
+    auto partial_oob = tensor[I(10)];
+    EXPECT_FALSE(partial_oob.inbounds());
+}}
+"""
+
+
+@_cpp_test
+def _test_compound_index_derived_dims():
+    """Test the derived dimensions interface for CompoundIndex.
+
+    CompoundIndex should work as a derived dimension type, mapping
+    OFFSET to multi-dimensional coordinates.
+    """
+    specs = [
+        gen.CompoundIndex(gen.Dims(i=8, j=16), class_name="Index2D"),
+        gen.Tensor(
+            gen.dtype.float,
+            gen.Dims(i=8, j=16),
+            class_name="Tensor2D",
+        ),
+    ]
+
+    generated_code = gen.generate(specs, namespace="CompoundIndexDerivedDims_GenCode")
+
+    return f"""
+{generated_code}
+
+UTEST(CompoundIndexDerivedDims, input_output_dims)
+{{
+    using namespace CompoundIndexDerivedDims_GenCode;
+
+    // Verify input_dims contains OFFSET with correct size
+    using input = Index2D::input_dims;
+    static_assert(spio::detail::tuple_size<input>::value == 1, "Should have 1 input dim");
+
+    // Verify output_dims contains both I and J
+    using output = Index2D::output_dims;
+    static_assert(spio::detail::tuple_size<output>::value == 2, "Should have 2 output dims");
+}}
+
+UTEST(CompoundIndexDerivedDims, compute_coordinates)
+{{
+    using namespace CompoundIndexDerivedDims_GenCode;
+    using spio::Coordinates;
+    using spio::OFFSET;
+
+    // Test that compute_coordinates returns the same result as coordinates()
+    for (int offset = 0; offset < Index2D::size(); offset++) {{
+        Index2D idx(offset);
+
+        // Get expected values directly from CompoundIndex
+        auto expected_i = idx.template get<I>().get();
+        auto expected_j = idx.template get<J>().get();
+
+        // Compute via derived dims interface
+        auto computed = Index2D::compute_coordinates(Coordinates<OFFSET>(OFFSET(offset)));
+
+        // Use idx.get() return type to access computed coordinates
+        using I_Coord = decltype(idx.template get<I>());
+        using J_Coord = decltype(idx.template get<J>());
+        auto computed_i = computed.template get<I_Coord>().get();
+        auto computed_j = computed.template get<J_Coord>().get();
+
+        EXPECT_EQ(computed_i, expected_i);
+        EXPECT_EQ(computed_j, expected_j);
+    }}
+}}
+
+UTEST(CompoundIndexDerivedDims, tensor_subscript_with_offset)
+{{
+    using namespace CompoundIndexDerivedDims_GenCode;
+
+    // Create a tensor with the same dimensions as the compound index
+    float data[Tensor2D::storage_size()];
+    Tensor2D tensor(data);
+
+    // Initialize data with linear values
+    for (int i = 0; i < Tensor2D::storage_size(); i++) {{
+        data[i] = static_cast<float>(i);
+    }}
+
+    // Verify that subscripting with OFFSET uses derived dimensions
+    // to expand to multi-dimensional coordinates
+    for (int offset = 0; offset < Index2D::size(); offset++) {{
+        Index2D idx(offset);
+
+        // Direct subscript with i and j
+        float* direct = tensor[idx.template get<I>()][idx.template get<J>()].get();
+
+        // Using coordinates
+        float* via_coords = tensor[idx.coordinates()].get();
+
+        EXPECT_EQ(direct, via_coords);
+    }}
+}}
+"""
+
+
+@_cpp_test
 def _test_fragment_index():
 
     specs = [
@@ -808,6 +1103,192 @@ UTEST(FragmentLoadIndex, MMA_M16_K16_F16_A)
         EXPECT_TRUE((weights.get<Fold<C, 8>>() == expect.get<Fold<C, 8>>()));
         EXPECT_TRUE(weights.get<K>() == expect.get<K>());
      }}
+}}
+"""
+    return test_code
+
+
+@_cpp_test
+def _test_tensor_with_checkerboard_derived_dim():
+    """Test Tensor generator with a Checkerboard derived dimension."""
+    # Create a Checkerboard derived dimension similar to the C++ test
+    # CheckerboardIndex<8, I, K8, CHECKERS, 16>
+    g = gen.Generators()
+    g.Swizzle = gen.Checkerboard(
+        pairs_dim="i",
+        colors_dim="k8",
+        offset_dim="swizzle",
+        size=16,
+        ranks=8,
+    )
+
+    # Create a Tensor that uses the Checkerboard as a derived dimension
+    # The dimension name "checkers" maps to the Checkerboard's output dimension
+    g.MyTensor = gen.Tensor(
+        gen.dtype.float,
+        gen.Dims(swizzle=g.Swizzle),
+    )
+
+    generated_code = gen.generate(g, namespace="TensorCheckerboard_GenCode")
+
+    test_code = f"""
+{generated_code}
+
+UTEST(TensorCheckerboard, derived_dim_subscript)
+{{
+    using namespace TensorCheckerboard_GenCode;
+    using namespace spio;
+
+    constexpr int Size = 16;
+    float data[Size];
+    for (int i = 0; i < Size; ++i)
+        data[i] = static_cast<float>(i);
+
+    MyTensor tensor(data);
+
+    // Test subscript with input dimensions (pairs_dim=I, colors_dim=K8)
+    using K8 = Fold<K, 8>;
+    for (int idx = 0; idx < Size; ++idx) {{
+        auto i_val = idx / 2;
+        auto k8_val = idx % 2;
+        auto coords = make_coordinates(I(i_val), K8(k8_val));
+
+        // Compute expected offset using CheckerboardIndex logic
+        Swizzle expected_idx{{I(i_val), K8(k8_val)}};
+        int expected_offset = expected_idx.offset().get();
+        EXPECT_EQ(*tensor[coords], data[expected_offset]);
+    }}
+}}
+"""
+    return test_code
+
+
+@_cpp_test
+def _test_tensor_with_derived_dim_and_compound_index():
+    """Test Tensor with derived dimension subscripted by CompoundIndex."""
+    g = gen.Generators()
+    g.Swizzle = gen.Checkerboard(
+        pairs_dim="i",
+        colors_dim="k8",
+        offset_dim="swizzle",
+        size=16,
+        ranks=8,
+    )
+
+    # Tensor with derived dimension
+    g.MyTensor = gen.Tensor(
+        gen.dtype.float,
+        gen.Dims(swizzle=g.Swizzle),
+    )
+
+    # CompoundIndex with the input dimensions of the derived dimension
+    g.MyIndex = gen.CompoundIndex(gen.Dims(i=8, k8=2))
+
+    generated_code = gen.generate(g, namespace="TensorDerivedCompound_GenCode")
+
+    test_code = f"""
+{generated_code}
+
+UTEST(TensorDerivedDim, compound_index_subscript)
+{{
+    using namespace TensorDerivedCompound_GenCode;
+    using namespace spio;
+
+    constexpr int Size = 16;
+    float data[Size];
+    for (int i = 0; i < Size; ++i)
+        data[i] = static_cast<float>(i);
+
+    MyTensor tensor(data);
+
+    // Test subscript with CompoundIndex
+    for (int offset = 0; offset < Size; ++offset) {{
+        MyIndex idx(offset);
+
+        // CompoundIndex has coordinates() method, so tensor[idx] should work
+        // The tensor should project the coordinates onto the derived dimension
+        using K8 = Fold<K, 8>;
+        auto i_val = idx.get<I>().get();
+        auto k8_val = idx.get<K8>().get();
+
+        // Compute expected offset using CheckerboardIndex logic
+        Swizzle expected_idx{{I(i_val), K8(k8_val)}};
+        int expected_offset = expected_idx.offset().get();
+        EXPECT_EQ(*tensor[idx], data[expected_offset]);
+    }}
+}}
+"""
+    return test_code
+
+
+@_cpp_test
+def _test_tensor_with_derived_dim_and_fragment_load_index():
+    """Test Tensor with derived dimension subscripted by fragment load index.
+
+    This tests whether the fragment load index (MMA_A_M16_K16_F16_LoadIndex)
+    can be used to subscript a tensor with a derived dimension.
+    The fragment load index has get<Dim>() methods but may not have coordinates().
+    """
+    g = gen.Generators()
+    # MMA_A_M16_K16_F16_LoadIndex produces I=0-15 for lanes 0-31, and K8=0-1
+    # size=32 accommodates 16 pairs * 2 colors = 32 elements
+    # ranks=8 means 8 elements per row (for 128-byte shared memory lines)
+    g.Swizzle = gen.Checkerboard(
+        pairs_dim="i",
+        colors_dim="k8",
+        offset_dim="swizzle",
+        size=32,
+        ranks=8,
+    )
+
+    # Tensor with derived dimension
+    g.MyTensor = gen.Tensor(
+        gen.dtype.float,
+        gen.Dims(swizzle=g.Swizzle),
+    )
+
+    generated_code = gen.generate(g, namespace="TensorDerivedFragment_GenCode")
+
+    test_code = f"""
+{generated_code}
+
+UTEST(TensorDerivedDim, fragment_load_index_subscript)
+{{
+    using namespace TensorDerivedFragment_GenCode;
+    using namespace spio;
+
+    constexpr int Size = 32;
+    float data[Size];
+    for (int i = 0; i < Size; ++i)
+        data[i] = static_cast<float>(i);
+
+    MyTensor tensor(data);
+
+    // Test subscript with fragment load index
+    // MMA_A_M16_K16_F16_LoadIndex maps lane -> (I, K8) coordinates
+    // For lanes 0-15: I = lane, K8 = 0
+    // For lanes 16-31: I = lane & 15, K8 = 1
+    using LoadIndex = MMA_A_M16_K16_F16_LoadIndex<I, K>;
+    using K8 = Fold<K, 8>;
+
+    // Test for all 32 lanes
+    for (int lane = 0; lane < 32; ++lane) {{
+        LoadIndex load_idx(lane);
+
+        // Get the I and K8 values from the load index
+        auto i_val = load_idx.get<I>().get();
+        auto k8_val = load_idx.get<K8>().get();
+
+        // Compute expected offset using CheckerboardIndex logic
+        Swizzle expected_idx{{I(i_val), K8(k8_val)}};
+        int expected_offset = expected_idx.offset().get();
+
+        // This is the key test: can we subscript with the load index?
+        // The tensor needs to either:
+        // 1. Use load_idx.coordinates() if it exists, or
+        // 2. Use the derived dimension's ability to extract from load_idx via get<>()
+        EXPECT_EQ(*tensor[load_idx], data[expected_offset]);
+    }}
 }}
 """
     return test_code
