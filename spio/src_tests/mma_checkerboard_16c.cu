@@ -15,9 +15,9 @@ extern "C" {
     __global__ void mma_checkerboard_16c(uint4* __restrict__ c_ptr, const uint4* __restrict__ a_ptr,
                                          const uint4* __restrict__ b_ptr) {
 
-        // Create a shared memory allocator for the kernel.
-        __shared__ uint4 smem[spio::max(ASmem::storage_size() + BSmem::storage_size(),
-                                        CSmem::storage_size() / 4)];
+        // Create a shared memory buffer and allocator.
+        __shared__ char
+            smem[spio::max(ASmem::num_bytes() + BSmem::num_bytes(), CSmem::num_bytes())];
         auto smem_allocator = StackAllocator(smem);
 
         // Set up views of global memory matrices A and B.
