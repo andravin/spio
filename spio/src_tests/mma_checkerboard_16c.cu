@@ -33,8 +33,8 @@ extern "C" {
         auto b_smem = BSmem::allocate(smem_allocator);
 
         // Set up store ..
-        auto a_store_smem = AStoreSmem(a_smem).rebase();
-        auto b_store_smem = BStoreSmem(b_smem).rebase();
+        auto a_store_smem = AStoreSmem(a_smem);
+        auto b_store_smem = BStoreSmem(b_smem);
 
         // .. and load views of the shared memory for A and B.
         auto a_load_smem = ALoadSmem(a_smem).rebase();
