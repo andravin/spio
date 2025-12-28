@@ -32,8 +32,6 @@ Spio dimensions behave like integers. Because dimensions are types, it is not po
 **File:** [01\_commutativity.cpp](spio/src_tests/tutorial/01_commutativity.cpp)
 
 ```cpp
-// Define dimension types I and J.
-//
 /*@spio
 I = Dim()
 J = Dim()
@@ -48,18 +46,16 @@ UTEST(Lesson1, TypeSafety) {
     // Each dimension is a different CUDA / C++ type.
     static_assert(!std::is_same_v<I, J>, "I and J are different types");
 
-    // This would fail to compile:
+    // Different dimensions cannot be compared. This prevents accidental mixing:
     //
     // EXPECT_EQ(I(5), J(5));
     // error: no match for ‘operator==’ (operand types are ‘I’ and ‘J’)
     //
-    // and so would this:
+    // Orthogonal dimensions can be added to produce a coordinates list:
     //
-    // auto sum = I(3) + J(4);
-    // error: invalid operands to binary expression ('I' and 'J')
-    //
-    // This prevents accidental mixing of dimensions.
-}```
+    EXPECT_TRUE(I(3) + J(4) == spio::make_coordinates(I(3), J(4)));
+}
+```
 
 Spio never asks for a dimension's position in the tensor's dimensions list. Instead, Spio uses the dimension variable's static type to determine operator behavior.
 
