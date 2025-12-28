@@ -34,6 +34,7 @@ class Tensor(GenSpecsWithContext):
         strides (Strides): An optional dictionary mapping dimension names to their strides.
         constant (bool): Whether the tensor is constant.
         derived_dims (List[DerivedDimension]): List of derived dimensions used in dims.
+        ancestors (List["Tensor"]): List of tensors from which this tensor is derived.
     """
 
     data_type: Union[dtype, FragmentType, str]
@@ -42,6 +43,7 @@ class Tensor(GenSpecsWithContext):
     strides: Strides = None
     constant: bool = False
     derived_dims: List[DerivedDimension] = None
+    ancestors: List["Tensor"] = None
 
     def __post_init__(self):
         if isinstance(self.dims, dict):
@@ -102,6 +104,8 @@ class Tensor(GenSpecsWithContext):
         """
         new_derived_dims = list(self.derived_dims) if self.derived_dims else []
         new_derived_dims.append(derived_dim)
+        new_ancestors = list(self.ancestors) if self.ancestors else []
+        new_ancestors.append(self)
         return Tensor(
             data_type=self.data_type,
             dims=self.dims,
@@ -109,6 +113,7 @@ class Tensor(GenSpecsWithContext):
             strides=self.strides,
             constant=self.constant,
             derived_dims=new_derived_dims,
+            ancestors=new_ancestors,
         )
 
     def vector_length(self, width: int, constant: bool = None) -> "Tensor":
@@ -190,6 +195,8 @@ class Tensor(GenSpecsWithContext):
         # Get the new dtype with the target vector length
         new_dtype = get_dtype_with_veclen(self.data_type, width)
 
+        new_ancestors = list(self.ancestors) if self.ancestors else []
+        new_ancestors.append(self)
         return Tensor(
             data_type=new_dtype,
             dims=new_dims,
@@ -197,12 +204,11 @@ class Tensor(GenSpecsWithContext):
             strides=new_strides,
             constant=self.constant if constant is None else constant,
             derived_dims=self.derived_dims,
+            ancestors=new_ancestors,
         )
 
-    def initializer(
-        self, *implicit_dims: GenSpecsWithContext
-    ) -> "CursorWithImplicitDims":
-        """Return a CursorWithImplicitDims that applies implicit subscripts at construction.
+    def initializer(self, *implicit_dims: GenSpecsWithContext) -> "CursorInitializer":
+        """Return a CursorInitializer that applies implicit subscripts at construction.
 
         Implicit dimensions are subscripts that are automatically applied when
         the cursor is created, using default-constructed index types. This is
@@ -215,7 +221,7 @@ class Tensor(GenSpecsWithContext):
                 default-constructed and used as a subscript.
 
         Returns:
-            A CursorWithImplicitDims generator that produces a factory function.
+            A CursorInitializer generator that produces a factory function.
 
         Example:
             g.AGlobalLoader = g.AGlobal.implicit_dim(g.ALoadGlobalIndex)
@@ -225,7 +231,7 @@ class Tensor(GenSpecsWithContext):
                 return AGlobal(ptr)[ALoadGlobalIndex()];
             }
         """
-        return CursorWithImplicitDims(tensor=self, implicit_dims=list(implicit_dims))
+        return CursorInitializer(tensor=self, implicit_dims=list(implicit_dims))
 
     @property
     def size(self) -> int:
@@ -261,7 +267,7 @@ class Tensor(GenSpecsWithContext):
 
 
 @dataclass
-class CursorWithImplicitDims(GenSpecsWithContext):
+class CursorInitializer(GenSpecsWithContext):
     """Code generator for a cursor factory with implicit dimension subscripts.
 
     This class generates a factory function that constructs a tensor cursor
@@ -311,9 +317,14 @@ class CursorWithImplicitDims(GenSpecsWithContext):
         return used
 
     def generate_with_context(self, user_data_types: List[str] = None) -> str:
-        """Generate the C++ factory function."""
+        """Generate the C++ factory functions.
+
+        Generates two overloads:
+        1. A factory that takes a raw pointer and constructs the tensor.
+        2. A factory that takes an existing tensor instance.
+        """
         if self.class_name is None:
-            raise ValueError("CursorWithImplicitDims requires a class_name")
+            raise ValueError("CursorInitializer requires a class_name")
 
         tensor_class_name = self.tensor.get_class_name()
         if tensor_class_name is None:
@@ -329,11 +340,32 @@ class CursorWithImplicitDims(GenSpecsWithContext):
                 raise ValueError("Implicit dimension must have a class_name set")
             subscript_chain += f"[{dim_class_name}()]"
 
-        return (
+        result = (
             f"DEVICE auto {self.class_name}({data_type_name}* ptr) {{\n"
             f"    return {tensor_class_name}(ptr){subscript_chain};\n"
             f"}}\n"
+            f"DEVICE auto {self.class_name}({tensor_class_name} tensor) {{\n"
+            f"    return tensor{subscript_chain};\n"
+            f"}}\n"
         )
+
+        # Generate factory overloads for all ancestor tensor types
+        if self.tensor.ancestors:
+            for ancestor in self.tensor.ancestors:
+                ancestor_class_name = ancestor.get_class_name()
+                if ancestor_class_name is None:
+                    raise ValueError("Ancestor tensor must have a class_name set")
+                # Construct the derived tensor from the ancestor's pointer,
+                # cast to the correct data type. Tensors are always at origin,
+                # so no coordinate restoration is needed.
+                result += (
+                    f"DEVICE auto {self.class_name}({ancestor_class_name} tensor) {{\n"
+                    f"    return {tensor_class_name}(reinterpret_cast<{data_type_name}*>(tensor.get()))"
+                    f"{subscript_chain};\n"
+                    f"}}\n"
+                )
+
+        return result
 
     @property
     def strides(self) -> Strides:

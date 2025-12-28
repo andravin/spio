@@ -4,7 +4,7 @@ from .generators import generate
 from .generators_class import Generators
 from .gen_specs import GenSpecs
 from .compound_index import CompoundIndex
-from .tensor import Tensor, CursorWithImplicitDims
+from .tensor import Tensor, CursorInitializer
 from .fragment_type import FragmentType
 from .data_type import dtype, get_dtype_veclen
 from .fragment import Fragment

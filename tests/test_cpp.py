@@ -801,6 +801,260 @@ UTEST(WithVectorWidth, memory_access)
 
 
 @_cpp_test
+def _test_cursor_initializer_with_ancestors():
+    """Test CursorInitializer factory functions with ancestor tensors.
+
+    This tests that when a tensor is derived (via derive_dim or vector_length),
+    the CursorInitializer generates factory overloads for all ancestor types.
+    This is important for patterns like:
+        auto a_load_smem = ALoadSmem(a_smem);
+    where a_smem is an ASmem instance and ALoadSmem is derived from ASmem.
+    """
+    # Thread index for implicit dims
+    thread_idx = gen.CompoundIndex(
+        gen.Dims(warp=4, lane=32),
+        init=gen.BuiltIn.THREAD_IDX_X,
+        class_name="ThreadIdx",
+    )
+
+    # Base shared memory tensor (like ASmem)
+    base_smem = gen.Tensor(
+        gen.dtype.float,
+        gen.Dims(k_chunk=2, i16=8, k8=4),
+        class_name="BaseSmem",
+    )
+
+    # Fragment load index (simulates a derived dimension from a Fragment)
+    fragment_index = gen.CompoundIndex(
+        gen.Dims(i16=8, k8=4),
+        class_name="FragmentIndex",
+    )
+
+    # Derived tensor with implicit dims (like ALoadSmem = ASmem.derive_dim(...).initializer(...))
+    derived_smem = base_smem.derive_dim(fragment_index)
+    load_smem_init = derived_smem.initializer(thread_idx)
+    load_smem_init._set_class_name("LoadSmem")
+
+    # We need to set the class name on the derived tensor too
+    derived_smem._set_class_name("DerivedSmem")
+
+    specs = [
+        thread_idx,
+        base_smem,
+        fragment_index,
+        derived_smem,
+        load_smem_init,
+    ]
+
+    generated_code = gen.generate(specs, namespace="AncestorInit_GenCode")
+
+    return f"""
+{generated_code}
+
+UTEST(CursorInitializer, accepts_ancestor_tensor)
+{{
+    using namespace AncestorInit_GenCode;
+
+    // Allocate shared memory for the base tensor
+    float data[BaseSmem::storage_size()];
+    for (int i = 0; i < BaseSmem::storage_size(); ++i)
+        data[i] = static_cast<float>(i);
+
+    // Create a BaseSmem cursor
+    BaseSmem base_smem(data);
+
+    // Create a LoadSmem cursor from the BaseSmem cursor (ancestor type)
+    // This should work because LoadSmem::initializer() generates an overload
+    // that accepts BaseSmem.
+    auto load_cursor = LoadSmem(base_smem);
+
+    // Verify we can access data through the derived cursor
+    // The cursor should point to the same underlying data
+    EXPECT_EQ(reinterpret_cast<const void*>(load_cursor.get()),
+              reinterpret_cast<const void*>(base_smem.get()));
+}}
+
+UTEST(CursorInitializer, accepts_derived_tensor)
+{{
+    using namespace AncestorInit_GenCode;
+
+    float data[BaseSmem::storage_size()];
+    for (int i = 0; i < BaseSmem::storage_size(); ++i)
+        data[i] = static_cast<float>(i);
+
+    // Create a DerivedSmem cursor directly
+    DerivedSmem derived_smem(data);
+
+    // Create a LoadSmem cursor from the DerivedSmem cursor (direct parent)
+    auto load_cursor = LoadSmem(derived_smem);
+
+    EXPECT_EQ(reinterpret_cast<const void*>(load_cursor.get()),
+              reinterpret_cast<const void*>(derived_smem.get()));
+}}
+
+UTEST(CursorInitializer, accepts_raw_pointer)
+{{
+    using namespace AncestorInit_GenCode;
+
+    float data[BaseSmem::storage_size()];
+    for (int i = 0; i < BaseSmem::storage_size(); ++i)
+        data[i] = static_cast<float>(i);
+
+    // Create a LoadSmem cursor from a raw pointer
+    auto load_cursor = LoadSmem(data);
+
+    EXPECT_EQ(reinterpret_cast<const void*>(load_cursor.get()),
+              reinterpret_cast<const void*>(data));
+}}
+"""
+
+
+@_cpp_test
+def _test_cursor_initializer_with_vector_length():
+    """Test CursorInitializer with vector_length() creating different data types.
+
+    This tests the case where vector_length() changes the data type (e.g., half2 -> uint4),
+    requiring reinterpret_cast in the generated factory function.
+    This mirrors the CLoadSmem pattern in mma_checkerboard_16c.cu.
+    """
+    # Simulate the CSmem -> CLoadSmem pattern:
+    # CSmem uses half2, CLoadSmem uses half8 (uint4) via vector_length(8)
+
+    # Thread index for implicit dims
+    thread_idx = gen.CompoundIndex(
+        gen.Dims(warp=4, lane=32),
+        init=gen.BuiltIn.THREAD_IDX_X,
+        class_name="ThreadIdx",
+    )
+
+    # Base shared memory tensor with float (simulating half2)
+    # Dims: (warp_i=4, j8=16, i=32, k=4) with padding stride
+    # Using k instead of j for the stride-1 dimension to avoid fold size conflict
+    base_smem = gen.Tensor(
+        gen.dtype.float,
+        gen.Dims(warp_i=4, j8=16, i=32, k=4),
+        strides=gen.Strides(j8=132),  # (32 + 1) * 4 for padding
+        class_name="CSmem",
+    )
+
+    # Use vector_length(4) to create wider tensor (simulating half2 -> uint4)
+    # This changes dtype from float to float4 and eliminates the k dimension
+    wide_smem = base_smem.vector_length(4, constant=True)
+    wide_smem._set_class_name("CSmemWide")
+
+    # Create initializer for the wide tensor
+    load_smem_init = wide_smem.initializer(thread_idx)
+    load_smem_init._set_class_name("CLoadSmem")
+
+    specs = [
+        thread_idx,
+        base_smem,
+        wide_smem,
+        load_smem_init,
+    ]
+
+    generated_code = gen.generate(specs, namespace="VectorLengthInit_GenCode")
+
+    return f"""
+// Define a simple uint4-like struct for testing if not available
+#ifndef __CUDA_ARCH__
+#ifndef uint4_defined
+#define uint4_defined
+// float4 is usually available, but let's make sure
+#endif
+#endif
+
+{generated_code}
+
+UTEST(CursorInitializer, vector_length_accepts_ancestor)
+{{
+    using namespace VectorLengthInit_GenCode;
+
+    // Allocate data for the base tensor
+    float data[CSmem::storage_size()];
+    for (int i = 0; i < CSmem::storage_size(); ++i)
+        data[i] = static_cast<float>(i);
+
+    // Create the base tensor
+    CSmem c_smem(data);
+
+    // Create the wide tensor from the base tensor via the factory
+    // This should work because CLoadSmem generates an overload for CSmem
+    // that does: return CSmemWide(reinterpret_cast<const float4*>(tensor.get()))[ThreadIdx()];
+    auto load_cursor = CLoadSmem(c_smem);
+
+    // Verify the pointer is correctly cast and offset
+    // The base data pointer should match (before any subscript offset)
+    const float4* expected_base = reinterpret_cast<const float4*>(c_smem.get());
+    
+    // The actual pointer may differ due to ThreadIdx() subscript, but the base
+    // memory region should be the same
+    auto load_ptr = reinterpret_cast<const char*>(load_cursor.get());
+    auto base_ptr = reinterpret_cast<const char*>(data);
+    auto end_ptr = base_ptr + sizeof(data);
+    
+    // Verify load_cursor points within the data range
+    EXPECT_TRUE(load_ptr >= base_ptr && load_ptr < end_ptr);
+}}
+
+UTEST(CursorInitializer, vector_length_data_access)
+{{
+    using namespace VectorLengthInit_GenCode;
+
+    // Allocate and initialize data
+    float data[CSmem::storage_size()];
+    for (int i = 0; i < CSmem::storage_size(); ++i)
+        data[i] = static_cast<float>(i);
+
+    // Create base tensor and subscript to a known position
+    CSmem c_smem(data);
+
+    // Access via base tensor at a specific location
+    auto base_cursor = c_smem[WARP_I(0)][J8(0)][I(0)][K(0)];
+    float* base_ptr = base_cursor.get();
+
+    // Access via wide tensor at same location (k dimension eliminated)
+    CSmemWide c_smem_wide(reinterpret_cast<const float4*>(data));
+    auto wide_cursor = c_smem_wide[WARP_I(0)][J8(0)][I(0)];
+    const float4* wide_ptr = wide_cursor.get();
+
+    // They should point to the same memory
+    EXPECT_EQ(reinterpret_cast<const void*>(wide_ptr),
+              reinterpret_cast<const void*>(base_ptr));
+
+    // Verify data values through wide pointer
+    EXPECT_EQ(wide_ptr->x, data[0]);
+    EXPECT_EQ(wide_ptr->y, data[1]);
+    EXPECT_EQ(wide_ptr->z, data[2]);
+    EXPECT_EQ(wide_ptr->w, data[3]);
+}}
+
+UTEST(CursorInitializer, vector_length_via_factory)
+{{
+    using namespace VectorLengthInit_GenCode;
+
+    // This test verifies the full factory path with reinterpret_cast
+    float data[CSmem::storage_size()];
+    for (int i = 0; i < CSmem::storage_size(); ++i)
+        data[i] = static_cast<float>(i);
+
+    CSmem c_smem(data);
+
+    // Use the factory to create the wide cursor from base tensor
+    // The factory should handle the reinterpret_cast internally
+    auto load_cursor = CLoadSmem(c_smem);
+
+    // Verify it's a valid float4 pointer within the data range
+    const float4* ptr = load_cursor.get();
+    EXPECT_TRUE(ptr != nullptr);
+
+    // The pointer should be aligned for float4 access
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(ptr) % alignof(float4), 0);
+}}
+"""
+
+
+@_cpp_test
 def _test_cursor_inbounds():
     """Test the Cursor::inbounds() method.
 
