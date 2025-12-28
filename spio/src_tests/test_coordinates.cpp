@@ -990,6 +990,11 @@ UTEST(Coordinates, add_single_dim_to_coords) {
     EXPECT_EQ(result.get<I>(), I(1));
     EXPECT_EQ(result.get<J>(), J(2));
     EXPECT_EQ(result.get<K>(), K(5));
+
+    auto result2 = K(5) + coords;
+    EXPECT_EQ(result2.get<I>(), I(1));
+    EXPECT_EQ(result2.get<J>(), J(2));
+    EXPECT_EQ(result2.get<K>(), K(5));
 }
 
 UTEST(Coordinates, add_single_dim_existing) {

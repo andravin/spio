@@ -395,6 +395,40 @@ namespace spio {
     // Free function operators for Dim + Coordinates and Dim <op> Coordinates
     // ============================================================================
 
+    namespace detail {
+        // Check if two dim-like types have orthogonal (different) base dimensions.
+        // This is true when both types have dim_type but they are different.
+        template <typename T, typename U, typename = void>
+        struct is_orthogonal_dims : false_type {};
+
+        template <typename T, typename U>
+        struct is_orthogonal_dims<T, U, void_t<typename T::dim_type, typename U::dim_type>>
+            : bool_constant<is_dim_like_v<T> && is_dim_like_v<U> &&
+                            !is_same<typename T::dim_type, typename U::dim_type>::value> {};
+
+        template <typename T, typename U>
+        inline constexpr bool is_orthogonal_dims_v = is_orthogonal_dims<T, U>::value;
+    } // namespace detail
+
+    // ============================================================================
+    // Orthogonal dimension operators: different dim types produce Coordinates
+    // ============================================================================
+
+    /// @brief Add two orthogonal dimensions to produce Coordinates (e.g., I(1) + J(2))
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_orthogonal_dims_v<T, U>, int> = 0>
+    DEVICE constexpr auto operator+(T lhs, U rhs) {
+        return make_coordinates(lhs, rhs);
+    }
+
+    /// @brief Subtract two orthogonal dimensions to produce Coordinates (e.g., I(1) - J(2))
+    /// The second dimension is negated: I(1) - J(2) == make_coordinates(I(1), J(-2))
+    template <typename T, typename U,
+              detail::enable_if_t<detail::is_orthogonal_dims_v<T, U>, int> = 0>
+    DEVICE constexpr auto operator-(T lhs, U rhs) {
+        return make_coordinates(lhs, U(-rhs.get()));
+    }
+
     /// @brief Add a dimension to coordinates (Dim + Coordinates)
     template <typename Dim, typename... CoordDims,
               detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
