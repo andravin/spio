@@ -21,7 +21,7 @@ UTEST(Lesson1, TypeSafety) {
     // EXPECT_EQ(I(5), J(5));
     // error: no match for ‘operator==’ (operand types are ‘I’ and ‘J’)
     //
-    // Orthogonal dimensions can be added to produce Coordinates:
+    // Orthogonal dimensions can be added to produce a coordinates list:
     //
     EXPECT_TRUE(I(3) + J(4) == spio::make_coordinates(I(3), J(4)));
 }
