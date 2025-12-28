@@ -59,12 +59,11 @@ UTEST(Lesson1, TypeSafety) {
     // error: invalid operands to binary expression ('I' and 'J')
     //
     // This prevents accidental mixing of dimensions.
-}
-```
+}```
 
 Spio never asks for a dimension's position in the tensor's dimensions list. Instead, Spio uses the dimension variable's static type to determine operator behavior.
 
-For example, many frameworks implement tensor subscripting such that the position of a subscript determines its behavior. In other words, `x(i, j, k) != x(k, i, j)`. Spio enables **position-free subscripting** where `x[i][j][k] == x[k][i][j]`. The compiler determines the effect of subscripts `i`, `j`, and `k` using their static types only.
+For example, many frameworks implement tensor subscripting such that the position of a subscript determines its behavior. In other words, `x(i, j, k) != x(k, i, j)`. Spio enables **position-free subscripting** where `x[i][j][k] == x[i + j + k] == x[k][i][j]`. The compiler determines the effect of subscripts `i`, `j`, and `k` using their static types only.
 
 Typed dimensions also enable something we call **dimensional projection**: a coordinate list comprising many dimensions can be used as a subscript, and only dimensions supported by the tensor will have an effect, while others are ignored.
 

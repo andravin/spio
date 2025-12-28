@@ -428,3 +428,36 @@ UTEST(range, fold_dim_range) {
     }
     EXPECT_EQ(count, n / 16);
 }
+
+UTEST(Dim, mixed_dimensions_arithmetic) {
+    EXPECT_TRUE(I(1) + J(2) == make_coordinates(I(1), J(2)));
+    EXPECT_TRUE(I(1) - J(2) == make_coordinates(I(1), J(-2)));
+}
+
+UTEST(Dim, mixed_dimensions_with_fold) {
+    using I8 = spio::Fold<I, 8>;
+    using J16 = spio::Fold<J, 16>;
+    // Fold<I> + Fold<J> should produce Coordinates
+    EXPECT_TRUE(I8(2) + J16(3) == make_coordinates(I8(2), J16(3)));
+    // Dim + Fold of different type should produce Coordinates
+    EXPECT_TRUE(I(10) + J16(2) == make_coordinates(I(10), J16(2)));
+    EXPECT_TRUE(I8(5) + J(20) == make_coordinates(I8(5), J(20)));
+}
+
+UTEST(Dim, mixed_dimensions_with_module) {
+    using MI4 = spio::Module<I, 4, 8>;
+    using MJ8 = spio::Module<J, 8, 16>;
+    // Module<I> + Module<J> should produce Coordinates
+    EXPECT_TRUE(MI4(2) + MJ8(3) == make_coordinates(MI4(2), MJ8(3)));
+    // Dim + Module of different type should produce Coordinates
+    EXPECT_TRUE(I(5) + MJ8(2) == make_coordinates(I(5), MJ8(2)));
+    EXPECT_TRUE(MI4(1) + J(10) == make_coordinates(MI4(1), J(10)));
+}
+
+UTEST(Dim, mixed_dimensions_fold_and_module) {
+    using I8 = spio::Fold<I, 8>;
+    using MJ4 = spio::Module<J, 4, 16>;
+    // Fold<I> + Module<J> should produce Coordinates
+    EXPECT_TRUE(I8(3) + MJ4(2) == make_coordinates(I8(3), MJ4(2)));
+    EXPECT_TRUE(MJ4(1) + I8(4) == make_coordinates(MJ4(1), I8(4)));
+}

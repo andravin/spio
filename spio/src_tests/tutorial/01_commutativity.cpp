@@ -16,17 +16,14 @@ UTEST(Lesson1, TypeSafety) {
     // Each dimension is a different CUDA / C++ type.
     static_assert(!std::is_same_v<I, J>, "I and J are different types");
 
-    // This would fail to compile:
+    // Different dimensions cannot be compared. This prevents accidental mixing:
     //
     // EXPECT_EQ(I(5), J(5));
     // error: no match for ‘operator==’ (operand types are ‘I’ and ‘J’)
     //
-    // and so would this:
+    // Orthogonal dimensions can be added to produce a coordinates list:
     //
-    // auto sum = I(3) + J(4);
-    // error: invalid operands to binary expression ('I' and 'J')
-    //
-    // This prevents accidental mixing of dimensions.
+    EXPECT_TRUE(I(3) + J(4) == spio::make_coordinates(I(3), J(4)));
 }
 
 // Define tensors A and B using dimensions I(16) × K(32) and K(32) × J(64).
