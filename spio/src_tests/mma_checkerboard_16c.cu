@@ -33,12 +33,12 @@ extern "C" {
         auto b_smem = BSmem::allocate(smem_allocator);
 
         // Set up store ..
-        auto a_store_smem = AStoreSmem(a_smem.get()).rebase();
-        auto b_store_smem = BStoreSmem(b_smem.get()).rebase();
+        auto a_store_smem = AStoreSmem(a_smem).rebase();
+        auto b_store_smem = BStoreSmem(b_smem).rebase();
 
         // .. and load views of the shared memory for A and B.
-        auto a_load_smem = ALoadSmem(a_smem.get()).rebase();
-        auto b_load_smem = BLoadSmem(b_smem.get()).rebase();
+        auto a_load_smem = ALoadSmem(a_smem).rebase();
+        auto b_load_smem = BLoadSmem(b_smem).rebase();
 
         // Allocate registers for the local matrices.
         AReg::data_type a_data[AReg::storage_size()];
@@ -113,7 +113,7 @@ extern "C" {
         auto c_smem = CSmem::allocate(smem_allocator);
 
         // Transfer outputs from registers to shared memory, converting from float32 to float16.
-        auto c_store_smem = CStoreSmem(c_smem.get()).rebase();
+        auto c_store_smem = CStoreSmem(c_smem).rebase();
         for (auto e : range(c_reg)) {
             auto c_fragments = *c_reg[e];
             for (auto f : range(c_fragments)) {
@@ -124,7 +124,7 @@ extern "C" {
         // Transfer outputs from shared memory to global memory.
         // Since each warp transfers its own transposed tile, no synchronization is needed.
         auto c_global = CGlobal(c_ptr);
-        auto c_load_smem = CLoadSmem(reinterpret_cast<const uint4*>(c_smem.get())).rebase();
+        auto c_load_smem = CLoadSmem(c_smem).rebase();
         for (auto p : CLoadSmemIndex::partition<LANE>(ComputeIndex())) {
             if (c_global[p].inbounds()) { *c_global[p] = *c_load_smem[p]; }
         }

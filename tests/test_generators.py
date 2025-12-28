@@ -211,7 +211,7 @@ class TestGeneratorsPreservesOrder:
 
 
 class TestCursorWithImplicitDims:
-    """Test the CursorWithImplicitDims generator."""
+    """Test the CursorInitializer generator."""
 
     def test_implicit_dim_single(self):
         """implicit_dim with single dimension should generate correct factory."""
