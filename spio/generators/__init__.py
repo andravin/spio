@@ -3,7 +3,7 @@
 from .generators import generate
 from .generators_class import Generators
 from .gen_specs import GenSpecs
-from .compound_index import CompoundIndex
+from .compound_index import CompoundIndex, CompoundIndexPartition
 from .tensor import Tensor, CursorInitializer
 from .fragment_type import FragmentType
 from .data_type import dtype, get_dtype_veclen
@@ -33,6 +33,7 @@ GENERATORS = [
     "ParamsSpec",
     "Matmul",
     "Coordinates",
+    "CompoundIndexPartition",
 ]
 
 __all__ = GENERATORS + [

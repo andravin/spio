@@ -72,9 +72,9 @@ extern "C" {
             // Double-buffered loads and computation
             for (auto k_chunk : range(K_CHUNK(2))) {
 
-                // Copy the next tile into the backbuffer.
+                // If not the last iteration ..
                 if (k_double_chunk + k_chunk + K_CHUNK(1) < size) {
-                    // Copy into the back-buffer.
+                    // .. copy the next tile into the back buffer.
                     a_loader.copy_async(a_store_smem[k_chunk + 1].get(),
                                         a_global[k_double_chunk + k_chunk].get());
                     b_loader.copy_async(b_store_smem[k_chunk + 1].get(),
@@ -86,12 +86,11 @@ extern "C" {
                 __pipeline_wait_prior(1);
                 __syncthreads();
 
-                // Load matrix tiles from shared memory into registers.
+                // Load matrix tiles from the front buffer.
                 a_reg.load(a_load_smem[k_chunk]);
                 b_reg.load(b_load_smem[k_chunk]);
 
-                // Matrix-multiply the tiles using Tensor Cores.
-                // Compile-time type checking ensures the compatibility of the tile dimensions.
+                // Matrix multiply-accumulate the tiles using Tensor Cores.
                 mma(a_reg, b_reg, c_reg, c_reg);
                 __syncthreads();
             }
@@ -125,7 +124,7 @@ extern "C" {
         // Since each warp transfers its own transposed tile, no synchronization is needed.
         auto c_global = CGlobal(c_ptr);
         auto c_load_smem = CLoadSmem(c_smem).rebase();
-        for (auto p : CLoadSmemIndex::partition<LANE>(ComputeIndex())) {
+        for (auto p : c_output_idx()) {
             if (c_global[p].inbounds()) { *c_global[p] = *c_load_smem[p]; }
         }
     }

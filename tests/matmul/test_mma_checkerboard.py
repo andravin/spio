@@ -119,9 +119,8 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     ALoadGlobalIndex = CompoundIndex(Dims(i=block_x, k8=2), init=BuiltIn.THREAD_IDX_X)
     BLoadGlobalIndex = CompoundIndex(Dims(j=block_x, k8=2), init=BuiltIn.THREAD_IDX_X)
 
-    # The index that defines which output tile each warp computes.
-    # Also provies the LANE dimension for each thread.
-    g.ComputeIndex = CompoundIndex(
+    # The position of each warp's tile and the LANE dimension for each thread.
+    LocalIndex = CompoundIndex(
         Dims(warp_i=warps_m, warp_j=warps_n, lane=32), init=BuiltIn.THREAD_IDX_X
     )
 
@@ -133,7 +132,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         dtype.half8, Dims(k16=k16, j=n, k8=-1), constant=True
     ).initializer(BLoadGlobalIndex, BlockIdx)
     g.CGlobal = Tensor(dtype.half8, Dims(j16=j16, i=m, j8=-1)).initializer(
-        BlockIdx, g.ComputeIndex
+        BlockIdx, LocalIndex
     )
 
     # Shared memory tensors
@@ -180,8 +179,8 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     g.CFragment = Fragment(FragmentType.M16_N16_F32_C, "i", "j")
 
     # Load and store views for the shared memory tensors.
-    g.ALoadSmem = g.ASmem.derive_dim(g.AFragment.load_index).initializer(g.ComputeIndex)
-    g.BLoadSmem = g.BSmem.derive_dim(g.BFragment.load_index).initializer(g.ComputeIndex)
+    g.ALoadSmem = g.ASmem.derive_dim(g.AFragment.load_index).initializer(LocalIndex)
+    g.BLoadSmem = g.BSmem.derive_dim(g.BFragment.load_index).initializer(LocalIndex)
     g.AStoreSmem = g.ASmem.initializer(ALoadGlobalIndex)
     g.BStoreSmem = g.BSmem.initializer(BLoadGlobalIndex)
 
@@ -201,10 +200,12 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         strides=Strides(j8=(config.warp_m + 1) * 4),
     )
     g.CStoreSmem = g.CSmem.derive_dim(g.CFragment.compound_index).initializer(
-        g.ComputeIndex
+        LocalIndex
     )
-    g.CLoadSmem = g.CSmem.vector_length(8, constant=True).initializer(g.ComputeIndex)
+    g.CLoadSmem = g.CSmem.vector_length(8, constant=True).initializer(LocalIndex)
     g.CLoadSmemIndex = CompoundIndex(Dims(i=config.warp_m, j8=warp_n8))
+
+    g.c_output_idx = g.CLoadSmemIndex.partition("lane", LocalIndex)
 
     # Macro for loop unrolling
     g.macros = Macro(dict(MAIN_LOOP_UNROLL_DEPTH=""))
