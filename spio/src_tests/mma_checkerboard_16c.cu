@@ -72,13 +72,12 @@ extern "C" {
             // Double-buffered loads and computation
             for (auto k_chunk : range(K_CHUNK(2))) {
 
-                // If not the last iteration, copy the next tile from global
-                // memory to shared memory asynchronously.
+                // Copy the next tile into the backbuffer.
                 if (k_double_chunk + k_chunk + K_CHUNK(1) < size) {
                     // Copy into the back-buffer.
-                    a_loader.copy_async(a_store_smem[(k_chunk + 1) % 2].get(),
+                    a_loader.copy_async(a_store_smem[k_chunk + 1].get(),
                                         a_global[k_double_chunk + k_chunk].get());
-                    b_loader.copy_async(b_store_smem[(k_chunk + 1) % 2].get(),
+                    b_loader.copy_async(b_store_smem[k_chunk + 1].get(),
                                         b_global[k_double_chunk + k_chunk].get());
                 }
 
