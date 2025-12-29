@@ -66,7 +66,7 @@ def test_mma_checkerboard_16c_kernel(m, n, k):
     assert_all_close_with_acc_depth(C, C_ref, acc_depth=k)
 
 
-def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
+def _get_specs(m: int, n: int, k: int, config: MmaConfig):
     """Return the generator specs, grid and block for the mma checkerboard kernel."""
     assert k % 16 == 0, "Kernel requires K to be a multiple of 16."
     assert n % 8 == 0, "Kernel requires N to be a multiple of 8."
@@ -125,15 +125,13 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     )
 
     # Global memory tensors
-    g.AGlobal = Tensor(
-        dtype.half8, Dims(k16=k16, i=m, k8=-1), constant=True
-    ).initializer(ALoadGlobalIndex, BlockIdx)
-    g.BGlobal = Tensor(
-        dtype.half8, Dims(k16=k16, j=n, k8=-1), constant=True
-    ).initializer(BLoadGlobalIndex, BlockIdx)
-    g.CGlobal = Tensor(dtype.half8, Dims(j16=j16, i=m, j8=-1)).initializer(
-        BlockIdx, LocalIndex
-    )
+    g.AGlobal = Tensor(dtype.half8, Dims(k16=k16, i=m, k8=-1), constant=True)[
+        ALoadGlobalIndex, BlockIdx
+    ]
+    g.BGlobal = Tensor(dtype.half8, Dims(k16=k16, j=n, k8=-1), constant=True)[
+        BLoadGlobalIndex, BlockIdx
+    ]
+    g.CGlobal = Tensor(dtype.half8, Dims(j16=j16, i=m, j8=-1))[BlockIdx, LocalIndex]
 
     # Shared memory tensors
     g.ASmem = Tensor(
@@ -179,10 +177,10 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
     g.CFragment = Fragment(FragmentType.M16_N16_F32_C, "i", "j")
 
     # Load and store views for the shared memory tensors.
-    g.ALoadSmem = g.ASmem.derive_dim(g.AFragment.load_index).initializer(LocalIndex)
-    g.BLoadSmem = g.BSmem.derive_dim(g.BFragment.load_index).initializer(LocalIndex)
-    g.AStoreSmem = g.ASmem.initializer(ALoadGlobalIndex)
-    g.BStoreSmem = g.BSmem.initializer(BLoadGlobalIndex)
+    g.ALoadSmem = g.ASmem.derive_dim(g.AFragment.load_index)[LocalIndex]
+    g.BLoadSmem = g.BSmem.derive_dim(g.BFragment.load_index)[LocalIndex]
+    g.AStoreSmem = g.ASmem[ALoadGlobalIndex]
+    g.BStoreSmem = g.BSmem[BLoadGlobalIndex]
 
     # Local memory tensors (i.e. registers)
     # - Each tensor "element" is itself a matrix fragment.
@@ -199,10 +197,8 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig = None):
         Dims(warp_i=warps_m, j8=block_x8, i=config.warp_m, j2=-1),
         strides=Strides(j8=(config.warp_m + 1) * 4),
     )
-    g.CStoreSmem = g.CSmem.derive_dim(g.CFragment.compound_index).initializer(
-        LocalIndex
-    )
-    g.CLoadSmem = g.CSmem.vector_length(8, constant=True).initializer(LocalIndex)
+    g.CStoreSmem = g.CSmem.derive_dim(g.CFragment.compound_index)[LocalIndex]
+    g.CLoadSmem = g.CSmem.vector_length(8, constant=True)[LocalIndex]
     g.CLoadSmemIndex = CompoundIndex(Dims(i=config.warp_m, j8=warp_n8))
 
     g.c_output_idx = g.CLoadSmemIndex.partition("lane", LocalIndex)

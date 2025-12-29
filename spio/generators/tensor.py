@@ -233,6 +233,29 @@ class Tensor(GenSpecsWithContext):
         """
         return CursorInitializer(tensor=self, implicit_dims=list(implicit_dims))
 
+    def __getitem__(
+        self, implicit_dims: Union[GenSpecsWithContext, Tuple[GenSpecsWithContext, ...]]
+    ) -> "CursorInitializer":
+        """Subscript operator as a synonym for initializer.
+
+        Allows using tensor[dim] or tensor[dim1, dim2] syntax instead of
+        tensor.initializer(dim) or tensor.initializer(dim1, dim2).
+
+        Args:
+            implicit_dims: A single generator spec or tuple of generator specs
+                for the implicit dimension types.
+
+        Returns:
+            A CursorInitializer generator that produces a factory function.
+
+        Example:
+            g.AGlobalLoader = g.AGlobal[g.ALoadGlobalIndex]
+            # Equivalent to: g.AGlobalLoader = g.AGlobal.initializer(g.ALoadGlobalIndex)
+        """
+        if isinstance(implicit_dims, tuple):
+            return self.initializer(*implicit_dims)
+        return self.initializer(implicit_dims)
+
     @property
     def size(self) -> int:
         """The number of elements required to store the tensor data."""
