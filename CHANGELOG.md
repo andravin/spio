@@ -10,6 +10,70 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## **[0.7.0] — 2025-12-28**
+
+### **Derived dimensions, tensor initializers, and orthogonal dimension addition**
+
+This release introduces derived dimensions, allowing tensors to encode nonlinear coordinate
+transformations (like swizzle patterns) directly into their definitions. Swizzle patterns
+and load indices that previously required manual setup in kernel code are now folded into
+tensor definitions by the generators.
+
+#### Added
+
+* Derived dimensions: tensors can now include dimensions that transform coordinates
+  (e.g., checkerboard swizzle patterns) as part of their type definition.
+* Tensor initializers (`Tensor.initializer()`): factory functions that automatically apply
+  index subscripts when constructing tensor views.
+* Tensor copy construction: factory methods that construct tensors from compatible base tensors
+  in the same derivation chain.
+* `Tensor.with_vector_length()`: create tensor views with modified vector length.
+* `Cursor.inbounds()`: bounds checking method for cursor positions.
+* `Cursor.extents()`: access tensor extents from cursor.
+* Orthogonal dimension addition: `I(1) + J(2)` now produces `make_coordinates(I(1), J(2))`,
+  enabling `a[i][j][k] == a[i + j + k] == a[j][k][i]`.
+* `Coordinates` generator for explicit coordinate list generation.
+* `CompoundIndexPartition` generator for cooperative iteration patterns.
+* Anonymous generator naming: generators without explicit names receive automatic names.
+* `Generators` class: container that automatically sets generator names from attribute names.
+* Assignment syntax for `@spio` blocks: `A = Tensor(...)` instead of `Tensor("A", ...)`.
+* Builtin CUDA expressions (`threadIdx.x`, etc.) as fold and compound index initializers.
+* `dtype.half8` as synonym for `dtype.uint4`.
+* `get_dtype_veclen()` and `get_dtype_with_veclen()` utilities.
+* `Tensor.num_bytes()` method.
+* `SPIO_COUNT_INSTRUCTIONS` environment variable and `count_instructions` context variable.
+* `SPIO_DISASM` environment variable for printing disassembly.
+* `disasm()` function using nvdisasm.
+
+#### Changed
+
+* Renamed `ComputeIndex` to `LocalIndex`.
+* DimInfo now uses plain `int` for size and stride instead of `_OffsetDim` type.
+* Added `BaseDim` base class unifying `Dim`, `Fold`, and `Module`.
+* `Dim` now has a trivial `unfold()` method returning self.
+* Simplified cross-type arithmetic using common implementations with operation lambdas.
+* Simplified double-buffer indexing in matmul example to use implicit modulo wrap via
+  dimensional projection.
+* Allocate shared memory as `char` array instead of `uint4`.
+* Moved compiler environment variables to `spio.compiler.flags`.
+* Extracted CUDA path detection to `spio.compiler.cuda_paths`.
+* Updated README examples to use assignment syntax in `@spio` blocks.
+* Clarified torch.compile requirements section with specific error message.
+
+#### Removed
+
+* `get_base_dim_type_t`, `get_dim_stride`, `fold_to_target()` helpers (superseded by
+  uniform `unfold()` and `fold()` methods).
+* `_OffsetDim` type (replaced by plain `int`).
+* `test_row_memcpy_kernel()` (functionality covered elsewhere).
+
+### Performance Models
+
+* No changes to convolution kernels.
+* Performance model archives from 0.6.0 are fully compatible.
+
+---
+
 ## **[0.6.0] — 2025-12-09**
 
 ### **Compound index projection, deferred folding, and documentation improvements**
