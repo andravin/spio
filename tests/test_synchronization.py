@@ -18,8 +18,8 @@ def test_warp_semaphore():
     iters_per_warp = 64
     num_iters = iters_per_warp * warps
     num_events = num_iters * 2
-    event_types = torch.zeros((num_events,), dtype=torch.uint64, device="cuda")
-    event_times = torch.zeros((num_events,), dtype=torch.uint64, device="cuda")
+    event_types = torch.zeros((num_events,), dtype=torch.int64, device="cuda")
+    event_times = torch.zeros((num_events,), dtype=torch.int64, device="cuda")
 
     threads = warps * 32
     grid = (blocks, 1, 1)
@@ -53,8 +53,8 @@ def test_warp_fifo():
     iters_per_warp = 64
     num_iters = iters_per_warp * warps
     num_events = num_iters * 2
-    event_types = torch.zeros((num_events,), dtype=torch.uint64, device="cuda")
-    event_times = torch.zeros((num_events,), dtype=torch.uint64, device="cuda")
+    event_types = torch.zeros((num_events,), dtype=torch.int64, device="cuda")
+    event_times = torch.zeros((num_events,), dtype=torch.int64, device="cuda")
 
     threads = warps * 32
     grid = (blocks, 1, 1)
