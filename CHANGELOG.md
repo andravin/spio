@@ -10,6 +10,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## **[0.7.1] — 2025-12-28**
+
+### **Python 3.9 compatibility fix**
+
+#### Fixed
+
+* Type annotation `Path | None` incompatible with Python 3.9.
+
+#### Tests
+
+* Fix `test_warp_semaphore()` dtype for older CUDA array interface compatibility.
+
+---
+
 ## **[0.7.0] — 2025-12-28**
 
 ### **Derived dimensions, tensor initializers, and orthogonal dimension addition**
