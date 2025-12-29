@@ -4,6 +4,8 @@ Generally the CUDA toolkit is not required for Spio, but its presence
 enable additional testing and diagnostics.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 import os
 import shutil
