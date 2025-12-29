@@ -2,7 +2,7 @@
 
 from typing import Dict, Generator, List, Tuple, Union
 
-from .derived_dimension import DerivedDimension
+from .derived_dimension import DerivedDimension, SizedDerivedDimension
 
 # Type alias for dimension values: either an integer size or a derived dimension generator
 DimValue = Union[int, DerivedDimension]
@@ -194,7 +194,7 @@ def compute_full_strides(
             stride = given_strides[name]
         all_strides[name] = stride
         # Compute the default stride of the next dimension.
-        if isinstance(value, DerivedDimension):
+        if isinstance(value, SizedDerivedDimension):
             dim_size = value.size
         else:
             dim_size = value

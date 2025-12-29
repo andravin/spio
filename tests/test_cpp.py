@@ -831,7 +831,7 @@ def _test_cursor_initializer_with_ancestors():
     )
 
     # Derived tensor with implicit dims (like ALoadSmem = ASmem.derive_dim(...).initializer(...))
-    derived_smem = base_smem.derive_dim(fragment_index)
+    derived_smem = base_smem.with_dim(fragment_index)
     load_smem_init = derived_smem.initializer(thread_idx)
     load_smem_init._set_class_name("LoadSmem")
 

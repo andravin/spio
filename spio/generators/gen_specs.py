@@ -1,8 +1,9 @@
 """Protocol for kernel code generation classes."""
 
-from typing import Optional, Protocol
+from typing import Optional, Protocol, runtime_checkable
 
 
+@runtime_checkable
 class GenSpecs(Protocol):
     """Protocol for kernel code generation classes.
 
@@ -34,6 +35,7 @@ class GenSpecs(Protocol):
         return None
 
 
+@runtime_checkable
 class GenSpecsWithContext(GenSpecs, Protocol):
     """Protocol for kernel code generation classes with optional context."""
 

@@ -8,17 +8,21 @@ from typing import runtime_checkable
 class DerivedDimension(Protocol):
     """Protocol for derived dimension generators."""
 
-    @property
-    def size(self) -> int:
-        """Return the size of the derived dimension."""
+    def get_class_name(self) -> str:
+        """Return the class name of the derived dimension."""
 
 
 @runtime_checkable
-class SupportsOutputDimName(Protocol):
-    """Protocol for derived dimensions that support setting output dim name.
+class SizedDerivedDimension(DerivedDimension, Protocol):
+    """Protocol for single-output derived dimensions.
 
-    This only makes sense for DeriveDimension subclasses that have a single output dimension.
+    These can be used inline in Dims() because they have a definite size
+    and can be bound to a dimension name.
     """
 
     def set_output_dim_name(self, name: str) -> None:
         """Set the name of the output dimension."""
+
+    @property
+    def size(self) -> int:
+        """Return the size of the derived dimension."""

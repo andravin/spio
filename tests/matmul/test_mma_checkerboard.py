@@ -177,8 +177,8 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig):
     g.CFragment = Fragment(FragmentType.M16_N16_F32_C, "i", "j")
 
     # Load and store views for the shared memory tensors.
-    g.ALoadSmem = g.ASmem.derive_dim(g.AFragment.load_index)[LocalIndex]
-    g.BLoadSmem = g.BSmem.derive_dim(g.BFragment.load_index)[LocalIndex]
+    g.ALoadSmem = g.ASmem.with_dim(g.AFragment.load_index)[LocalIndex]
+    g.BLoadSmem = g.BSmem.with_dim(g.BFragment.load_index)[LocalIndex]
     g.AStoreSmem = g.ASmem[ALoadGlobalIndex]
     g.BStoreSmem = g.BSmem[BLoadGlobalIndex]
 
@@ -197,7 +197,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig):
         Dims(warp_i=warps_m, j8=block_x8, i=config.warp_m, j2=-1),
         strides=Strides(j8=(config.warp_m + 1) * 4),
     )
-    g.CStoreSmem = g.CSmem.derive_dim(g.CFragment.compound_index)[LocalIndex]
+    g.CStoreSmem = g.CSmem.with_dim(g.CFragment.compound_index)[LocalIndex]
     g.CLoadSmem = g.CSmem.vector_length(8, constant=True)[LocalIndex]
     g.CLoadSmemIndex = CompoundIndex(Dims(i=config.warp_m, j8=warp_n8))
 

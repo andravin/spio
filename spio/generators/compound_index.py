@@ -7,10 +7,11 @@ from .dims import Dims, Strides, compute_full_strides
 from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
 from .built_in import BuiltIn
 from .gen_specs import GenSpecsWithContext, GenSpecs
+from .derived_dimension import DerivedDimension
 
 
 @dataclass
-class CompoundIndex(GenSpecsWithContext):
+class CompoundIndex(GenSpecsWithContext, DerivedDimension):
     """CUDA Code generator for custom index classes.
 
     This class is used to generate custom index classes that map linear offsets

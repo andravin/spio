@@ -4,11 +4,11 @@ from dataclasses import dataclass
 
 from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
 from .gen_specs import GenSpecs
-from .derived_dimension import DerivedDimension, SupportsOutputDimName
+from .derived_dimension import SizedDerivedDimension
 
 
 @dataclass
-class Checkerboard(GenSpecs, DerivedDimension, SupportsOutputDimName):
+class Checkerboard(GenSpecs, SizedDerivedDimension):
     """CUDA / C++ code generator for checkerboard index classes.
 
     When used with the Generators container, class_name can be omitted and will

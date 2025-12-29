@@ -8,8 +8,8 @@ from .dims import Dims, Strides, compute_full_strides
 from .fragment_type import FragmentType
 from .fragment import Fragment
 from .data_type import dtype, get_dtype_veclen, get_dtype_with_veclen
-from .gen_specs import GenSpecsWithContext
-from .derived_dimension import DerivedDimension, SupportsOutputDimName
+from .gen_specs import GenSpecs, GenSpecsWithContext
+from .derived_dimension import DerivedDimension, SizedDerivedDimension
 
 
 @dataclass
@@ -57,7 +57,7 @@ class Tensor(GenSpecsWithContext):
                         f"Stride name '{stride_name}' not found in dims {list(self.dims.keys())}."
                     )
         for name, value in self.dims.items():
-            if isinstance(value, (DerivedDimension, SupportsOutputDimName)):
+            if isinstance(value, SizedDerivedDimension):
                 value.set_output_dim_name(name)
         self.strides = compute_full_strides(self.dims, self.strides)
 
@@ -83,7 +83,7 @@ class Tensor(GenSpecsWithContext):
             derived_dims=self.derived_dims,
         )
 
-    def used_generators(self) -> list[GenSpecsWithContext]:
+    def used_generators(self) -> list[GenSpecs]:
         """Return a list of generator class-names used by this generator.
 
         This is used to find any generators that need to be assigned class names automatically.
@@ -97,11 +97,15 @@ class Tensor(GenSpecsWithContext):
             used_gens.extend(self.derived_dims)
         return used_gens
 
-    def derive_dim(self, derived_dim: DerivedDimension) -> "Tensor":
+    def with_dim(self, derived_dim: DerivedDimension) -> "Tensor":
         """Return a new Tensor with an additional derived dimension.
 
         Duplicate this tensor and add the given derived dimension to its derived_dims list.
         """
+        if not isinstance(derived_dim, DerivedDimension):
+            raise ValueError(
+                f"with_dim requires a DerivedDimension, got {type(derived_dim)}"
+            )
         new_derived_dims = list(self.derived_dims) if self.derived_dims else []
         new_derived_dims.append(derived_dim)
         new_ancestors = list(self.ancestors) if self.ancestors else []
@@ -410,7 +414,7 @@ def _generate_tensor(
 
     dim_infos = []
     for name, dim_value in dims.items():
-        if isinstance(dim_value, DerivedDimension):
+        if isinstance(dim_value, SizedDerivedDimension):
             size = dim_value.size
             derived_dims.append(dim_value)
         else:

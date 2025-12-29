@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from .fragment_type import FragmentType
 from .gen_specs import GenSpecs
+from .derived_dimension import DerivedDimension
 
 
 @dataclass
@@ -81,7 +82,7 @@ class Fragment(GenSpecs):
         return (self.row, self.col)
 
 
-class FragmentLoadIndex(GenSpecs):
+class FragmentLoadIndex(GenSpecs, DerivedDimension):
     """Wrapper for a fragment load index type."""
 
     def __init__(self, fragment: Fragment):
@@ -101,7 +102,7 @@ class FragmentLoadIndex(GenSpecs):
         return ""  # Load index type is defined within the fragment class.
 
 
-class FragmentCompoundIndex(GenSpecs):
+class FragmentCompoundIndex(GenSpecs, DerivedDimension):
     """Wrapper for a fragment compound index type."""
 
     def __init__(self, fragment: Fragment):

@@ -19,7 +19,7 @@ from .dims import Dims, Strides
 from .matmul import Matmul
 from .built_in import BuiltIn
 from .coordinates import Coordinates
-from .derived_dimension import DerivedDimension
+from .derived_dimension import DerivedDimension, SizedDerivedDimension
 
 GENERATORS = [
     "Tensor",
