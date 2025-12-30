@@ -63,8 +63,6 @@ extern "C" {
             b_global.step(K_CHUNK(1));
         }
 
-        // Main computation loop with pipelined memory operations.
-
         // Aggressive unrolling of the main loop improves arithmetic utilization.
 #pragma unroll MAIN_LOOP_UNROLL_DEPTH
         for (auto k_double_chunk : range(K_DOUBLE_CHUNK(size))) {
@@ -72,19 +70,20 @@ extern "C" {
             // Double-buffered loads and computation
             for (auto k_chunk : range(K_CHUNK(2))) {
 
+                __pipeline_wait_prior(0);
+                __syncthreads();
+
                 // If not the last iteration ..
                 if (k_double_chunk + k_chunk + K_CHUNK(1) < size) {
                     // .. copy the next tile into the back buffer.
-                    a_loader.copy_async(a_store_smem[k_chunk + 1].get(),
+                    a_loader.copy_async(a_store_smem[k_chunk + K_CHUNK(1)].get(),
                                         a_global[k_double_chunk + k_chunk].get());
-                    b_loader.copy_async(b_store_smem[k_chunk + 1].get(),
+                    b_loader.copy_async(b_store_smem[k_chunk + K_CHUNK(1)].get(),
                                         b_global[k_double_chunk + k_chunk].get());
                 }
 
                 // Synchronize on the previous iteration's global memory copy.
                 __pipeline_commit();
-                __pipeline_wait_prior(1);
-                __syncthreads();
 
                 // Load matrix tiles from the front buffer.
                 a_reg.load(a_load_smem[k_chunk]);
@@ -92,19 +91,20 @@ extern "C" {
 
                 // Matrix multiply-accumulate the tiles using Tensor Cores.
                 mma(a_reg, b_reg, c_reg, c_reg);
-                __syncthreads();
             }
         }
-        __pipeline_wait_prior(0);
 
         // Final computation for any leftover iteration.
         if constexpr (K_DOUBLE_CHUNK(size) < size) {
+            __pipeline_wait_prior(0);
             __syncthreads();
             a_reg.load(a_load_smem);
             b_reg.load(b_load_smem);
             mma(a_reg, b_reg, c_reg, c_reg);
-            __syncthreads();
         }
+
+        // Separate smem loads from in the main loop from smem stores in the epilogue.
+        __syncthreads();
 
         // Allocate shared memory for transposing the output matrix.
         a_smem.deallocate(smem_allocator);
