@@ -189,7 +189,7 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig):
     g.CReg = Tensor(g.CFragment, Dims(i16=warp_m16, j16=warp_n16))
 
     # Matmul operation
-    g.mma = Matmul(g.AReg, g.BReg, g.CReg, g.CReg, function_name="mma")
+    g.mma = Matmul(g.AReg, g.BReg, g.CReg, g.CReg)
 
     # Transpose output through shared memory
     g.CSmem = Tensor(
