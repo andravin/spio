@@ -69,7 +69,7 @@ extern "C" {
 
             // Double-buffered loads and computation
             for (auto k_chunk : range(K_CHUNK(2))) {
-
+                // Synchronize on the previous iteration's global memory copy.
                 __pipeline_wait_prior(0);
                 __syncthreads();
 
@@ -81,8 +81,6 @@ extern "C" {
                     b_loader.copy_async(b_store_smem[k_chunk + K_CHUNK(1)].get(),
                                         b_global[k_double_chunk + k_chunk].get());
                 }
-
-                // Synchronize on the previous iteration's global memory copy.
                 __pipeline_commit();
 
                 // Load matrix tiles from the front buffer.
