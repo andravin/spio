@@ -14,6 +14,8 @@ namespace spio {
     /// data between global and shared memory. Each thread copies one vector
     /// of data per load, moving to the next position using the specified strides.
     ///
+    /// The constructor accepts a global memory cursor and records inbounds status.
+    ///
     /// Use StripLoaderParams to calculate the num_loads template parameter.
     ///
     /// Examples:
@@ -47,11 +49,13 @@ namespace spio {
     ///          +---+---+---+---+
     ///
     template <int smem_stride, int global_stride, int num_loads> class AsyncStripLoader {
+        bool _mask;
+
     public:
-        /// @brief Construct AynscStripLoader and optionally mask-to-zero the current thread.
-        /// @param mask Zero-fill the destination and skip the copy for the current thread with
-        /// zeros if true.
-        __device__ AsyncStripLoader(bool mask = true) : _mask(mask) {}
+        /// @brief Construct AsyncStripLoader from a cursor, recording inbounds mask.
+        /// @param cursor Global memory cursor at the starting position.
+        template <typename Cursor>
+        __device__ AsyncStripLoader(Cursor cursor) : _mask(cursor.inbounds()) {}
 
         /// @brief Copy data asynchronously from global to shared memory.
         /// @param smem_ptr Pointer to the shared memory destination for the current thread.
@@ -59,13 +63,11 @@ namespace spio {
         /// @tparam data_type The type of the data to load.
         template <typename data_type>
         __device__ void copy_async(data_type* smem_ptr, const data_type* global_ptr) {
+#pragma unroll
             for (int i = 0; i < num_loads; ++i) {
                 memcpy_async(smem_ptr + i * smem_stride, global_ptr + i * global_stride, _mask);
             }
         }
-
-    private:
-        bool _mask;
     };
 
     /// @brief 2D async strip loader for loading tiles with two iteration dimensions.
@@ -75,8 +77,14 @@ namespace spio {
     /// @tparam smem_stride_outer Outer (minor) axis stride in shared memory.
     /// @tparam global_stride_outer Outer (minor) axis stride in global memory.
     /// @tparam num_outer Number of loads along outer (minor) axis.
+    /// @tparam InnerStepDim The dimension type to step by along the inner axis.
+    /// @tparam inner_step_size The step size in InnerStepDim units.
     /// @details Extends AsyncStripLoader to handle 2D iteration patterns where each thread
     /// needs to load multiple elements along two dimensions (e.g., i/j and k16).
+    ///
+    /// The constructor accepts a global memory cursor and performs a dry-run
+    /// iteration along the inner axis to record per-load inbounds masks.
+    /// The outer dimension is assumed to be tested externally.
     ///
     /// Example: 4 warps loading a 128 x 2 tile (256 elements, 128 threads):
     ///   - Each thread loads 2 elements along i (inner) with stride 128
@@ -89,11 +97,24 @@ namespace spio {
     ///   - Total: 4 loads per thread
     ///
     template <int smem_stride_inner, int global_stride_inner, int num_inner, int smem_stride_outer,
-              int global_stride_outer, int num_outer>
+              int global_stride_outer, int num_outer, typename InnerStepDim, int inner_step_size>
     class AsyncStripLoader2D {
-    public:
-        __device__ AsyncStripLoader2D(bool mask = true) : _mask(mask) {}
+        bool _masks[num_inner];
 
+    public:
+        /// @brief Construct AsyncStripLoader2D from a cursor, recording per-inner-load masks.
+        /// @param cursor Global memory cursor at the starting position.
+        template <typename Cursor> __device__ AsyncStripLoader2D(Cursor cursor) {
+#pragma unroll
+            for (int i = 0; i < num_inner; ++i) {
+                _masks[i] = cursor[InnerStepDim(i * inner_step_size)].inbounds();
+            }
+        }
+
+        /// @brief Copy data asynchronously from global to shared memory.
+        /// @param smem_ptr Pointer to the shared memory destination for the current thread.
+        /// @param global_ptr Pointer to the global memory source for the current thread.
+        /// @tparam data_type The type of the data to load.
         template <typename data_type>
         __device__ void copy_async(data_type* smem_ptr, const data_type* global_ptr) {
 #pragma unroll
@@ -102,13 +123,10 @@ namespace spio {
                 for (int i = 0; i < num_inner; ++i) {
                     memcpy_async(smem_ptr + j * smem_stride_outer + i * smem_stride_inner,
                                  global_ptr + j * global_stride_outer + i * global_stride_inner,
-                                 _mask);
+                                 _masks[i]);
                 }
             }
         }
-
-    private:
-        bool _mask;
     };
 }
 

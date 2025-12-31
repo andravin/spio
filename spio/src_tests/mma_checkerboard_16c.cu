@@ -24,9 +24,9 @@ extern "C" {
         auto a_global = AGlobal(a_ptr);
         auto b_global = BGlobal(b_ptr);
 
-        // Set up loaders for A and B.
-        auto a_loader = ALoader(a_global.inbounds());
-        auto b_loader = BLoader(b_global.inbounds());
+        // Set up loaders for A and B (compute per-load inbounds masks).
+        auto a_loader = ALoader(a_global);
+        auto b_loader = BLoader(b_global);
 
         // Allocate shared memory for A and B.
         auto a_smem = ASmem::allocate(smem_allocator);
