@@ -24,6 +24,15 @@ class MmaConfig:
     chunk_k16: int = 2
 
 
+CONFIGS = [
+    MmaConfig(warp_m=32, warp_n=64, chunk_k16=1),
+    MmaConfig(warp_m=32, warp_n=64, chunk_k16=2),
+    MmaConfig(warp_m=64, warp_n=32, chunk_k16=1),
+    MmaConfig(warp_m=64, warp_n=32, chunk_k16=2),
+]
+
+
+@pytest.mark.parametrize("config", CONFIGS)
 @pytest.mark.parametrize(
     "m, n, k",
     [
@@ -31,11 +40,8 @@ class MmaConfig:
         (8192 - 32, 1024, 1024 + 32),
     ],
 )
-def test_mma_checkerboard_16c_kernel(m, n, k):
+def test_mma_checkerboard_16c_kernel(m, n, k, config):
     """Compile and run a GPU kernel that tests tensor core mma with checkerboard layout for smem."""
-
-    # TODO: fix for warp_m=64, warp_n=32
-    config = MmaConfig(warp_m=32, warp_n=64, chunk_k16=2)
 
     specs, grid, block, max_registers = _get_specs(m, n, k, config=config)
 
