@@ -67,6 +67,49 @@ namespace spio {
     private:
         bool _mask;
     };
+
+    /// @brief 2D async strip loader for loading tiles with two iteration dimensions.
+    /// @tparam smem_stride_inner Inner (major) axis stride in shared memory.
+    /// @tparam global_stride_inner Inner (major) axis stride in global memory.
+    /// @tparam num_inner Number of loads along inner (major) axis.
+    /// @tparam smem_stride_outer Outer (minor) axis stride in shared memory.
+    /// @tparam global_stride_outer Outer (minor) axis stride in global memory.
+    /// @tparam num_outer Number of loads along outer (minor) axis.
+    /// @details Extends AsyncStripLoader to handle 2D iteration patterns where each thread
+    /// needs to load multiple elements along two dimensions (e.g., i/j and k16).
+    ///
+    /// Example: 4 warps loading a 128 x 2 tile (256 elements, 128 threads):
+    ///   - Each thread loads 2 elements along i (inner) with stride 128
+    ///   - Times 1 element along k16 (outer)
+    ///   - Total: 2 loads per thread
+    ///
+    /// Example: 4 warps loading a 128 x 2 x 2 tile (512 elements, 128 threads):
+    ///   - Each thread loads 2 elements along i (inner) with stride 128
+    ///   - Times 2 elements along k16 (outer)
+    ///   - Total: 4 loads per thread
+    ///
+    template <int smem_stride_inner, int global_stride_inner, int num_inner, int smem_stride_outer,
+              int global_stride_outer, int num_outer>
+    class AsyncStripLoader2D {
+    public:
+        __device__ AsyncStripLoader2D(bool mask = true) : _mask(mask) {}
+
+        template <typename data_type>
+        __device__ void copy_async(data_type* smem_ptr, const data_type* global_ptr) {
+#pragma unroll
+            for (int j = 0; j < num_outer; ++j) {
+#pragma unroll
+                for (int i = 0; i < num_inner; ++i) {
+                    memcpy_async(smem_ptr + j * smem_stride_outer + i * smem_stride_inner,
+                                 global_ptr + j * global_stride_outer + i * global_stride_inner,
+                                 _mask);
+                }
+            }
+        }
+
+    private:
+        bool _mask;
+    };
 }
 
 #endif

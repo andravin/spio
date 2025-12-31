@@ -91,7 +91,7 @@ def compile_and_load_kernel(
     max_registers: int = None,
     count_instructions: bool = False,
     print_disasm: bool = False,
-):
+) -> Tuple[Module, Function]:
     """Compile and load a CUDA kernel."""
     arch = torch.cuda.get_device_capability(device_ordinal)
     if source_file_name is None:
