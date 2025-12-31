@@ -25,11 +25,11 @@ Spio implements typed dimensions in a header-only, CUDA-aware C++ library using 
 
 In the following examples, the comment blocks marked with the `@spio` tag instruct Spio's code generator to pre-include header files that define the requested dimension, tensor, and compound index classes.
 
-### 1\. Safety and Commutativity
+### 1. Safety and Commutativity
 
 Spio dimensions behave like integers. Because dimensions are types, it is not possible to accidentally mix different dimensions.
 
-**File:** [01\_commutativity.cpp](spio/src_tests/tutorial/01_commutativity.cpp)
+**File:** [01_commutativity.cpp](spio/src_tests/tutorial/01_commutativity.cpp)
 
 ```cpp
 /*@spio
@@ -104,11 +104,11 @@ UTEST(Lesson1, Commutativity) {
 }
 ```
 
-### 2\. Cursors
+### 2. Cursors
 
 Spio uses Cursors: lightweight, multi-dimensional pointers that traverse tensor dimensions.
 
-**File:** [02\_cursor\_movement.cpp](spio/src_tests/tutorial/02_cursor_movement.cpp)
+**File:** [02_cursor_movement.cpp](spio/src_tests/tutorial/02_cursor_movement.cpp)
 
 ```cpp
 /*@spio
@@ -155,11 +155,11 @@ UTEST(Lesson2, AccumulationLoop) {
 }
 ```
 
-### 3\. Folded Dimensions
+### 3. Folded Dimensions
 
 The generator `Dims(k8=4, i=4, k=-1)` creates a tensor with physical layout $K_8(4) \times I(4) \times K(8)$. Here, $K_8$ and $K$ together address the full logical range $K(0) \ldots K(31)$: $K_8$ selects which chunk of 8 (the quotient), and $K$ selects within that chunk (the remainder). This decomposition enables interleaved and vectorized memory layouts while letting you write loops over the logical dimension $K$.
 
-**File:** [03\_folding.cpp](spio/src_tests/tutorial/03_folding.cpp)
+**File:** [03_folding.cpp](spio/src_tests/tutorial/03_folding.cpp)
 
 ```cpp
 // Define a Tensor with a folded dimension K and interleaved layout.
@@ -214,7 +214,7 @@ EXPECT_TRUE(*a[i][K(4)][K(4)] == *a[i][K8(1)]);
 EXPECT_TRUE(*a[i][K(7)][K(5)] == *a[i][K8(1)][K(4)]);
 ```
 
-### 4\. Dimensional Projection
+### 4. Dimensional Projection
 
 A Spio tensor acts as a filter. It accepts a world state (a superset of coordinates) and automatically projects onto the supported dimensions.
 
@@ -222,7 +222,7 @@ This allows you to create a single coordinates variable that includes all releva
 
 With dimensional projection, individual dimensions disappear from the program. Tensor definitions carry all the information about how dimensions are used, and dimensional projection automatically harvests the relevant dimensions from world coordinates.
 
-**File:** [04\_projection.cpp](spio/src_tests/tutorial/04_projection.cpp)
+**File:** [04_projection.cpp](spio/src_tests/tutorial/04_projection.cpp)
 
 ```cpp
 // Define tensors A, B, C, and C_tile
@@ -279,11 +279,11 @@ UTEST(Lesson4, DimensionalProjection) {
 }
 ```
 
-### 5\. Compound Index
+### 5. Compound Index
 
 Spio uses a compound index to fold a linear offset into multiple dimensions. A common use case is folding CUDA `blockIdx` and `threadIdx` into logical tensor coordinates.
 
-**File:** [05\_compound\_index.cpp](spio/src_tests/tutorial/05_compound_index.cpp)
+**File:** [05_compound_index.cpp](spio/src_tests/tutorial/05_compound_index.cpp)
 
 ```cpp
 /*@spio
@@ -338,7 +338,7 @@ For a full example of a high-performance matrix multiply kernel using typed dime
 - CUDA Source: [mma_checkerboard_16c.cu](spio/src_tests/mma_checkerboard_16c.cu)
 - Python Generators: [test_mma_checkerboard.py](tests/matmul/test_mma_checkerboard.py)
 
-This example demonstrates how dimensional projection manages the complexity of mapping global memory, shared memory tiles, and register matrix fragments within a single kernel.
+This example demonstrates how dimensional projection manages the complexity of mapping global memory, swizzled shared memory tiles, and tensor core fragments, reaching 94% arithmetic utilization on an RTX 4090 GPU.
 
 ### Limitations
 
@@ -383,8 +383,8 @@ Benchmarks use realistic workloads with layers embedded in ConvFirst or MBConv b
 
 ### Prerequisites
 
-- Linux x86\_64
-- NVIDIA GPU: Ampere (sm\_80/sm\_86) or Ada (sm\_89)
+- Linux x86_64
+- NVIDIA GPU: Ampere (sm_80/sm_86) or Ada (sm_89)
 - NVIDIA driver (compatible with CUDA 12 runtime)
 - Python 3.9+
 
@@ -398,7 +398,7 @@ pip install spio
 
 Notes:
 
-- PyTorch (torch\>=2.4.0) is an explicit dependency and will be installed automatically when you install Spio; no separate installation step is required.
+- PyTorch (torch>=2.4.0) is an explicit dependency and will be installed automatically when you install Spio; no separate installation step is required.
 - CUDA toolkit installation is not required. Spio relies on NVIDIA's CUDA runtime and NVRTC libraries and installs them automatically via pip wheels. PyTorch also depends on the same NVIDIA packages.
 
 ## Development

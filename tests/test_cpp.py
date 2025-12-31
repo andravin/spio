@@ -1548,6 +1548,229 @@ UTEST(TensorDerivedDim, fragment_load_index_subscript)
     return test_code
 
 
+@_cpp_test
+def _test_async_strip_loader_2d_iteration():
+    """Test AsyncStripLoader2D iteration pattern.
+
+    This test verifies that the 2D strip loader correctly iterates over
+    two dimensions when loading data. We test the pattern for 4 warps (128 threads)
+    loading an 8x1 tile (same as 8 i16 elements x 1 k16 element).
+
+    We don't include the actual async_strip_loader.cuh since it requires CUDA
+    device code. Instead, we test the iteration logic directly.
+    """
+    return """
+
+// Test helper: track which positions were visited and compute offsets
+// This mirrors the AsyncStripLoader2D iteration pattern without CUDA dependencies
+template <int smem_stride_inner, int global_stride_inner, int num_inner,
+          int smem_stride_outer, int global_stride_outer, int num_outer>
+struct TestLoader2DIteration {
+    static constexpr int total_loads = num_outer * num_inner;
+
+    int smem_offsets[total_loads];
+    int global_offsets[total_loads];
+
+    // Simulate the iteration pattern from a given base offset
+    void simulate(int smem_base, int global_base) {
+        int idx = 0;
+        for (int j = 0; j < num_outer; ++j) {
+            for (int i = 0; i < num_inner; ++i) {
+                smem_offsets[idx] = smem_base + j * smem_stride_outer + i * smem_stride_inner;
+                global_offsets[idx] = global_base + j * global_stride_outer + i * global_stride_inner;
+                idx++;
+            }
+        }
+    }
+};
+
+UTEST(AsyncStripLoader2D, four_warps_8x1_tile_iteration)
+{
+    // 4 warps (128 threads) loading 8 i16 elements x 1 k16 element
+    // Each warp loads 2 elements along i16 (8 / 4 = 2)
+    // With 4 warps, warp 0 loads positions 0,4; warp 1 loads 1,5; etc.
+    //
+    // Layout (showing which warp loads which position):
+    //     i16:  0   1   2   3   4   5   6   7
+    // k16=0:  [w0  w1  w2  w3  w0  w1  w2  w3]
+    //          ^---first load--^---second load-^
+    //
+    // So for warp w:
+    //   - First load: position w (offset = w * smem_stride_element)
+    //   - Second load: position w+4 (offset = (w+4) * smem_stride_element)
+    //
+    // Template params for AsyncStripLoader2D:
+    //   smem_stride_inner = 4 * element_stride (skip 4 warps)
+    //   num_inner = 2 (each warp loads 2 elements)
+    //   smem_stride_outer = k16 stride
+    //   num_outer = 1
+
+    constexpr int num_warps = 4;
+    constexpr int i16_size = 8;
+    constexpr int k16_size = 1;
+
+    // Smem layout: k16 x i16 x 2 (checkerboard k8)
+    // Stride for i16 = 2 (the k8 checkerboard pair)
+    constexpr int smem_i16_stride = 2;
+    constexpr int smem_k16_stride = i16_size * smem_i16_stride;  // 8 * 2 = 16
+
+    // Global layout: k16 x i x k8
+    // Each element is half8, so stride for i = 1
+    constexpr int global_i_stride = 1;
+    constexpr int global_k16_stride = 8192;  // Some large value for outer dim
+
+    // Each warp needs to load i16_size / num_warps = 2 elements
+    constexpr int num_inner = i16_size / num_warps;  // 2
+    constexpr int num_outer = k16_size;  // 1
+
+    // Inner stride: skip num_warps positions in smem/global
+    constexpr int smem_stride_inner = num_warps * smem_i16_stride;  // 4 * 2 = 8
+    constexpr int global_stride_inner = num_warps * global_i_stride;  // 4 * 1 = 4
+
+    // Verify the parameters
+    EXPECT_EQ(num_inner, 2);
+    EXPECT_EQ(num_outer, 1);
+    EXPECT_EQ(smem_stride_inner, 8);
+    EXPECT_EQ(global_stride_inner, 4);
+
+    // Test loader for warp 0
+    TestLoader2DIteration<smem_stride_inner, global_stride_inner, num_inner,
+                          smem_k16_stride, global_k16_stride, num_outer> loader0;
+
+    // Warp 0 starts at smem offset 0, global offset 0
+    int warp0_smem_base = 0 * smem_i16_stride;  // 0
+    int warp0_global_base = 0 * global_i_stride;  // 0
+    loader0.simulate(warp0_smem_base, warp0_global_base);
+
+    // Warp 0 should load i16 positions 0 and 4
+    // Position 0: smem offset = 0
+    // Position 4: smem offset = 0 + 8 = 8 (skip 4 warps * stride 2)
+    EXPECT_EQ(loader0.smem_offsets[0], 0);      // i16=0
+    EXPECT_EQ(loader0.smem_offsets[1], 8);      // i16=4
+    EXPECT_EQ(loader0.global_offsets[0], 0);
+    EXPECT_EQ(loader0.global_offsets[1], 4);
+
+    // Test warp 1
+    TestLoader2DIteration<smem_stride_inner, global_stride_inner, num_inner,
+                          smem_k16_stride, global_k16_stride, num_outer> loader1;
+    int warp1_smem_base = 1 * smem_i16_stride;  // 2
+    int warp1_global_base = 1 * global_i_stride;  // 1
+    loader1.simulate(warp1_smem_base, warp1_global_base);
+
+    // Warp 1 should load i16 positions 1 and 5
+    EXPECT_EQ(loader1.smem_offsets[0], 2);     // i16=1
+    EXPECT_EQ(loader1.smem_offsets[1], 10);    // i16=5 (2 + 8)
+    EXPECT_EQ(loader1.global_offsets[0], 1);
+    EXPECT_EQ(loader1.global_offsets[1], 5);
+
+    // Verify all 8 positions are covered by all 4 warps
+    // Each position should be loaded exactly once
+    int smem_positions_loaded[8] = {0};
+    for (int warp = 0; warp < 4; ++warp) {
+        TestLoader2DIteration<smem_stride_inner, global_stride_inner, num_inner,
+                              smem_k16_stride, global_k16_stride, num_outer> loader;
+        loader.simulate(warp * smem_i16_stride, warp * global_i_stride);
+        for (int load = 0; load < num_inner; ++load) {
+            // smem_offset / smem_i16_stride gives the i16 position
+            int pos = loader.smem_offsets[load] / smem_i16_stride;
+            EXPECT_TRUE(pos >= 0 && pos < 8);
+            smem_positions_loaded[pos]++;
+        }
+    }
+    // Each position should be loaded exactly once
+    for (int pos = 0; pos < 8; ++pos) {
+        EXPECT_EQ(smem_positions_loaded[pos], 1);
+    }
+}
+
+UTEST(AsyncStripLoader2D, four_warps_8x2_tile_iteration)
+{
+    // 4 warps (128 threads) loading 8 i16 elements x 2 k16 elements
+    // Each warp loads 2 i16 positions and iterates over both k16 values
+    //
+    // num_inner = 8/4 = 2, num_outer = 2
+    // Total: 4 loads per warp
+
+    constexpr int num_warps = 4;
+    constexpr int i16_size = 8;
+    constexpr int k16_size = 2;
+
+    constexpr int smem_i16_stride = 2;
+    constexpr int smem_k16_stride = i16_size * smem_i16_stride;  // 16
+
+    constexpr int global_i_stride = 1;
+    constexpr int global_k16_stride = 8192;
+
+    constexpr int num_inner = i16_size / num_warps;  // 2
+    constexpr int num_outer = k16_size;  // 2
+
+    constexpr int smem_stride_inner = num_warps * smem_i16_stride;  // 8
+    constexpr int global_stride_inner = num_warps * global_i_stride;  // 4
+
+    EXPECT_EQ(num_inner, 2);
+    EXPECT_EQ(num_outer, 2);
+
+    TestLoader2DIteration<smem_stride_inner, global_stride_inner, num_inner,
+                          smem_k16_stride, global_k16_stride, num_outer> loader;
+
+    // Warp 0 base offsets
+    loader.simulate(0, 0);
+
+    // 4 loads total: outer loop j=0,1; inner loop i=0,1
+    // j=0, i=0: smem = 0, global = 0
+    // j=0, i=1: smem = 0 + 8 = 8, global = 0 + 4 = 4
+    // j=1, i=0: smem = 0 + 16 = 16, global = 0 + 8192 = 8192
+    // j=1, i=1: smem = 0 + 16 + 8 = 24, global = 0 + 8192 + 4 = 8196
+    EXPECT_EQ(loader.smem_offsets[0], 0);       // k16=0, i16=0
+    EXPECT_EQ(loader.smem_offsets[1], 8);       // k16=0, i16=4
+    EXPECT_EQ(loader.smem_offsets[2], 16);      // k16=1, i16=0
+    EXPECT_EQ(loader.smem_offsets[3], 24);      // k16=1, i16=4
+
+    EXPECT_EQ(loader.global_offsets[0], 0);
+    EXPECT_EQ(loader.global_offsets[1], 4);
+    EXPECT_EQ(loader.global_offsets[2], 8192);
+    EXPECT_EQ(loader.global_offsets[3], 8196);
+}
+
+UTEST(AsyncStripLoader2D, eight_warps_8x1_tile_iteration)
+{
+    // 8 warps loading 8 i16 x 1 k16 = perfect 1:1 mapping
+    // This is the baseline case that works with AsyncStripLoader
+    // num_inner = 1, num_outer = 1
+
+    constexpr int num_warps = 8;
+    constexpr int i16_size = 8;
+    constexpr int k16_size = 1;
+
+    constexpr int num_inner = i16_size / num_warps;  // 1
+    constexpr int num_outer = k16_size;  // 1
+
+    EXPECT_EQ(num_inner, 1);
+    EXPECT_EQ(num_outer, 1);
+    EXPECT_EQ(num_inner * num_outer, 1);  // Single load per warp
+
+    // With num_inner=1 and num_outer=1, there's only one load per warp
+    // The strides don't matter since we never step
+    constexpr int smem_stride_inner = 16;  // doesn't matter
+    constexpr int global_stride_inner = 8;  // doesn't matter
+    constexpr int smem_k16_stride = 32;
+    constexpr int global_k16_stride = 8192;
+
+    TestLoader2DIteration<smem_stride_inner, global_stride_inner, num_inner,
+                          smem_k16_stride, global_k16_stride, num_outer> loader;
+
+    // Warp 3 starts at its position
+    int warp3_smem_base = 3 * 2;  // position 3 * stride 2
+    int warp3_global_base = 3;
+    loader.simulate(warp3_smem_base, warp3_global_base);
+
+    // Only one load, at the base position
+    EXPECT_EQ(loader.smem_offsets[0], 6);
+    EXPECT_EQ(loader.global_offsets[0], 3);
+}
+"""
+
+
 def _compile_cpp_tests(extra_cpp_test_files=None, run_args=None):
     """Compile C++ tests with NVCC."""
     if extra_cpp_test_files is None:

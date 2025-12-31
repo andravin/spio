@@ -70,7 +70,9 @@ class CompoundIndex(GenSpecsWithContext, DerivedDimension):
         )
 
     def partition(
-        self, partition_dim: str, partition_index: "CompoundIndex"
+        self,
+        partition_dim: str,
+        partition_index: "CompoundIndex",
     ) -> "CompoundIndexPartition":
         """Create a CompoundIndexPartition generator for this index.
 
