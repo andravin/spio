@@ -114,6 +114,10 @@ class {self.class_name} : public {base}
 
         gmem_stride_inner_total = self.num_warps * fold_ratio * gmem_stride_inner
 
+        # Inner step dimension for cursor iteration (in gmem's units, e.g., I)
+        inner_step_dim = gmem_inner_axis
+        inner_step_size = self.num_warps * fold_ratio
+
         base_params = _make_args_list(
             smem_stride_inner_total,
             gmem_stride_inner_total,
@@ -121,6 +125,8 @@ class {self.class_name} : public {base}
             smem_stride_outer,
             gmem_stride_outer,
             num_outer,
+            inner_step_dim,
+            inner_step_size,
         )
         base = f"spio::AsyncStripLoader2D<{base_params}>"
 
