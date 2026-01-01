@@ -35,3 +35,6 @@ spio.egg-info/
 
 # Disassembly
 *.sass
+
+# Local version utility.
+.versions/

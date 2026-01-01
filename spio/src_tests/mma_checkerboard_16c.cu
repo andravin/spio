@@ -15,30 +15,36 @@ extern "C" {
     __global__ void mma_checkerboard_16c(uint4* __restrict__ c_ptr, const uint4* __restrict__ a_ptr,
                                          const uint4* __restrict__ b_ptr) {
 
-        // Create a shared memory buffer and allocator.
-        __shared__ char
-            smem[spio::max(ASmem::num_bytes() + BSmem::num_bytes(), CSmem::num_bytes())];
+        // Use dynamic shared memory.
+        extern __shared__ char smem[];
+
+        // Create an allocator for shared memory.
         auto smem_allocator = StackAllocator(smem);
 
         // Set up views of global memory matrices A and B.
         auto a_global = AGlobal(a_ptr);
         auto b_global = BGlobal(b_ptr);
 
-        // Set up loaders for A and B (compute per-load inbounds masks).
-        auto a_loader = ALoader(a_global);
-        auto b_loader = BLoader(b_global);
+        // Get the size of the main loop.
+        constexpr auto size = a_global.extent<K>();
+        constexpr auto step = K_CHUNK(1).fold<16>();
+        constexpr auto double_step = K_CHUNK(2).fold<16>();
 
         // Allocate shared memory for A and B.
         auto a_smem = ASmem::allocate(smem_allocator);
         auto b_smem = BSmem::allocate(smem_allocator);
 
         // Set up store ..
-        auto a_store_smem = AStoreSmem(a_smem);
-        auto b_store_smem = BStoreSmem(b_smem);
+        auto a_store_smem = AStoreSmem(a_smem).rebase();
+        auto b_store_smem = BStoreSmem(b_smem).rebase();
 
         // .. and load views of the shared memory for A and B.
         auto a_load_smem = ALoadSmem(a_smem).rebase();
         auto b_load_smem = BLoadSmem(b_smem).rebase();
+
+        // Set up loaders for A and B (compute per-load inbounds masks).
+        auto a_loader = ALoader(a_store_smem, a_global);
+        auto b_loader = BLoader(b_store_smem, b_global);
 
         // Allocate registers for the local matrices.
         AReg::data_type a_data[AReg::storage_size()];
@@ -51,16 +57,13 @@ extern "C" {
         auto c_reg = CReg(c_data);
         c_reg.zero();
 
-        // Get the size of the main loop.
-        constexpr auto size = a_global.extent<K>();
-
         // Prefetch the first k_chunk of data from A and B.
         if constexpr (size > K(0)) {
-            a_loader.copy_async(a_store_smem.get(), a_global.get());
-            b_loader.copy_async(b_store_smem.get(), b_global.get());
+            a_loader.copy_async();
+            b_loader.copy_async();
             __pipeline_commit();
-            a_global.step(K_CHUNK(1));
-            b_global.step(K_CHUNK(1));
+            a_loader.step(1);
+            b_loader.step(1);
         }
 
         // Aggressive unrolling of the main loop improves arithmetic utilization.
@@ -68,36 +71,37 @@ extern "C" {
         for (auto k_double_chunk : range(K_DOUBLE_CHUNK(size))) {
 
             // Double-buffered loads and computation
-            for (auto k_chunk : range(K_CHUNK(2))) {
+#pragma unroll
+            for (int phase = 0; phase < 2; ++phase) {
                 // Synchronize on the previous iteration's global memory copy.
                 __pipeline_wait_prior(0);
                 __syncthreads();
 
                 // If not the last iteration ..
-                if (k_double_chunk + k_chunk + K_CHUNK(1) < size) {
+                if (k_double_chunk + step * (phase + 1) < size) {
                     // .. copy the next tile into the back buffer.
-                    a_loader.copy_async(a_store_smem[k_chunk + K_CHUNK(1)].get(),
-                                        a_global[k_double_chunk + k_chunk].get());
-                    b_loader.copy_async(b_store_smem[k_chunk + K_CHUNK(1)].get(),
-                                        b_global[k_double_chunk + k_chunk].get());
+                    a_loader.copy_async(1 - phase, phase);
+                    b_loader.copy_async(1 - phase, phase);
                 }
                 __pipeline_commit();
 
                 // Load matrix tiles from the front buffer.
-                a_reg.load(a_load_smem[k_chunk]);
-                b_reg.load(b_load_smem[k_chunk]);
+                a_reg.load(a_load_smem[step * phase]);
+                b_reg.load(b_load_smem[step * phase]);
 
                 // Matrix multiply-accumulate the tiles using Tensor Cores.
                 mma(a_reg, b_reg, c_reg, c_reg);
             }
+            a_loader.step(2);
+            b_loader.step(2);
         }
 
         // Final computation for any leftover iteration.
         if constexpr (K_DOUBLE_CHUNK(size) < size) {
             __pipeline_wait_prior(0);
             __syncthreads();
-            a_reg.load(a_load_smem);
-            b_reg.load(b_load_smem);
+            a_reg.load(a_load_smem[step]);
+            b_reg.load(b_load_smem[step]);
             mma(a_reg, b_reg, c_reg, c_reg);
         }
 

@@ -42,6 +42,7 @@ class AsyncStripLoader(GenSpecs):
     outer_axis_size: int
     num_warps: int
     class_name: str = None
+    num_buffers: int = 1
 
     def __post_init__(self):
         """Normalize axis names to upper-case."""
@@ -71,8 +72,18 @@ class AsyncStripLoader(GenSpecs):
         smem_stride = smem.strides[self.outer_axis]
         gmem_stride = gmem.strides[self.outer_axis]
 
+        smem_buffer_stride = smem_stride * self.outer_axis_size
+        gmem_buffer_stride = gmem_stride * self.outer_axis_size
+
         params = self._gen_strip_loader_params()
-        base_params = _make_args_list(smem_stride, gmem_stride, f"{params}::num_loads")
+        base_params = _make_args_list(
+            gmem.data_type.value.name,
+            smem_stride,
+            gmem_stride,
+            f"{params}::num_loads",
+            smem_buffer_stride,
+            gmem_buffer_stride,
+        )
         base = f"spio::AsyncStripLoader<{base_params}>"
 
         return f"""
@@ -114,11 +125,15 @@ class {self.class_name} : public {base}
 
         gmem_stride_inner_total = self.num_warps * fold_ratio * gmem_stride_inner
 
+        smem_buffer_stride = smem_stride_outer * self.outer_axis_size
+        gmem_buffer_stride = gmem_stride_outer * self.outer_axis_size // fold_ratio
+
         # Inner step dimension for cursor iteration (in gmem's units, e.g., I)
         inner_step_dim = gmem_inner_axis
         inner_step_size = self.num_warps * fold_ratio
 
         base_params = _make_args_list(
+            gmem.data_type.value.name,
             smem_stride_inner_total,
             gmem_stride_inner_total,
             num_inner,
@@ -127,6 +142,8 @@ class {self.class_name} : public {base}
             num_outer,
             inner_step_dim,
             inner_step_size,
+            smem_buffer_stride,
+            gmem_buffer_stride,
         )
         base = f"spio::AsyncStripLoader2D<{base_params}>"
 

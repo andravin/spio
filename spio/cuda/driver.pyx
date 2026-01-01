@@ -134,21 +134,21 @@ cdef class Function:
     cdef set_c_function(self, cdriver.CUfunction c_function):
         self._c_function = c_function
 
-    cdef set_max_dynamic_shared_memory_size(self, size):
+    def set_max_dynamic_shared_memory_size(self, size):
         """Set the maximum dynamic shared memory size for this function."""
         _check(_driver_fns.cuFuncSetAttribute(self._c_function, cdriver.CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, size))
 
-    cdef get_max_dynamic_shared_memory_size(self):
+    def get_max_dynamic_shared_memory_size(self):
         cdef int size
         _check(_driver_fns.cuFuncGetAttribute(&size, cdriver.CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, self._c_function))
         return size
 
-    cdef set_preferred_shared_memory_carveout(self, percentage):
+    def set_preferred_shared_memory_carveout(self, percentage):
         """Set the preferred shared memory carveout for this function."""
         _check(_driver_fns.cuFuncSetAttribute(
             self._c_function, cdriver.CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT, percentage))
 
-    cdef get_preferred_shared_memory_carveout(self):
+    def get_preferred_shared_memory_carveout(self):
         cdef int percentage
         _check(_driver_fns.cuFuncGetAttribute(
             &percentage, cdriver.CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT, self._c_function))

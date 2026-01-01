@@ -15,5 +15,5 @@ from .parse_kwargs import ParseKwargs
 from .parse_dataclass import parse_dataclass
 from .logger import logger_enabled, logger_verbose, log_level
 from .tensor_format import to_channels_last
-from .memory_format import SixteenChannelsLast, check_channels_last
+from .memory_format import SixteenChannelsLast, check_channels_last, TwoFold
 from .env import env_var_is_true
