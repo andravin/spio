@@ -4,7 +4,7 @@ from itertools import product
 
 import torch
 
-from spio.util import divup, next_relative_prime, SixteenChannelsLast
+from spio.util import divup, next_relative_prime, SixteenChannelsLast, TwoFold
 
 
 def test_divup():
@@ -40,7 +40,7 @@ def test_sixteen_channels_last_2d():
     assert torch.equal(a, b)
 
 
-def test_sixtenn_channels_last_4d():
+def test_sixteen_channels_last_4d():
     """Test the SixteenChannelsLast memory format with 4d tensors."""
     N, C, H, W = (2, 64, 8, 16)
     for a_format in [torch.contiguous_format, torch.channels_last]:
@@ -51,3 +51,45 @@ def test_sixtenn_channels_last_4d():
             cd16 = c // 16
             cm16 = c % 16
             assert a[n, c, h, w] == b[cd16, n, h, w, cm16]
+
+
+def test_two_fold():
+    """Test the TwoFold memory format."""
+    fold_m = 4
+    fold_k = 8
+    M, K = 16, 32
+    a = torch.randn(M, K)
+    two_fold = TwoFold(fold_m, fold_k)
+    a_folded = two_fold.format(a)
+    assert a_folded.shape == (M // fold_m, K // fold_k, fold_m, fold_k)
+    for m, k in product(range(M), range(K)):
+        md = m // fold_m
+        mm = m % fold_m
+        kd = k // fold_k
+        km = k % fold_k
+        assert a[m, k] == a_folded[md, kd, mm, km]
+
+    b = two_fold.unformat(a_folded)
+    assert torch.equal(a, b)
+
+
+def test_two_fold_unformat():
+    """Test the TwoFold unformat error handling."""
+    fold_m = 4
+    fold_k = 8
+
+    M = 2 * fold_m
+    K = 3 * fold_k
+
+    # Test with incorrect shape
+    a_folded = torch.randn(2, 3, fold_m, fold_k)  # Invalid shape
+
+    two_fold = TwoFold(fold_m, fold_k)
+    a = two_fold.unformat(a_folded)
+    assert a.shape == (M, K)
+    for m, k in product(range(M), range(K)):
+        md = m // fold_m
+        mm = m % fold_m
+        kd = k // fold_k
+        km = k % fold_k
+        assert a[m, k] == a_folded[md, kd, mm, km]

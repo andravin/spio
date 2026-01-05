@@ -280,6 +280,105 @@ UTEST(AnonCoordinates, anonymous_folds_unfold_correctly)
 
 
 @_cpp_test
+def _test_wave_based_block_idx():
+    """Test wave-based BlockIdx pattern used in test_mma_checkerboard.py.
+
+    This tests the pattern where blocks iterate in waves:
+    - First iterate over wave_size blocks in the i-dimension (block_i_local)
+    - Then iterate over all blocks in the j-dimension (block_j)
+    - Finally iterate over waves in the i-dimension (block_i_wave)
+    """
+    # Use values similar to test_mma_checkerboard.py test case
+    block_m = 256
+    block_n = 128
+    wave_size = 4
+    m = 8192
+    n = 1024
+
+    blocks_m = m // block_m  # 32
+    blocks_n = n // block_n  # 8
+    block_waves = blocks_m // wave_size  # 8
+    block_local = wave_size  # 4
+    wave_stride = wave_size * block_m  # 1024
+
+    block_i_wave = gen.Fold("i", wave_stride, fold_name="block_i_wave")
+    block_i_local = gen.Fold("i", block_m, fold_name="block_i_local")
+    block_j = gen.Fold("j", block_n, fold_name="block_j")
+
+    specs = [
+        gen.Dim("i"),
+        gen.Dim("j"),
+        block_i_wave,
+        block_i_local,
+        block_j,
+        gen.CompoundIndex(
+            gen.Dims(
+                block_i_wave=block_waves, block_j=blocks_n, block_i_local=block_local
+            ),
+            class_name="BlockIdx",
+            init=gen.BuiltIn.BLOCK_IDX_X,
+        ),
+    ]
+    generated_code = gen.generate(specs, namespace="WaveBlockIdx_GenCode")
+
+    total_blocks = block_waves * blocks_n * block_local  # 256
+
+    return f"""
+// Mock blockIdx for host testing
+namespace WaveBlockIdx_GenCode {{
+    struct {{ int x = 0, y = 0, z = 0; }} blockIdx;
+}}
+
+{generated_code}
+
+UTEST(WaveBlockIdx, decomposition_and_unfold)
+{{
+    using namespace WaveBlockIdx_GenCode;
+
+    // Test a representative set of blockIdx.x values
+    struct TestCase {{
+        int block_idx_x;
+        int expected_local, expected_j, expected_wave;
+    }};
+
+    TestCase cases[] = {{
+        {{0, 0, 0, 0}},      // First block
+        {{3, 3, 0, 0}},      // Last in first local group
+        {{4, 0, 1, 0}},      // First in second j-block
+        {{31, 3, 7, 0}},     // Last in first wave
+        {{32, 0, 0, 1}},     // First in second wave
+        {{45, 1, 3, 1}},     // Middle of second wave
+        {{255, 3, 7, 7}},    // Last block overall
+    }};
+
+    for (const auto& tc : cases) {{
+        WaveBlockIdx_GenCode::blockIdx.x = tc.block_idx_x;
+        BlockIdx idx;
+
+        // Check decomposition
+        EXPECT_EQ(idx.get<BLOCK_I_LOCAL>().get(), tc.expected_local);
+        EXPECT_EQ(idx.get<BLOCK_J>().get(), tc.expected_j);
+        EXPECT_EQ(idx.get<BLOCK_I_WAVE>().get(), tc.expected_wave);
+
+        // Check unfold produces correct I and J offsets
+        int expected_i = tc.expected_wave * {wave_stride} + tc.expected_local * {block_m};
+        int expected_j = tc.expected_j * {block_n};
+
+        EXPECT_TRUE(idx.get<BLOCK_I_WAVE>() == I(tc.expected_wave * {wave_stride}));
+        EXPECT_TRUE(idx.get<BLOCK_I_LOCAL>() == I(tc.expected_local * {block_m}));
+        EXPECT_TRUE(idx.get<BLOCK_J>() == J(expected_j));
+
+        // Verify coordinates combine correctly
+        EXPECT_TRUE(idx.coordinates() == make_coordinates(I(expected_i), J(expected_j)));
+    }}
+
+    // Verify total size
+    EXPECT_EQ(BlockIdx::size(), {total_blocks});
+}}
+"""
+
+
+@_cpp_test
 def _test_generate_index():
     """Return the C++ source code that tests a custom index class."""
 

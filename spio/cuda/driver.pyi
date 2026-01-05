@@ -32,6 +32,18 @@ class Function:
     def set_attributes(self, attr: FunctionAttributes) -> None:
         """Set the function attributes."""
 
+    def set_max_dynamic_shared_memory_size(self, size: int) -> None:
+        """Set the maximum dynamic shared memory size for this function."""
+
+    def get_max_dynamic_shared_memory_size(self) -> int:
+        """Get the maximum dynamic shared memory size for this function."""
+
+    def set_preferred_shared_memory_carveout(self, percentage: int) -> None:
+        """Set the preferred shared memory carveout for this function."""
+
+    def get_preferred_shared_memory_carveout(self) -> int:
+        """Get the preferred shared memory carveout for this function."""
+
     def launch(
         self,
         grid: Tuple[int, int, int],

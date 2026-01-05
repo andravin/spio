@@ -743,3 +743,159 @@ UTEST(Tensor, dimensional_projection_ignores_extra_dims) {
     // Should match a[I(3)][K(10)], ignoring J
     EXPECT_EQ(*a[world], *a[I(3)][K(10)]);
 }
+
+// Test the exact pattern from test_mma_checkerboard.py:
+// AGlobal = Tensor(dtype.half8, Dims(i16=i16, k16=k16, i=-1, k8=-1))[ALoadGlobalIndex, BlockIdx]
+//
+// This creates a tensor with dimensions I16 x K16 x I x K8, then subscripts it with:
+// 1. ALoadGlobalIndex: CompoundIndex(Dims(i=block_m, k8=2)) - thread-local offset
+// 2. BlockIdx: CompoundIndex(Dims(block_i_wave, block_j, block_i_local)) - block offset
+//
+// The key challenge is that BlockIdx has TWO folds of I (block_i_wave and block_i_local)
+// that must BOTH contribute to the tensor's I16 and I dimensions.
+// Also tests that BLOCK_J (a fold of J) is correctly ignored since the tensor has no J dimension.
+UTEST(Tensor, double_subscript_with_wave_block_idx) {
+    using I16 = Fold<I, 16>;
+    using K16 = Fold<K, 16>;
+    using K8 = Fold<K, 8>;
+
+    // Tensor similar to AGlobal: I16 x K16 x I x K8
+    // Sizes: i16=4, k16=2, i=16, k8=2 (total 4*2*16*2 = 256)
+    constexpr int i16_size = 4;
+    constexpr int k16_size = 2;
+    constexpr int i_size = 16;
+    constexpr int k8_size = 2;
+
+    // Strides for row-major layout: i16 is outermost, k8 is innermost
+    constexpr int k8_stride = 1;
+    constexpr int i_stride = k8_size * k8_stride;     // 2
+    constexpr int k16_stride = i_size * i_stride;     // 32
+    constexpr int i16_stride = k16_size * k16_stride; // 64
+
+    using ATensor =
+        Tensor<float, DimInfo<I16, i16_size, i16_stride>, DimInfo<K16, k16_size, k16_stride>,
+               DimInfo<I, i_size, i_stride>, DimInfo<K8, k8_size, k8_stride>>;
+
+    constexpr int total_size = i16_size * i16_stride;
+
+    float data[total_size];
+    for (int i = 0; i < total_size; ++i) {
+        data[i] = static_cast<float>(i);
+    }
+    auto tensor = ATensor(data);
+
+    // Wave-based BlockIdx: Dims(block_i_wave=2, block_j=4, block_i_local=2)
+    // This simulates: wave_size=2, blocks_m=4, blocks_n=4
+    // block_i_wave has stride wave_stride = wave_size * block_m (e.g., 2 * 32 = 64)
+    // block_i_local has stride block_m (e.g., 32)
+    // block_j has stride block_n (e.g., 16)
+    //
+    // For this test, use:
+    // - block_i_wave: Fold<I, 32> (2 blocks of 32 each = 64 total I)
+    // - block_i_local: Fold<I, 16> (2 blocks of 16 each within wave)
+    // - block_j: Fold<J, 8> (4 blocks of 8 each = 32 total J, ignored by tensor)
+    //
+    // Total I extent = 2 * 32 = 64 = 4 * 16 (matches i16_size * i_size)
+
+    using BLOCK_I_WAVE = Fold<I, 32>;  // wave_stride = 32
+    using BLOCK_I_LOCAL = Fold<I, 16>; // block_m = 16
+    using BLOCK_J = Fold<J, 8>;        // block_n = 8 (ignored by tensor)
+
+    // BlockIdx: block_i_wave=2, block_j=4, block_i_local=2
+    // Total size = 2 * 4 * 2 = 16
+    constexpr int block_i_wave_size = 2;
+    constexpr int block_j_size = 4;
+    constexpr int block_i_local_size = 2;
+
+    // Strides for the compound index (innermost to outermost: local, j, wave)
+    constexpr int block_i_local_stride = 1;
+    constexpr int block_j_stride = block_i_local_size;
+    constexpr int block_i_wave_stride = block_j_size * block_j_stride;
+
+    using BlockIdx =
+        CompoundIndex<DimInfo<BLOCK_I_WAVE, block_i_wave_size, block_i_wave_stride>,
+                      DimInfo<BLOCK_J, block_j_size, block_j_stride>,
+                      DimInfo<BLOCK_I_LOCAL, block_i_local_size, block_i_local_stride>>;
+
+    // Test: for each block index, verify that tensor[BlockIdx] gives correct offset
+    for (int block_idx = 0; block_idx < BlockIdx::size(); ++block_idx) {
+        auto idx = BlockIdx(block_idx);
+
+        auto block_i_wave = idx.get<BLOCK_I_WAVE>();
+        auto block_j = idx.get<BLOCK_J>();
+        auto block_i_local = idx.get<BLOCK_I_LOCAL>();
+
+        // Compute the expected I coordinate from the two I folds
+        // I = block_i_wave * 32 + block_i_local * 16
+        int expected_i = block_i_wave.get() * 32 + block_i_local.get() * 16;
+
+        // Convert to I16 and I components for tensor access
+        int expected_i16 = expected_i / 16;
+        int expected_i_inner = expected_i % 16;
+
+        // Access tensor with the compound index - should apply I folds correctly
+        auto cursor = tensor[idx];
+
+        // Compare with explicit subscript using computed I16 and I values
+        // (at K16=0, K8=0 for simplicity)
+        auto expected_cursor = tensor[I16(expected_i16)][I(expected_i_inner)];
+
+        // The pointers should match
+        EXPECT_EQ(cursor.get(), expected_cursor.get());
+    }
+}
+
+// Test chained subscripts: verify that order of subscript application doesn't matter
+// for independent dimensions, but accumulates correctly for shared base dimensions.
+UTEST(Tensor, double_subscript_order_independence) {
+    using I16 = Fold<I, 16>;
+    using K8 = Fold<K, 8>;
+
+    // Simple tensor with I16 x I x K8 layout
+    constexpr int i16_size = 4;
+    constexpr int i_size = 16;
+    constexpr int k8_size = 4;
+
+    constexpr int k8_stride = 1;
+    constexpr int i_stride = k8_size;
+    constexpr int i16_stride = i_size * i_stride;
+
+    using TestTensor = Tensor<float, DimInfo<I16, i16_size, i16_stride>,
+                              DimInfo<I, i_size, i_stride>, DimInfo<K8, k8_size, k8_stride>>;
+
+    float data[TestTensor::storage_size()];
+    for (size_t i = 0; i < TestTensor::storage_size(); ++i) {
+        data[i] = static_cast<float>(i);
+    }
+    auto tensor = TestTensor(data);
+
+    // Two indices with overlapping I dimension
+    using BLOCK_I = Fold<I, 32>; // Block-level I offset
+    using THREAD_I = Fold<I, 1>; // Thread-level I offset (just I)
+
+    // Create indices
+    using BlockIndex = CompoundIndex<DimInfo<BLOCK_I, 2, 1>>; // 2 blocks of 32
+    using ThreadIndex = CompoundIndex<DimInfo<I, 16, 4>, DimInfo<K8, 4, 1>>;
+
+    // Test: block_i=1, thread_i=5, k8=2
+    // Total I = 1*32 + 5 = 37
+    // Expected: I16 = 37/16 = 2, I = 37%16 = 5
+    auto block_idx = BlockIndex(1);           // BLOCK_I = 1
+    auto thread_idx = ThreadIndex(5 * 4 + 2); // I = 5, K8 = 2
+
+    // Order 1: tensor[thread_idx][block_idx]
+    auto cursor1 = tensor[thread_idx][block_idx];
+
+    // Order 2: tensor[block_idx][thread_idx]
+    auto cursor2 = tensor[block_idx][thread_idx];
+
+    // Both should give same result since dimensions accumulate
+    EXPECT_EQ(cursor1.get(), cursor2.get());
+
+    // Verify the actual offset
+    // I = 37, K8 = 2
+    // I16 = 2, I_inner = 5
+    // offset = 2 * 64 + 5 * 4 + 2 = 128 + 20 + 2 = 150
+    int expected_offset = 2 * i16_stride + 5 * i_stride + 2 * k8_stride;
+    EXPECT_EQ(static_cast<int>(cursor1.get() - data), expected_offset);
+}
