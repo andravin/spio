@@ -1,6 +1,6 @@
-# Spio (SPEE-oh)
+# Spio
 
-Experimental CUDA kernel framework unifying typed dimensions, NVRTC JIT specialization, and ML‑guided tuning.
+Spio (SPEE-oh) is an experimental CUDA kernel framework unifying typed dimensions, NVRTC JIT specialization, and ML‑guided tuning.
 
 [![PyPI version](https://img.shields.io/pypi/v/spio.svg)](https://pypi.org/project/spio/)
 ![Python versions](https://img.shields.io/pypi/pyversions/spio.svg)
