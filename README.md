@@ -1,4 +1,4 @@
-# Spio
+# Spio (SPEE-oh)
 
 Experimental CUDA kernel framework unifying typed dimensions, NVRTC JIT specialization, and ML‑guided tuning.
 
