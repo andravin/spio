@@ -137,18 +137,16 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig):
 
     block = (threads, 1, 1)
 
-    warp_m16 = config.warp_m // 16
-    warp_n16 = config.warp_n // 16
-
     i16 = m // 16
     k16 = k // 16
     j16 = n // 16
 
     block_m16 = config.block_m // 16
-
     block_n8 = config.block_n // 8
     block_n16 = config.block_n // 16
 
+    warp_m16 = config.warp_m // 16
+    warp_n16 = config.warp_n // 16
     warp_n8 = config.warp_n // 8
 
     k_chunk = config.chunk_k16 * 16
@@ -233,27 +231,6 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig):
             % f"Required shared memory size {smem_size} exceeds device capacity {smem_capacity}"
         )
 
-    # Async loaders
-    # The loader automatically chooses 1D or 2D based on num_warps vs inner_axis_size
-    g.ALoader = AsyncStripLoader(
-        smem_tensor=g.ASmem,
-        gmem_tensor=g.AGlobal,
-        inner_axis="i16",
-        outer_axis="k16",
-        inner_axis_size=block_m16,
-        outer_axis_size=config.chunk_k16,
-        num_warps=config.warps,
-    )
-    g.BLoader = AsyncStripLoader(
-        smem_tensor=g.BSmem,
-        gmem_tensor=g.BGlobal,
-        inner_axis="j16",
-        outer_axis="k16",
-        inner_axis_size=block_n16,
-        outer_axis_size=config.chunk_k16,
-        num_warps=config.warps,
-    )
-
     # MMA fragments
     g.AFragment = Fragment(FragmentType.M16_K16_F16_A, "i", "k")
     g.BFragment = Fragment(FragmentType.N16_K16_F16_B, "k", "j")
@@ -264,6 +241,29 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig):
     g.BLoadSmem = g.BSmem.with_dim(g.BFragment.load_index)[LocalIndex]
     g.AStoreSmem = g.ASmem[ALoadGlobalIndex]
     g.BStoreSmem = g.BSmem[BLoadGlobalIndex]
+
+    # Async loaders
+    # The loader automatically chooses 1D or 2D based on num_warps vs inner_axis_size
+    g.ALoader = AsyncStripLoader(
+        smem_tensor=g.AStoreSmem,
+        gmem_tensor=g.AGlobal,
+        inner_axis="i16",
+        outer_axis="k16",
+        inner_axis_size=block_m16,
+        outer_axis_size=config.chunk_k16,
+        num_warps=config.warps,
+        num_buffers=2,
+    )
+    g.BLoader = AsyncStripLoader(
+        smem_tensor=g.BStoreSmem,
+        gmem_tensor=g.BGlobal,
+        inner_axis="j16",
+        outer_axis="k16",
+        inner_axis_size=block_n16,
+        outer_axis_size=config.chunk_k16,
+        num_warps=config.warps,
+        num_buffers=2,
+    )
 
     # Local memory tensors (i.e. registers)
     # - Each tensor "element" is itself a matrix fragment.

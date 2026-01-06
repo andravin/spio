@@ -344,11 +344,12 @@ class CursorInitializer(GenSpecsWithContext):
         return used
 
     def generate_with_context(self, user_data_types: List[str] = None) -> str:
-        """Generate the C++ factory functions.
+        """Generate the C++ cursor subclass.
 
-        Generates two overloads:
-        1. A factory that takes a raw pointer and constructs the tensor.
-        2. A factory that takes an existing tensor instance.
+        Generates a struct that:
+        - Inherits from the tensor's cursor_type
+        - Applies implicit subscripts at construction time
+        - Inherits all cursor methods (rebase, operator[], inbounds, get, etc.)
         """
         if self.class_name is None:
             raise ValueError("CursorInitializer requires a class_name")
@@ -356,8 +357,6 @@ class CursorInitializer(GenSpecsWithContext):
         tensor_class_name = self.tensor.get_class_name()
         if tensor_class_name is None:
             raise ValueError("Tensor must have a class_name set")
-
-        data_type_name = self.tensor._get_data_type_name(user_data_types)
 
         # Build the subscript chain
         subscript_chain = ""
@@ -367,32 +366,30 @@ class CursorInitializer(GenSpecsWithContext):
                 raise ValueError("Implicit dimension must have a class_name set")
             subscript_chain += f"[{dim_class_name}()]"
 
-        result = (
-            f"DEVICE auto {self.class_name}({data_type_name}* ptr) {{\n"
-            f"    return {tensor_class_name}(ptr){subscript_chain};\n"
-            f"}}\n"
-            f"DEVICE auto {self.class_name}({tensor_class_name} tensor) {{\n"
-            f"    return tensor{subscript_chain};\n"
-            f"}}\n"
-        )
-
-        # Generate factory overloads for all ancestor tensor types
+        # Generate constructor overloads for ancestor tensor types
+        ancestor_constructors = ""
         if self.tensor.ancestors:
             for ancestor in self.tensor.ancestors:
                 ancestor_class_name = ancestor.get_class_name()
                 if ancestor_class_name is None:
                     raise ValueError("Ancestor tensor must have a class_name set")
-                # Construct the derived tensor from the ancestor's pointer,
-                # cast to the correct data type. Tensors are always at origin,
-                # so no coordinate restoration is needed.
-                result += (
-                    f"DEVICE auto {self.class_name}({ancestor_class_name} tensor) {{\n"
-                    f"    return {tensor_class_name}(reinterpret_cast<{data_type_name}*>(tensor.get()))"
-                    f"{subscript_chain};\n"
-                    f"}}\n"
+                ancestor_constructors += (
+                    f"    DEVICE {self.class_name}({ancestor_class_name} tensor)\n"
+                    f"        : Base({tensor_class_name}("
+                    f"reinterpret_cast<data_type*>(tensor.get())){subscript_chain}) {{}}\n"
                 )
 
-        return result
+        return (
+            f"struct {self.class_name} : {tensor_class_name}::cursor_type {{\n"
+            f"    using Base = typename {tensor_class_name}::cursor_type;\n"
+            f"    using data_type = typename Base::data_type;\n"
+            f"    DEVICE {self.class_name}(data_type* ptr)\n"
+            f"        : Base({tensor_class_name}(ptr){subscript_chain}) {{}}\n"
+            f"    DEVICE {self.class_name}({tensor_class_name} tensor)\n"
+            f"        : Base(tensor{subscript_chain}) {{}}\n"
+            f"{ancestor_constructors}"
+            f"}};\n"
+        )
 
     @property
     def strides(self) -> Strides:

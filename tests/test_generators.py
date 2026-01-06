@@ -214,7 +214,7 @@ class TestCursorWithImplicitDims:
     """Test the CursorInitializer generator."""
 
     def test_implicit_dim_single(self):
-        """implicit_dim with single dimension should generate correct factory."""
+        """implicit_dim with single dimension should generate correct cursor subclass."""
         g = Generators()
         g.AGlobal = Tensor(dtype.half, Dims(warp=4, lane=32, i=8))
         g.ALoadIndex = CompoundIndex(Dims(warp=4, lane=32))
@@ -224,8 +224,8 @@ class TestCursorWithImplicitDims:
         assert g.AGlobalLoader.tensor is g.AGlobal
 
         code = generate(g)
-        assert "DEVICE auto AGlobalLoader(__half* ptr)" in code
-        assert "return AGlobal(ptr)[ALoadIndex()];" in code
+        assert "struct AGlobalLoader : AGlobal::cursor_type" in code
+        assert "Base(AGlobal(ptr)[ALoadIndex()])" in code
 
     def test_implicit_dim_multiple(self):
         """implicit_dim with multiple dimensions should chain subscripts."""
@@ -236,17 +236,19 @@ class TestCursorWithImplicitDims:
         g.AGlobalLoader = g.AGlobal.initializer(g.WarpIdx, g.LaneIdx)
 
         code = generate(g)
-        assert "return AGlobal(ptr)[WarpIdx()][LaneIdx()];" in code
+        assert "Base(AGlobal(ptr)[WarpIdx()][LaneIdx()])" in code
 
     def test_implicit_dim_constant_tensor(self):
-        """implicit_dim with constant tensor should use const pointer."""
+        """implicit_dim with constant tensor should inherit from cursor with const data."""
         g = Generators()
         g.AGlobal = Tensor(dtype.half, Dims(warp=4, lane=32), constant=True)
         g.ALoadIndex = CompoundIndex(Dims(warp=4, lane=32))
         g.AGlobalLoader = g.AGlobal.initializer(g.ALoadIndex)
 
         code = generate(g)
-        assert "DEVICE auto AGlobalLoader(const __half* ptr)" in code
+        # The struct inherits from the cursor type, which handles const-ness via data_type
+        assert "struct AGlobalLoader : AGlobal::cursor_type" in code
+        assert "using data_type = typename Base::data_type" in code
 
     def test_implicit_dim_used_generators(self):
         """implicit_dim's used_generators should include tensor and all dims."""
