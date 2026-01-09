@@ -95,7 +95,7 @@ extern "C" {
             mma(a_reg, b_reg, c_reg, c_reg);
         }
 
-        // Separate smem loads from in the main loop from smem stores in the epilogue.
+        // Separate smem loads in the main loop from smem stores in the epilogue.
         __syncthreads();
 
         // Allocate shared memory for transposing the output matrix.
