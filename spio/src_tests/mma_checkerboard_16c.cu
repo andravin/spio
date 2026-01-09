@@ -9,9 +9,9 @@ extern "C" {
 
     /// Test matrix multiplication using typed tensors with dimensional projection.
     ///
-    /// - c_ptr: result matrix with float16 precision.
-    /// - a_ptr: operand A matrix with float16 precision and format K16 x I x 16K
-    /// - b_ptr: operand B matrix with float16 precision and format K16 x J x 16K
+    /// - c_ptr: result matrix with float16 precision and format I16 x J16 x 16I x 16J
+    /// - a_ptr: operand A matrix with float16 precision and format I16 x K16 x 16I x 16K
+    /// - b_ptr: operand B matrix with float16 precision and format J16 x K16 x 16J x 16K
     __global__ void mma_checkerboard_16c(uint4* __restrict__ c_ptr, const uint4* __restrict__ a_ptr,
                                          const uint4* __restrict__ b_ptr) {
 
