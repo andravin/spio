@@ -434,6 +434,10 @@ Spio will likely find your CUDA toolkit installation automatically. To specify i
 
 ## Additional Requirements for torch.compile
 
+**Update**: New versions of PyTorch will include [fix](https://github.com/pytorch/pytorch/pull/170732)[(es)](https://github.com/triton-lang/triton/pull/8668) for the [issue](https://github.com/pytorch/pytorch/issues/116696)[(s)](https://github.com/triton-lang/triton/issues/8667) described below. Starting with PyTorch 2.10 (expected 21 January 2026), PyTorch runtime Docker images will include a C compiler, and Triton Language will link against libcuda.so.1, so torch.compile will work out of the box.
+
+---
+
 The Spio runtime does not need a host C/C++ compiler or the CUDA developer toolkit. You can use Spio operations with PyTorch on a production system that does not have these.
 
 However, torch.compile (Inductor/Triton) does. Without a C compiler installed, torch.compile will produce the error

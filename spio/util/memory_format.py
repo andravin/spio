@@ -1,8 +1,8 @@
 """Implement custom memory formats for PyTorch tensors."""
 
-import torch
-
 from typing import List
+
+import torch
 
 
 class SixteenChannelsLast:
