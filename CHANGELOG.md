@@ -10,6 +10,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## **[0.8.0] — 2026-01-08**
+
+### **Wave-based block traversal and loader encapsulation**
+
+This release improves L2 cache locality through wave-based block traversal and simplifies the kernel interface through loader encapsulation. Matrix multiply performance reaches 94% tensor core utilization on RTX 4090, exceeding cuBLAS by approximately 5%.
+
+#### Added
+
+* Wave-based block traversal for improved L2 cache hit rate (60% → 82%).
+* Inline PTX `cp.async.cg.shared.global.L2::128B` replaces `__pipeline_memcpy_async` intrinsic.
+* `TwoFold` tensor format for matrix layouts with two fold dimensions.
+* Dynamic shared memory with configurable carveout (100% default).
+* Extended `MmaConfig`: `warps_m`, `warps_n`, `wave_size`, `chunk_k16=4`.
+* Support for 128×256 and 256×128 block tiles.
+* Four-warp matrix multiply configurations with 2D async strip loader.
+* Per-load bounds masking for async strip loaders.
+* `prefetch_async()` method for initial tile loads before main loop.
+* Benchmark CLI: `--warp-m`, `--warp-n`, `--warps-m`, `--warps-n`, `--chunk-k16`, `--unroll-depth`, `--wave-size`, `--pytorch`.
+* Predicates in disasm output for SASS analysis.
+* `Tensor.__getitem__` as synonym for `initializer()`.
+* Support for CUDA 13.x (runtime detection of CUDA version from PyTorch).
+
+#### Changed
+
+* Loaders now own both smem and global cursors internally.
+* `copy_async(phase)` replaces `copy_async(smem_phase, global_phase)`.
+* `CursorInitializer` now creates `Cursor` subclass.
+* Global matrix layout changed to I16 × K16 × I × K8.
+* Swap inner/outer loop nesting in `AsyncStripLoader2D` for better address locality.
+* Rename `derive_dim` to `with_dim`.
+* Split derived dimension protocols: `DerivedDimension` and `SizedDerivedDimension`.
+* Eliminate one `__syncthreads()` from main loop.
+* Remove explicit nvidia-cuda-* dependencies; PyTorch manages CUDA package versions.
+
+#### Fixed
+
+* Add `__restrict__` to global memory pointers in loaders.
+
+### Performance Models
+
+* No changes to convolution kernels.
+* Performance model archives from 0.7.x are compatible.
+
+---
+
 ## **[0.7.1] — 2025-12-28**
 
 ### **Python 3.9 compatibility fix**

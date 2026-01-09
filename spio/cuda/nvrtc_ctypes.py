@@ -5,10 +5,22 @@ import ctypes
 from typing import List, Tuple
 from enum import Enum
 
+import torch
 from importlib_resources import files as importlib_resources_files
 
 
-NVRTC_LIB = "libnvrtc.so.12"
+def _get_cuda_major_version() -> int:
+    """Get the CUDA major version from PyTorch."""
+    cuda_version = torch.version.cuda
+    if cuda_version is None:
+        raise ValueError(
+            "PyTorch was not built with CUDA support. "
+            "Please install a CUDA-enabled version of PyTorch."
+        )
+    return int(cuda_version.split(".", maxsplit=1)[0])
+
+
+NVRTC_LIB = f"libnvrtc.so.{_get_cuda_major_version()}"
 
 
 def _find_libnvrtc() -> str:

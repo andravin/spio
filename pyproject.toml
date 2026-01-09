@@ -11,11 +11,9 @@ build-backend = "setuptools.build_meta"
 [project]
 description = "Experimental CUDA kernel framework unifying typed dimensions, NVRTC JIT specialization, and ML‑guided tuning."
 name = "spio"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
   "torch>=2.4.0",
-  "nvidia-cuda-nvrtc-cu12",
-  "nvidia-cuda-runtime-cu12",
   "pytest",
   "xgboost",
   "appdirs",
