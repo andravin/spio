@@ -75,14 +75,19 @@ class AsyncStripLoader(GenSpecs):
         smem_buffer_stride = smem_stride * self.outer_axis_size
         gmem_buffer_stride = gmem_stride * self.outer_axis_size
 
+        data_type_name = smem.data_type.value.name
+
         params = self._gen_strip_loader_params()
         base_params = _make_args_list(
-            gmem.data_type.value.name,
+            self.smem_tensor.class_name,
+            self.gmem_tensor.class_name,
+            data_type_name,
             smem_stride,
             gmem_stride,
             f"{params}::num_loads",
             smem_buffer_stride,
             gmem_buffer_stride,
+            self.num_buffers,
         )
         base = f"spio::AsyncStripLoader<{base_params}>"
 
@@ -132,8 +137,12 @@ class {self.class_name} : public {base}
         inner_step_dim = gmem_inner_axis
         inner_step_size = self.num_warps * fold_ratio
 
+        data_type = smem.data_type.value.name
+
         base_params = _make_args_list(
-            gmem.data_type.value.name,
+            self.smem_tensor.class_name,
+            self.gmem_tensor.class_name,
+            data_type,
             smem_stride_inner_total,
             gmem_stride_inner_total,
             num_inner,
@@ -144,6 +153,7 @@ class {self.class_name} : public {base}
             inner_step_size,
             smem_buffer_stride,
             gmem_buffer_stride,
+            self.num_buffers,
         )
         base = f"spio::AsyncStripLoader2D<{base_params}>"
 

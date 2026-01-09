@@ -21,30 +21,17 @@ extern "C" {
         // Create an allocator for shared memory.
         auto smem_allocator = StackAllocator(smem);
 
-        // Set up views of global memory matrices A and B.
-        auto a_global = AGlobal(a_ptr);
-        auto b_global = BGlobal(b_ptr);
-
-        // Get the size of the main loop.
-        constexpr auto size = a_global.extent<K>();
-        constexpr auto step = K_CHUNK(1).fold<16>();
-        constexpr auto double_step = K_CHUNK(2).fold<16>();
-
         // Allocate shared memory for A and B.
         auto a_smem = ASmem::allocate(smem_allocator);
         auto b_smem = BSmem::allocate(smem_allocator);
 
-        // Set up store ..
-        auto a_store_smem = AStoreSmem(a_smem).rebase();
-        auto b_store_smem = BStoreSmem(b_smem).rebase();
+        // Set up loaders for A and B.
+        auto a_loader = ALoader(a_smem.get(), a_ptr);
+        auto b_loader = BLoader(b_smem.get(), b_ptr);
 
-        // .. and load views of the shared memory for A and B.
+        // Set up load views of the shared memory for A and B.
         auto a_load_smem = ALoadSmem(a_smem).rebase();
         auto b_load_smem = BLoadSmem(b_smem).rebase();
-
-        // Set up loaders for A and B (compute per-load inbounds masks).
-        auto a_loader = ALoader(a_store_smem, a_global);
-        auto b_loader = BLoader(b_store_smem, b_global);
 
         // Allocate registers for the local matrices.
         AReg::data_type a_data[AReg::storage_size()];
@@ -57,16 +44,19 @@ extern "C" {
         auto c_reg = CReg(c_data);
         c_reg.zero();
 
+        // Get the size of the main loop.
+        constexpr auto size = AGlobal::extent<K>();
+        constexpr auto step = K_CHUNK(1).fold<16>();
+
         // Prefetch the first k_chunk of data from A and B.
         if constexpr (size > K(0)) {
-            a_loader.copy_async();
-            b_loader.copy_async();
+            a_loader.prefetch_async();
+            b_loader.prefetch_async();
             __pipeline_commit();
             a_loader.step(1);
             b_loader.step(1);
         }
 
-        // Aggressive unrolling of the main loop improves arithmetic utilization.
 #pragma unroll MAIN_LOOP_UNROLL_DEPTH
         for (auto k_double_chunk : range(K_DOUBLE_CHUNK(size))) {
 
@@ -80,14 +70,14 @@ extern "C" {
                 // If not the last iteration ..
                 if (k_double_chunk + step * (phase + 1) < size) {
                     // .. copy the next tile into the back buffer.
-                    a_loader.copy_async(1 - phase, phase);
-                    b_loader.copy_async(1 - phase, phase);
+                    a_loader.copy_async(phase);
+                    b_loader.copy_async(phase);
                 }
                 __pipeline_commit();
 
                 // Load matrix tiles from the front buffer.
-                a_reg.load(a_load_smem[step * phase]);
-                b_reg.load(b_load_smem[step * phase]);
+                a_reg.load(a_load_smem[step * (1 - phase)]);
+                b_reg.load(b_load_smem[step * (1 - phase)]);
 
                 // Matrix multiply-accumulate the tiles using Tensor Cores.
                 mma(a_reg, b_reg, c_reg, c_reg);
