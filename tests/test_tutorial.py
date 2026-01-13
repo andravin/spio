@@ -13,13 +13,6 @@ from spio.generators import *
 from spio.generators import GENERATORS
 from spio.util import env_var_is_true
 
-DIM_EXAMPLES = [
-    "01_commutativity",
-    "02_cursor_movement",
-    "03_folding",
-    "04_projection",
-    "05_compound_index",
-]
 
 ENABLE_CPP_TESTS = env_var_is_true("SPIO_ENABLE_CPP_TESTS")
 
@@ -44,13 +37,22 @@ RESOURCE_PACKAGES = [
 
 
 @pytest.mark.skipif(not ENABLE_CPP_TESTS, reason="NVCC support not required by default")
-def test_tutorial():
+@pytest.mark.parametrize(
+    "example",
+    [
+        "01_commutativity",
+        "02_cursor_movement",
+        "03_folding",
+        "04_projection",
+        "05_compound_index",
+    ],
+)
+def test_tutorial(example):
     """Test all dim examples."""
-    for example in DIM_EXAMPLES:
-        try:
-            _compile_dim_example(example)
-        except CalledProcessError as e:
-            pytest.fail(f"Dim example {example} failed to compile or run: {e}")
+    try:
+        _compile_dim_example(example)
+    except CalledProcessError as e:
+        pytest.fail(f"Dim example {example} failed to compile or run: {e}")
 
 
 def _compile_dim_example(example_name: str):
@@ -108,13 +110,31 @@ def _extract_specs(source: str) -> Generators:
     A = Tensor(dtype.float, Dims(i=16, k=32))
     B = Tensor(dtype.float, Dims(k=32, j=64))
     @spio*/
+
+    Statements are executed line-by-line so that Dim objects get their names
+    set (via Generators assignment) before they're used in subsequent lines.
+
+    A shared namespace is used across all @spio blocks so that Dim objects
+    defined in earlier blocks can be reused in later blocks.
     """
     matches = SPIO_PATTERN.findall(source)
     g = Generators()
+    # Use a single shared namespace across all @spio blocks
+    namespace = dict(EVAL_NAMESPACE)
     for match in matches:
-        namespace = dict(EVAL_NAMESPACE)
-        exec(match, namespace)
-        for name, value in namespace.items():
-            if name not in EVAL_NAMESPACE:
+        # Execute line-by-line so Dim names are set before use in Tensor/etc.
+        for line in match.strip().split("\n"):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            exec(line, namespace)
+    # After all lines are executed, add capitalized specs to Generators.
+    # This ensures Folds are named (via I16 = I / 16) before CompoundIndex/Tensor
+    # specs that reference them are added.
+    for name, value in namespace.items():
+        if name not in EVAL_NAMESPACE and hasattr(value, "_set_class_name"):
+            # Only add capitalized names (Dim, Fold, Tensor, etc.)
+            # Skip lowercase names like StaticDim/StaticFold instances (i, k, etc.)
+            if name[0].isupper():
                 setattr(g, name, value)
     return g

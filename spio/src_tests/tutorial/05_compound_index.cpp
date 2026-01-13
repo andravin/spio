@@ -3,9 +3,26 @@
 #include <numeric>
 
 /*@spio
-BlockIndex = CompoundIndex(Dims(i16=32, j16=32))
-ThreadIndex = CompoundIndex(Dims(i=16, j=16))
-A = Tensor(dtype.float, Dims(i=512, j=512))
+
+# Define the dimensions.
+I = Dim()
+J = Dim()
+
+# Define the sizes.
+i = I(512)
+j = J(512)
+
+# Define compound indices for blocks and threads.
+BlockIndex = CompoundIndex(Dims(i / 16, j / 16))
+ThreadIndex = CompoundIndex(Dims(i % 16, j % 16))
+
+# Define tensor A using dimensions i x j
+A = Tensor(dtype.float, Dims(i, j))
+
+# Define aliases for I / 16 and J / 16.
+I16 = I / 16
+J16 = J / 16
+
 @spio*/
 UTEST(Lesson5, CompoundIndex) {
 

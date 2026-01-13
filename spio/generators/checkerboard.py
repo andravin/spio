@@ -1,8 +1,10 @@
 """Implements the CheckerboardSpec class for tensor layout. Use with IndexSpec and TensorSpec."""
 
 from dataclasses import dataclass
+from typing import Union
 
 from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
+from .dim_arg import DimArg, normalize_dim_arg
 from .gen_specs import GenSpecs
 from .derived_dimension import SizedDerivedDimension
 
@@ -15,25 +17,21 @@ class Checkerboard(GenSpecs, SizedDerivedDimension):
     be set from the attribute name.
 
     Attributes:
-        pairs_dim: The dimension name for pairs.
-        colors_dim: The dimension name for colors.
+        pairs_dim: The dimension for pairs (str, Dim, or Fold).
+        colors_dim: The dimension for colors (str, Dim, or Fold).
         class_name: The name of the generated class (optional with Generators).
-        offset_dim: The dimension name for offset (default: "LANE").
+        offset_dim: The dimension for offset (str, Dim, or Fold; default: "LANE").
         ranks: Number of ranks (default: 8).
     """
 
-    pairs_dim: str
-    colors_dim: str
+    pairs_dim: DimArg
+    colors_dim: DimArg
     class_name: str = None
-    offset_dim: str = "LANE"
+    offset_dim: DimArg = "LANE"
     size: int = 32
     ranks: int = 8
 
-    def __post_init__(self):
-        """Normalize the dimension names to upper-case."""
-        object.__setattr__(self, "pairs_dim", self.pairs_dim.upper())
-        object.__setattr__(self, "colors_dim", self.colors_dim.upper())
-        object.__setattr__(self, "offset_dim", self.offset_dim.upper())
+    # No __post_init__ - dimension names are resolved lazily in generate() and dim_names
 
     def _set_class_name(self, name: str) -> None:
         """Set the class name for this checkerboard.
@@ -52,9 +50,12 @@ class Checkerboard(GenSpecs, SizedDerivedDimension):
 
     def generate(self) -> str:
         """Return the CUDA / C++ source code for the checkerboard index subclass."""
-        pairs_dim_class_name = dim_name_to_dim_or_fold_class_name(self.pairs_dim)
-        colors_dim_class_name = dim_name_to_dim_or_fold_class_name(self.colors_dim)
-        offset_dim_class_name = dim_name_to_dim_or_fold_class_name(self.offset_dim)
+        pairs = normalize_dim_arg(self.pairs_dim)
+        colors = normalize_dim_arg(self.colors_dim)
+        offset = normalize_dim_arg(self.offset_dim)
+        pairs_dim_class_name = dim_name_to_dim_or_fold_class_name(pairs)
+        colors_dim_class_name = dim_name_to_dim_or_fold_class_name(colors)
+        offset_dim_class_name = dim_name_to_dim_or_fold_class_name(offset)
         if offset_dim_class_name in BUILTIN_DIM_NAMES:
             offset_dim_class_name = "spio::" + offset_dim_class_name
         pars = f"{self.ranks}, {pairs_dim_class_name}, {colors_dim_class_name}, {offset_dim_class_name}"
@@ -63,7 +64,11 @@ class Checkerboard(GenSpecs, SizedDerivedDimension):
     @property
     def dim_names(self):
         """Return the names of the dimensions."""
-        return (self.pairs_dim, self.colors_dim, self.offset_dim)
+        return (
+            normalize_dim_arg(self.pairs_dim),
+            normalize_dim_arg(self.colors_dim),
+            normalize_dim_arg(self.offset_dim),
+        )
 
 
 def header():

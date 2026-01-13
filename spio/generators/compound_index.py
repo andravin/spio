@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from .dims import Dims, Strides, compute_full_strides
 from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
+from .dim_arg import DimArg, normalize_dim_arg
 from .built_in import BuiltIn
 from .gen_specs import GenSpecsWithContext, GenSpecs
 from .derived_dimension import DerivedDimension
@@ -112,6 +113,10 @@ class CompoundIndex(GenSpecsWithContext, DerivedDimension):
             product *= size
         return product
 
+    def used_generators(self) -> list:
+        """Return Dim and Fold objects used by this CompoundIndex."""
+        return self.dims.used_generators()
+
     @property
     def dim_names(self) -> Generator[str, None, None]:
         """Return the names of the dimensions in the index."""
@@ -140,12 +145,14 @@ def _generate_index(
     specializations = []
 
     # Generate DimInfo parameters for each dimension
-    for name, size_value in dims.items():
+    # Use items_with_cached_key to get both the cached key (for stride lookup)
+    # and the current name (for generated code)
+    for cached_key, name, size_value in dims.items_with_cached_key():
         # Handle the size (now all integers)
         size_str = str(size_value)
 
-        # Get the stride for this dimension
-        stride = strides[name]
+        # Get the stride for this dimension (using cached key)
+        stride = strides[cached_key]
 
         # Use dim_name_to_dim_or_fold_class_name to handle both regular and fold dimensions
         dim_class = dim_name_to_dim_or_fold_class_name(name)
@@ -205,7 +212,7 @@ class CompoundIndexPartition(GenSpecs):
     """
 
     base_index: CompoundIndex
-    partition_dim: str
+    partition_dim: DimArg
     partition_index: CompoundIndex
     function_name: str = None
 
@@ -241,8 +248,9 @@ class CompoundIndexPartition(GenSpecs):
                 "CompoundIndexPartition requires a partition_index with a function_name"
             )
 
-        partition_dim = dim_name_to_dim_or_fold_class_name(self.partition_dim.upper())
-        if partition_dim in BUILTIN_DIM_NAMES:
+        partition_dim_name = normalize_dim_arg(self.partition_dim)
+        partition_dim = dim_name_to_dim_or_fold_class_name(partition_dim_name)
+        if partition_dim_name in BUILTIN_DIM_NAMES:
             partition_dim = "spio::" + partition_dim
 
         return f"""

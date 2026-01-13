@@ -5,6 +5,7 @@
 /*@spio
 I = Dim()
 J = Dim()
+K = Dim()
 @spio*/
 
 UTEST(Lesson1, TypeSafety) {
@@ -23,14 +24,14 @@ UTEST(Lesson1, TypeSafety) {
     //
     // Orthogonal dimensions can be added to produce a coordinates list:
     //
-    EXPECT_TRUE(I(3) + J(4) == spio::make_coordinates(I(3), J(4)));
+    EXPECT_TRUE(I(3) + J(4) + K(5) == spio::make_coordinates(I(3), J(4), K(5)));
 }
 
 // Define tensors A and B using dimensions I(16) × K(32) and K(32) × J(64).
 //
 /*@spio
-A = Tensor(dtype.float, Dims(i=16, k=32))
-B = Tensor(dtype.float, Dims(k=32, j=64))
+A = Tensor(dtype.float, Dims(I(16), K(32)))
+B = Tensor(dtype.float, Dims(K(32), J(64)))
 @spio*/
 UTEST(Lesson1, Commutativity) {
 

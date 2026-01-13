@@ -231,7 +231,7 @@ def _test_generate_coordinates_with_anonymous_folds():
 
     This mirrors the cleaner usage in test_mma_checkerboard.py where Folds
     are created inline without explicit fold_name - the generate() function
-    automatically assigns names like _FOLD_1, _FOLD_2 (uppercase).
+    automatically assigns names like _ANONFOLDA, _ANONFOLDB.
     """
     specs = [
         gen.Dim("i"),
@@ -257,8 +257,8 @@ UTEST(AnonCoordinates, anonymous_folds_are_generated)
     auto coords = BlockIdx();
     // blockIdx.y = 42, blockIdx.x = 3
     // Anonymous folds get auto-generated names, but order is not guaranteed
-    auto f1 = coords.get<_FOLD_1>().get();
-    auto f2 = coords.get<_FOLD_2>().get();
+    auto f1 = coords.get<_ANONFOLDA>().get();
+    auto f2 = coords.get<_ANONFOLDB>().get();
     // Check that we got both values (in some order)
     EXPECT_EQ(std::max(f1, f2), 42);
     EXPECT_EQ(std::min(f1, f2), 3);
@@ -269,9 +269,9 @@ UTEST(AnonCoordinates, anonymous_folds_unfold_correctly)
     using namespace AnonCoordinates_GenCode;
     auto coords = BlockIdx();
     // Each fold has stride 64, so unfold multiplies by 64
-    // Order of _FOLD_1 vs _FOLD_2 is not guaranteed
-    auto f1 = coords.get<_FOLD_1>().unfold().get();
-    auto f2 = coords.get<_FOLD_2>().unfold().get();
+    // Order of _ANONFOLDA vs _ANONFOLDB is not guaranteed
+    auto f1 = coords.get<_ANONFOLDA>().unfold().get();
+    auto f2 = coords.get<_ANONFOLDB>().unfold().get();
     // Check that we got both unfolded values (in some order)
     EXPECT_EQ(std::max(f1, f2), 42 * 64);
     EXPECT_EQ(std::min(f1, f2), 3 * 64);

@@ -30,35 +30,54 @@ def generate(
         The generated CUDA code as a string.
     """
 
-    # 0. Collect unnamed generators (using dict keyed by id to handle unhashable specs)
+    # 0. Recursively collect all used generators (using dict keyed by id to handle unhashable specs)
+    # These are the Dim/Fold objects referenced by Tensors etc. that need code generated.
+    def collect_recursive(spec, collected):
+        """Recursively collect all used generators from a spec."""
+        spec_id = id(spec)
+        if spec_id in collected:
+            return
+        collected[spec_id] = spec
+        if hasattr(spec, "used_generators"):
+            for used_spec in spec.used_generators():
+                collect_recursive(used_spec, collected)
+
     used_generators_by_id = {}
     for spec in gen_specs:
-        for used_spec in spec.used_generators():
-            used_generators_by_id[id(used_spec)] = used_spec
+        collect_recursive(spec, used_generators_by_id)
 
-    anon_genspecs = [
-        used_spec
-        for used_spec in used_generators_by_id.values()
-        if used_spec.get_class_name() is None
-    ]
+    # Auto-name any that don't have names yet
+    for used_spec in used_generators_by_id.values():
+        if (
+            hasattr(used_spec, "get_class_name")
+            and hasattr(used_spec, "_set_class_name")
+            and used_spec.get_class_name() is None
+        ):
+            _generate_name(used_spec)
 
-    # .. and assign them class names.
-    for spec in anon_genspecs:
-        _generate_name(spec)
+    # Also auto-name any top-level specs that don't have names
+    for spec in gen_specs:
+        if (
+            hasattr(spec, "get_class_name")
+            and hasattr(spec, "_set_class_name")
+            and spec.get_class_name() is None
+        ):
+            _generate_name(spec)
 
-    # Combine all generator specifications.
-    gen_specs = list(gen_specs) + anon_genspecs
+    # Combine all generator specifications - include ALL used generators
+    # (they may have been auto-named in Dims or here, but still need code generation)
+    gen_specs = list(gen_specs) + list(used_generators_by_id.values())
 
     # 1. Find explicitly declared Fold specs
     explicit_folds = {
         spec.fold_name: spec for spec in gen_specs if isinstance(spec, Fold)
     }
 
-    # Track all dimension names used as dim_name in fold specs
-    folded_dim_names = {spec.dim_name for spec in gen_specs if isinstance(spec, Fold)}
+    # Track all fold names - these are NOT base dimensions
+    fold_names = set(explicit_folds.keys())
 
-    # Also track the fold_name values from explicit folds (e.g., "block_p")
-    fold_aliases = set(explicit_folds.keys())
+    # Track all dimension names used as dim_name in fold specs (the base dim of each fold)
+    folded_dim_names = {spec.dim_name for spec in gen_specs if isinstance(spec, Fold)}
 
     # 2. Find all dimension names used in any specs
     all_dim_names = set()
@@ -71,19 +90,22 @@ def generate(
     implicit_folds = {}  # Use dict keyed by fold_name to avoid duplicates
 
     for name in all_dim_names:
-        # Skip names that are fold_aliases (like "block_p") since they're not base dimensions
-        if name in fold_aliases:
+        # Skip names that are known fold names (explicit folds from Fold objects)
+        if name in fold_names:
             continue
 
         base_name, stride = _get_dim_name_and_stride(name)
         if stride is not None:
-            # This is a fold dimension (e.g., "c4")
+            # This is an implicit fold dimension (e.g., "K16" when K16 wasn't explicitly declared)
             if name not in folded_dim_names and name not in explicit_folds:
                 # Only create implicit folds if not explicitly declared
                 # and not used as dim_name in a fold spec
                 implicit_folds[name] = Fold(base_name, stride, fold_name=name)
-                fold_aliases.add(name)  # Add to fold_aliases to exclude from base dims
-        base_dims.add(Dim(base_name))
+                fold_names.add(name)  # Add to fold_names to exclude from base dims
+            base_dims.add(Dim(base_name))
+        else:
+            # No numeric suffix - this is a base dimension name
+            base_dims.add(Dim(base_name))
 
     # 4. Make sure all base dimensions for folds are created
     for fold in list(explicit_folds.values()) + list(implicit_folds.values()):
@@ -229,7 +251,23 @@ def _end_namespace() -> str:
     return "}\n"
 
 
+def _counter_to_alpha(n: int) -> str:
+    """Convert a counter to an alphabetic suffix (a, b, c, ..., aa, ab, ...)."""
+    result = []
+    while n > 0:
+        n -= 1  # Make 1-indexed (1->a, 2->b, etc.)
+        result.append(chr(ord("a") + (n % 26)))
+        n //= 26
+    return "".join(reversed(result)) if result else "a"
+
+
 def _generate_name(spec: GenSpecs) -> None:
-    """Generate a class name for an unnamed generator specification."""
+    """Generate a class name for an unnamed generator specification.
+
+    Note: We use alphabetic suffixes (a, b, c, ...) to avoid numeric suffixes
+    like _Dim_1 which would be misinterpreted as fold dimensions.
+    """
     prefix = type(spec).__name__
-    spec._set_class_name(f"_{prefix}_{next(_anon_counter)}")
+    counter = next(_anon_counter)
+    alpha_suffix = _counter_to_alpha(counter)
+    spec._set_class_name(f"_Anon{prefix}{alpha_suffix}")

@@ -3,6 +3,7 @@
 from typing import Tuple
 from dataclasses import dataclass
 
+from .dim_arg import DimArg, normalize_dim_arg
 from .fragment_type import FragmentType
 from .gen_specs import GenSpecs
 from .derived_dimension import DerivedDimension
@@ -33,20 +34,17 @@ class Fragment(GenSpecs):
 
     Attributes:
         fragment_type: Type of the fragment (see spio.include.spio / fragment.cuh)
-        row: Name of the row dimension.
-        col: Name of the column dimension.
+        row: Row dimension (str, Dim, or Fold).
+        col: Column dimension (str, Dim, or Fold).
         class_name: Name of the fragment class (optional with Generators).
     """
 
     fragment_type: FragmentType
-    row: str
-    col: str
+    row: DimArg
+    col: DimArg
     class_name: str = None
 
-    def __post_init__(self):
-        """Normalize the row and column dimension names to upper-case."""
-        object.__setattr__(self, "row", self.row.upper())
-        object.__setattr__(self, "col", self.col.upper())
+    # No __post_init__ - dimension names are resolved lazily in generate() and dim_names
 
     def _set_class_name(self, name: str) -> None:
         """Set the class name for this fragment.
@@ -61,8 +59,8 @@ class Fragment(GenSpecs):
 
     def generate(self) -> str:
         """Generate the fragment class code as a type alias."""
-        row_dim = self.row
-        col_dim = self.col
+        row_dim = normalize_dim_arg(self.row)
+        col_dim = normalize_dim_arg(self.col)
         fragment_class = f"spio::{self.fragment_type.value}<{row_dim}, {col_dim}>"
         return f"using {self.class_name} = {fragment_class};\n"
 
@@ -79,7 +77,7 @@ class Fragment(GenSpecs):
     @property
     def dim_names(self) -> Tuple[str, str]:
         """Return the names of the dimensions."""
-        return (self.row, self.col)
+        return (normalize_dim_arg(self.row), normalize_dim_arg(self.col))
 
 
 class FragmentLoadIndex(GenSpecs, DerivedDimension):

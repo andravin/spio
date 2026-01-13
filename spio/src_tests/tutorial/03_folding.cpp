@@ -1,10 +1,24 @@
 #include "tutorial.h"
 
 // Define a Tensor with a folded dimension K and interleaved layout.
-// Layout: K8(4) x I(4) x K(8)
+// Layout: K / 8 x I x K % 8
 
 /*@spio
-A = Tensor(dtype.float, Dims(k8=4, i=4, k=-1))
+
+# Define dimensions
+I = Dim()
+K = Dim()
+
+# Define sizes.
+i = I(4)
+k = K(32)
+
+# Define tensor with folded dimensions.
+A = Tensor(dtype.float, Dims(k / 8, i, k % 8))
+
+# Define a fold alias.
+K8 = K / 8
+
 @spio*/
 
 UTEST(Lesson3, Folding) {
@@ -12,8 +26,6 @@ UTEST(Lesson3, Folding) {
     // Create tensor a.
     A::data_type data[A::storage_size()];
     auto a = A(data);
-
-    // Folded dimension K8 is dimension K folded by stride 8.
 
     // Dimensions are compatible with their folds:
     EXPECT_TRUE(K8(3) == K(3 * 8));
