@@ -35,6 +35,7 @@ Spio dimensions behave like integers. Because dimensions are types, it is not po
 /*@spio
 I = Dim()
 J = Dim()
+K = Dim()
 @spio*/
 
 UTEST(Lesson1, TypeSafety) {
@@ -53,7 +54,7 @@ UTEST(Lesson1, TypeSafety) {
     //
     // Orthogonal dimensions can be added to produce a coordinates list:
     //
-    EXPECT_TRUE(I(3) + J(4) == spio::make_coordinates(I(3), J(4)));
+    EXPECT_TRUE(I(3) + J(4) + K(5) == spio::make_coordinates(I(3), J(4), K(5)));
 }
 ```
 
@@ -67,8 +68,8 @@ Typed dimensions also enable something we call **dimensional projection**: a coo
 // Define tensors A and B using dimensions I(16) × K(32) and K(32) × J(64).
 //
 /*@spio
-A = Tensor(dtype.float, Dims(i=16, k=32))
-B = Tensor(dtype.float, Dims(k=32, j=64))
+A = Tensor(dtype.float, Dims(I(16), K(32)))
+B = Tensor(dtype.float, Dims(K(32), J(64)))
 @spio*/
 UTEST(Lesson1, Commutativity) {
 
@@ -112,7 +113,9 @@ Spio uses Cursors: lightweight, multi-dimensional pointers that traverse tensor 
 
 ```cpp
 /*@spio
-A = Tensor(dtype.float, Dims(i=10, j=10))
+I = Dim()
+J = Dim()
+A = Tensor(dtype.float, Dims(I(10), J(10)))
 @spio*/
 
 UTEST(Lesson2, RelativeMovement) {
@@ -133,7 +136,7 @@ UTEST(Lesson2, RelativeMovement) {
     b.step(J(1));
 
     // Verify movement.
-    EXPECT_EQ(b.get() - a_data, 3 * 10 + 3);
+    EXPECT_TRUE(b.get() - a_data == 3 * 10 + 3);
 }
 
 UTEST(Lesson2, AccumulationLoop) {
@@ -157,16 +160,30 @@ UTEST(Lesson2, AccumulationLoop) {
 
 ### 3. Folded Dimensions
 
-The generator `Dims(k8=4, i=4, k=-1)` creates a tensor with physical layout $K_8(4) \times I(4) \times K(8)$. Here, $K_8$ and $K$ together address the full logical range $K(0) \ldots K(31)$: $K_8$ selects which chunk of 8 (the quotient), and $K$ selects within that chunk (the remainder). This decomposition enables interleaved and vectorized memory layouts while letting you write loops over the logical dimension $K$.
+The generator `Dims(K / 8, I, K % 8)` creates a tensor with physical layout $(K/8) \times I \times (K \bmod 8)$. Here, `K / 8` and `K % 8` together address the full logical range $K(0) \ldots K(31)$: `K/8` selects which chunk of 8 (the quotient), and `K % 8` selects within that chunk (the remainder). This decomposition enables interleaved and vectorized memory layouts while letting you write loops over the logical dimension $K$.
 
 **File:** [03_folding.cpp](spio/src_tests/tutorial/03_folding.cpp)
 
 ```cpp
 // Define a Tensor with a folded dimension K and interleaved layout.
-// Layout: K8(4) x I(4) x K(8)
+// Layout: (K / 8) x I x (K % 8)
 
 /*@spio
-A = Tensor(dtype.float, Dims(k8=4, i=4, k=-1))
+
+# Define dimensions
+I = Dim()
+K = Dim()
+
+# Define sizes.
+i = I(4)
+k = K(32)
+
+# Define tensor with folded dimensions.
+A = Tensor(dtype.float, Dims(k / 8, i, k % 8))
+
+# Define a fold alias.
+K8 = K / 8
+
 @spio*/
 
 UTEST(Lesson3, Folding) {
@@ -174,8 +191,6 @@ UTEST(Lesson3, Folding) {
     // Create tensor a.
     A::data_type data[A::storage_size()];
     auto a = A(data);
-
-    // Folded dimension K8 is dimension K folded by stride 8.
 
     // Dimensions are compatible with their folds:
     EXPECT_TRUE(K8(3) == K(3 * 8));
@@ -207,10 +222,12 @@ UTEST(Lesson3, Folding) {
 Spio accumulates subscripts in logical coordinates before folding, so repeated subscripts are equivalent to their sum. This enables correct carry-over when subscripts cross fold boundaries:
 
 ```cpp
-// K(4) + K(4) == K8(1)
+// Example: K(4) + K(4) = K(4 + 4), which carries into K8.
 EXPECT_TRUE(*a[i][K(4)][K(4)] == *a[i][K8(1)]);
 
-// K(7) + K(5) = K(12) == K8(1) + K(4)
+// This also works when the sum crosses fold boundaries.
+// K(7) + K(5) = K(12) = K8(1) + K(4)
+EXPECT_TRUE(*a[i][K(7)][K(5)] == *a[i][K(7 + 5)]);
 EXPECT_TRUE(*a[i][K(7)][K(5)] == *a[i][K8(1)][K(4)]);
 ```
 
@@ -227,10 +244,20 @@ With dimensional projection, individual dimensions disappear from the program. T
 ```cpp
 // Define tensors A, B, C, and C_tile
 /*@spio
-A = Tensor(dtype.float, Dims(i=16, k=32))
-B = Tensor(dtype.float, Dims(k=32, j=64))
-C = Tensor(dtype.float, Dims(i=16, j=64))
-C_tile = Tensor(dtype.float, Dims(i=8, j=32), strides=Strides(i=64))
+
+# Define dimensions.
+I = Dim()
+J = Dim()
+K = Dim()
+
+# Define tensors for matrices A, B, and C.
+A = Tensor(dtype.float, Dims(I(16), K(32)))
+B = Tensor(dtype.float, Dims(K(32), J(64)))
+C = Tensor(dtype.float, Dims(I(16), J(64)))
+
+# Define a tensor for tiles of matrix C with custom stride.
+C_tile = Tensor(dtype.float, Dims(I(8), J(32)), strides=Strides(I(64)))
+
 @spio*/
 UTEST(Lesson4, DimensionalProjection) {
 
@@ -287,9 +314,26 @@ Spio uses a compound index to fold a linear offset into multiple dimensions. A c
 
 ```cpp
 /*@spio
-BlockIndex = CompoundIndex(Dims(i16=32, j16=32))
-ThreadIndex = CompoundIndex(Dims(i=16, j=16))
-A = Tensor(dtype.float, Dims(i=512, j=512))
+
+# Define the dimensions.
+I = Dim()
+J = Dim()
+
+# Define the sizes.
+i = I(512)
+j = J(512)
+
+# Define compound indices for blocks and threads.
+BlockIndex = CompoundIndex(Dims(i / 16, j / 16))
+ThreadIndex = CompoundIndex(Dims(i % 16, j % 16))
+
+# Define tensor A using dimensions i x j
+A = Tensor(dtype.float, Dims(i, j))
+
+# Define aliases for I / 16 and J / 16.
+I16 = I / 16
+J16 = J / 16
+
 @spio*/
 UTEST(Lesson5, CompoundIndex) {
 

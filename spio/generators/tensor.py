@@ -44,18 +44,38 @@ class Tensor(GenSpecsWithContext):
     constant: bool = False
     derived_dims: List[DerivedDimension] = None
     ancestors: List["Tensor"] = None
+    _initialized: bool = False
 
     def __post_init__(self):
         if isinstance(self.dims, dict):
             self.dims = Dims(**self.dims)
         if isinstance(self.strides, dict):
             self.strides = Strides(**self.strides)
+        # Defer validation and stride computation until first use
+        # This allows Dim objects to have their names set after Tensor creation
+
+    def _ensure_initialized(self):
+        """Lazily initialize strides and validate dims.
+
+        This is deferred from __post_init__ to allow Dim objects used in
+        StaticDim to have their names set after Tensor creation.
+        """
+        if self._initialized:
+            return
+        self._initialized = True
+
+        # Validate strides are in dims - but only for string-based (legacy) mode.
+        # Object-based mode uses identity matching in compute_full_strides.
         if self.strides is not None:
-            for stride_name in self.strides.keys():
-                if stride_name not in self.dims:
-                    raise ValueError(
-                        f"Stride name '{stride_name}' not found in dims {list(self.dims.keys())}."
-                    )
+            use_object_matching = (
+                self.dims.has_object_args() and self.strides.has_object_args()
+            )
+            if not use_object_matching:
+                for stride_name in self.strides.keys():
+                    if stride_name not in self.dims:
+                        raise ValueError(
+                            f"Stride name '{stride_name}' not found in dims {list(self.dims.keys())}."
+                        )
         for name, value in self.dims.items():
             if isinstance(value, SizedDerivedDimension):
                 value.set_output_dim_name(name)
@@ -74,6 +94,7 @@ class Tensor(GenSpecsWithContext):
 
     def generate_with_context(self, user_data_types: List[str] = None) -> str:
         """Generate the C++ source code for the custom tensor class."""
+        self._ensure_initialized()
         data_type_name = self._get_data_type_name(user_data_types=user_data_types)
         return _generate_tensor(
             self.class_name,
@@ -88,11 +109,23 @@ class Tensor(GenSpecsWithContext):
 
         This is used to find any generators that need to be assigned class names automatically.
         Subclasses should override this method if they use other generators.
+
+        NOTE: This method must NOT call _ensure_initialized() because it's called
+        before anonymous Dim/Fold objects have their names assigned. The initialization
+        is deferred until code generation (e.g., generate_with_context).
         """
         used_gens = []
-        for dim_value in self.dims.values():
-            if isinstance(dim_value, DerivedDimension):
-                used_gens.append(dim_value)
+        # Include Dim/Fold objects from the dims (for anonymous generator support).
+        # This must be called BEFORE initialization so that anonymous Dim/Fold
+        # objects can be discovered and assigned names first.
+        used_gens.extend(self.dims.used_generators())
+
+        # Include DerivedDimension objects from dims._derived_dims.
+        # This is available before initialization.
+        for _name, derived_dim in self.dims._derived_dims:
+            used_gens.append(derived_dim)
+
+        # Also include any explicitly passed derived_dims
         if self.derived_dims:
             used_gens.extend(self.derived_dims)
         return used_gens
@@ -102,6 +135,7 @@ class Tensor(GenSpecsWithContext):
 
         Duplicate this tensor and add the given derived dimension to its derived_dims list.
         """
+        self._ensure_initialized()
         if not isinstance(derived_dim, DerivedDimension):
             raise ValueError(
                 f"with_dim requires a DerivedDimension, got {type(derived_dim)}"
@@ -141,6 +175,7 @@ class Tensor(GenSpecsWithContext):
             calling with_vector_width(8) returns a tensor with dtype.half8
             and dims (warp_i, j8, i), with strides divided by 4.
         """
+        self._ensure_initialized()
         if not isinstance(self.data_type, dtype):
             raise ValueError(
                 f"with_vector_width requires a dtype, got {self.data_type}"
@@ -263,6 +298,7 @@ class Tensor(GenSpecsWithContext):
     @property
     def size(self) -> int:
         """The number of elements required to store the tensor data."""
+        self._ensure_initialized()
         name_0, size_0 = next(iter(self.dims.items()))
         stride_0 = self.strides[name_0]
         return size_0 * stride_0
@@ -270,6 +306,7 @@ class Tensor(GenSpecsWithContext):
     @property
     def num_bytes(self) -> int:
         """The number of bytes required to store the tensor data."""
+        self._ensure_initialized()
         if isinstance(self.data_type, dtype):
             element_size = self.data_type.value.size
         else:
@@ -280,6 +317,7 @@ class Tensor(GenSpecsWithContext):
     @property
     def dim_names(self) -> Generator[str, None, None]:
         """Return the names of the dimensions in the tensor."""
+        self._ensure_initialized()
         for name, _ in self.dims.items():
             yield name
 
@@ -410,15 +448,18 @@ def _generate_tensor(
     derived_dims = list(derived_dims) if derived_dims else []
 
     dim_infos = []
-    for name, dim_value in dims.items():
+    for cached_key, name, dim_value in dims.items_with_cached_key():
         if isinstance(dim_value, SizedDerivedDimension):
+            # Derived dimensions (e.g., Checkerboard) get BOTH:
+            # 1. A DimInfo<NAME, size, stride> like regular dimensions
+            # 2. The derived type (e.g., CheckerboardIndex) added at the end
             size = dim_value.size
             derived_dims.append(dim_value)
         else:
             size = dim_value
         dim_class = dim_name_to_dim_or_fold_class_name(name)
         size_str = str(size)
-        stride = strides[name]
+        stride = strides[cached_key]
         dim_infos.append(f"spio::DimInfo<{dim_class}, {size_str}, {stride}>")
 
     # Add derived dimension class names after all DimInfo entries

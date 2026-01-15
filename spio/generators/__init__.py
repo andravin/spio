@@ -13,8 +13,16 @@ from .macros import Macro
 from .params import ParamsSpec
 from .checkerboard import Checkerboard
 from .async_strip_loader import AsyncStripLoader
-from .dim import Dim, dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
-from .fold import Fold
+from .dim import (
+    Dim,
+    StaticDim,
+    dim_name_to_dim_or_fold_class_name,
+    BUILTIN_DIM_NAMES,
+    LANE,
+    OFFSET,
+)
+from .dim_arg import DimArg, normalize_dim_arg
+from .fold import Fold, StaticFold
 from .dims import Dims, Strides
 from .matmul import Matmul
 from .built_in import BuiltIn
@@ -48,4 +56,6 @@ __all__ = GENERATORS + [
     "Dims",
     "Strides",
     "BuiltIn",
+    "LANE",
+    "OFFSET",
 ]

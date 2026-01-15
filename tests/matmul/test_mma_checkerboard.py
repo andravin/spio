@@ -31,11 +31,11 @@ TOTAL_MATRIX_BYTES = 2 * 72 * 1024 * 1024
 class MmaConfig:
     """Configuration for the mma kernel."""
 
-    warp_m: int = 32
-    warp_n: int = 64
-    warps_m: int = 4
-    warps_n: int = 2
-    chunk_k16: int = 2
+    m_warp: int = 32
+    n_warp: int = 64
+    m_warps: int = 4
+    n_warps: int = 2
+    k16_chunk: int = 2
     wave_size: int = 4
 
     unroll_depth: int = 1
@@ -48,28 +48,33 @@ class MmaConfig:
         return str(self.unroll_depth)
 
     @property
-    def block_m(self) -> int:
+    def m_block(self) -> int:
         """Return the block M size."""
-        return self.warp_m * self.warps_m
+        return self.m_warp * self.m_warps
 
     @property
-    def block_n(self) -> int:
+    def n_block(self) -> int:
         """Return the block N size."""
-        return self.warp_n * self.warps_n
+        return self.n_warp * self.n_warps
 
     @property
     def warps(self) -> int:
         """Return the total number of warps."""
-        return self.warps_m * self.warps_n
+        return self.m_warps * self.n_warps
+
+    @property
+    def k_chunk(self) -> int:
+        """Return the K chunk size."""
+        return self.k16_chunk * 16
 
 
 WAVE_SIZE = [2, 4, 8]
 
 BASE_CONFIGS = [
-    MmaConfig(warp_m=64, warp_n=32, warps_m=2, warps_n=4, chunk_k16=2),
-    MmaConfig(warp_m=64, warp_n=32, warps_m=2, warps_n=4, chunk_k16=4),
-    MmaConfig(warp_m=64, warp_n=64, warps_m=2, warps_n=4, chunk_k16=2),
-    MmaConfig(warp_m=64, warp_n=64, warps_m=2, warps_n=4, chunk_k16=4),
+    MmaConfig(m_warp=64, n_warp=32, m_warps=2, n_warps=4, k16_chunk=2),
+    MmaConfig(m_warp=64, n_warp=32, m_warps=2, n_warps=4, k16_chunk=4),
+    MmaConfig(m_warp=64, n_warp=64, m_warps=2, n_warps=4, k16_chunk=2),
+    MmaConfig(m_warp=64, n_warp=64, m_warps=2, n_warps=4, k16_chunk=4),
 ]
 
 CONFIGS = [
@@ -114,112 +119,100 @@ def test_mma_checkerboard_16c_kernel(m: int, n: int, k: int, config: MmaConfig):
 
 def _get_specs(m: int, n: int, k: int, config: MmaConfig):
     """Return the generator specs, grid and block for the mma checkerboard kernel."""
+
+    # Validate problem size.
     assert k % 128 == 0, "Kernel requires K to be a multiple of 128."
     assert n % 128 == 0, "Kernel requires N to be a multiple of 128."
     assert m % 128 == 0, "Kernel requires M to be a multiple of 128."
-
-    k_chunk = config.chunk_k16 * 16
-    if k % k_chunk != 0:
+    if k % config.k_chunk != 0:
         raise ConfigError(
-            f"K ({k}) must be a multiple of k_chunk ({k_chunk}) for this config."
+            f"K ({k}) must be a multiple of k_chunk ({config.k_chunk}) for this config."
         )
 
-    # Calculate block and warp sizes.
+    # Base dimensions
+    I = Dim()
+    J = Dim()
+    K = Dim()
 
-    warps_m = config.warps_m
-    warps_n = config.warps_n
-    threads = config.warps * 32
+    # Matrix dimensions.
+    i = I(m)
+    j = J(n)
+    k = K(k)
 
-    blocks_m = divup(m, config.block_m)
-    blocks_n = divup(n, config.block_n)
-    blocks = blocks_m * blocks_n
-    grid = (blocks, 1, 1)
-
-    block = (threads, 1, 1)
-
-    i16 = m // 16
-    k16 = k // 16
-    j16 = n // 16
-
-    block_m16 = config.block_m // 16
-    block_n8 = config.block_n // 8
-    block_n16 = config.block_n // 16
-
-    warp_m16 = config.warp_m // 16
-    warp_n16 = config.warp_n // 16
-    warp_n8 = config.warp_n // 8
-
-    k_chunk = config.chunk_k16 * 16
-    k_double_chunk = 2 * k_chunk
-
-    # Use the Generators container for cleaner spec definitions
-    g = Generators()
-
-    # Thread-block coordinates.
-    block_waves = blocks_m // config.wave_size
-    block_local = config.wave_size
-    wave_stride = config.wave_size * config.block_m
-
-    g.block_i_wave = Fold("i", wave_stride)
-    g.block_i_local = Fold("i", config.block_m)
-    g.block_j = Fold("j", config.block_n)
-
+    # Define the thread-block traversal order.
     BlockIdx = CompoundIndex(
-        Dims(block_i_wave=block_waves, block_j=blocks_n, block_i_local=block_local),
+        Dims(
+            i / (config.wave_size * config.m_block),
+            j / config.n_block,
+            (i / config.m_block) % config.wave_size,
+        ),
         init=BuiltIn.BLOCK_IDX_X,
     )
 
-    # Fold dimensions
-    g.warp_i = Fold("i", config.warp_m)
-    g.warp_j = Fold("j", config.warp_n)
-    g.k_chunk = Fold("k", k_chunk)
-    g.k_double_chunk = Fold("k", k_double_chunk)
+    # Block dimensions.
+    i_block = I(config.m_block)
+    j_block = J(config.n_block)
+
+    # Warp dimensions.
+    i_warp = I(config.m_warp)
+    j_warp = J(config.n_warp)
+
+    # Number of warps.
+    i_warps = I(config.m_block) / config.m_warp
+    j_warps = J(config.n_block) / config.n_warp
+
+    # Add to the Generators container any classes that the kernel will use by name.
+    g = Generators()
+
+    # K8 becomes a CUDA/C++ class that the kernel can use.
+    K8 = g.K8 = K / 8
 
     # Load indices
-    ALoadGlobalIndex = CompoundIndex(
-        Dims(i=config.block_m, k8=2), init=BuiltIn.THREAD_IDX_X
-    )
-    BLoadGlobalIndex = CompoundIndex(
-        Dims(j=config.block_n, k8=2), init=BuiltIn.THREAD_IDX_X
-    )
+    ALoadGlobalIndex = CompoundIndex(Dims(i_block, K8(2)), init=BuiltIn.THREAD_IDX_X)
+    BLoadGlobalIndex = CompoundIndex(Dims(j_block, K8(2)), init=BuiltIn.THREAD_IDX_X)
 
     # The position of each warp's tile and the LANE dimension for each thread.
     LocalIndex = CompoundIndex(
-        Dims(warp_i=warps_m, warp_j=warps_n, lane=32), init=BuiltIn.THREAD_IDX_X
+        Dims(i_warps, j_warps, LANE(32)), init=BuiltIn.THREAD_IDX_X
     )
 
     # Global memory tensors
-    g.AGlobal = Tensor(dtype.half8, Dims(i16=i16, k16=k16, i=-1, k8=-1), constant=True)[
-        ALoadGlobalIndex, BlockIdx
-    ]
-    g.BGlobal = Tensor(dtype.half8, Dims(j16=j16, k16=k16, j=-1, k8=-1), constant=True)[
-        BLoadGlobalIndex, BlockIdx
-    ]
-    g.CGlobal = Tensor(dtype.half8, Dims(i16=i16, j16=j16, i=-1, j8=-1))[
+    g.AGlobal = Tensor(
+        dtype.half8, Dims(i / 16, k / 16, i % 16, (k % 16) / 8), constant=True
+    )[ALoadGlobalIndex, BlockIdx]
+    g.BGlobal = Tensor(
+        dtype.half8, Dims(j / 16, k / 16, j % 16, (k % 16) / 8), constant=True
+    )[BLoadGlobalIndex, BlockIdx]
+    g.CGlobal = Tensor(dtype.half8, Dims(i / 16, j / 16, i % 16, (j % 16) / 8))[
         BlockIdx, LocalIndex
     ]
+
+    # Depth of a single inner loop iteration.
+    g.K16 = K / 16
+    k16_chunk = g.K16(config.k16_chunk)
 
     # Shared memory tensors
     g.ASmem = Tensor(
         dtype.half8,
         Dims(
-            k16=2 * config.chunk_k16,
-            i16=block_m16,
-            swizzle=Checkerboard(pairs_dim="i", colors_dim="k8", size=32),
+            k16_chunk * 2,
+            i_block / 16,
+            swizzle=Checkerboard(pairs_dim=I, colors_dim=K / 8, size=32),
         ),
     )
     g.BSmem = Tensor(
         dtype.half8,
         Dims(
-            k16=2 * config.chunk_k16,
-            j16=block_n16,
-            swizzle=Checkerboard(pairs_dim="j", colors_dim="k8", size=32),
+            k16_chunk * 2,
+            j_block / 16,
+            swizzle=Checkerboard(pairs_dim=J, colors_dim=K / 8, size=32),
         ),
     )
+    J8 = J / 8
     g.CSmem = Tensor(
         dtype.half2,
-        Dims(warp_i=warps_m, j8=block_n8, i=config.warp_m, j2=-1),
-        strides=Strides(j8=(config.warp_m + 1) * 4),
+        Dims(i_warps, j_block / 8, i_warp, (j_block % 8) / 2),
+        strides=Strides(J8((config.m_warp + 1) * 4)),
     )
 
     smem_size = max(g.ASmem.num_bytes + g.BSmem.num_bytes, g.CSmem.num_bytes)
@@ -227,14 +220,13 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig):
 
     if smem_size > smem_capacity:
         raise ConfigError(
-            blocks_m
-            % f"Required shared memory size {smem_size} exceeds device capacity {smem_capacity}"
+            f"Required shared memory size {smem_size} exceeds device capacity {smem_capacity}"
         )
 
     # MMA fragments
-    g.AFragment = Fragment(FragmentType.M16_K16_F16_A, "i", "k")
-    g.BFragment = Fragment(FragmentType.N16_K16_F16_B, "k", "j")
-    g.CFragment = Fragment(FragmentType.M16_N16_F32_C, "i", "j")
+    g.AFragment = Fragment(FragmentType.M16_K16_F16_A, I, K)
+    g.BFragment = Fragment(FragmentType.N16_K16_F16_B, K, J)
+    g.CFragment = Fragment(FragmentType.M16_N16_F32_C, I, J)
 
     # Load and store views for the shared memory tensors.
     g.ALoadSmem = g.ASmem.with_dim(g.AFragment.load_index)[LocalIndex]
@@ -247,29 +239,25 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig):
     g.ALoader = AsyncStripLoader(
         smem_tensor=g.AStoreSmem,
         gmem_tensor=g.AGlobal,
-        inner_axis="i16",
-        outer_axis="k16",
-        inner_axis_size=block_m16,
-        outer_axis_size=config.chunk_k16,
+        inner_axis=i_block / 16,
+        outer_axis=k16_chunk,
         num_warps=config.warps,
         num_buffers=2,
     )
     g.BLoader = AsyncStripLoader(
         smem_tensor=g.BStoreSmem,
         gmem_tensor=g.BGlobal,
-        inner_axis="j16",
-        outer_axis="k16",
-        inner_axis_size=block_n16,
-        outer_axis_size=config.chunk_k16,
+        inner_axis=j_block / 16,
+        outer_axis=k16_chunk,
         num_warps=config.warps,
         num_buffers=2,
     )
 
     # Local memory tensors (i.e. registers)
     # - Each tensor "element" is itself a matrix fragment.
-    g.AReg = Tensor(g.AFragment, Dims(k16=config.chunk_k16, i16=warp_m16))
-    g.BReg = Tensor(g.BFragment, Dims(k16=config.chunk_k16, j16=warp_n16))
-    g.CReg = Tensor(g.CFragment, Dims(i16=warp_m16, j16=warp_n16))
+    g.AReg = Tensor(g.AFragment, Dims(k16_chunk, i_warp / 16))
+    g.BReg = Tensor(g.BFragment, Dims(k16_chunk, j_warp / 16))
+    g.CReg = Tensor(g.CFragment, Dims(i_warp / 16, j_warp / 16))
 
     # Matmul operation
     g.mma = Matmul(g.AReg, g.BReg, g.CReg, g.CReg)
@@ -277,14 +265,32 @@ def _get_specs(m: int, n: int, k: int, config: MmaConfig):
     # Transpose output through shared memory
     g.CStoreSmem = g.CSmem.with_dim(g.CFragment.compound_index)[LocalIndex]
     g.CLoadSmem = g.CSmem.vector_length(8, constant=True)[LocalIndex]
-    g.CLoadSmemIndex = CompoundIndex(Dims(i=config.warp_m, j8=warp_n8))
+    g.CLoadSmemIndex = CompoundIndex(Dims(i_warp, j_warp / 8))
 
-    g.c_output_idx = g.CLoadSmemIndex.partition("lane", LocalIndex)
+    g.c_output_idx = g.CLoadSmemIndex.partition(LANE, LocalIndex)
 
     # Macro for loop unrolling
     g.macros = Macro(dict(MAIN_LOOP_UNROLL_DEPTH=config.unroll_depth_str))
 
-    num_warp_elements = config.warp_m * config.warp_n
+    # Register dimensions ..
+    g.K = K
+
+    # .. and folded dimensions that are used by name in the kernel.
+    g.K_CHUNK = K / config.k_chunk
+    g.K_DOUBLE_CHUNK = g.K_CHUNK / 2
+
+    # Calculate the block size.
+    threads = config.warps * 32
+    block = (threads, 1, 1)
+
+    # Calculate the grid size.
+    i_blocks = divup(m, config.m_block)
+    j_blocks = divup(n, config.n_block)
+    blocks = i_blocks * j_blocks
+    grid = (blocks, 1, 1)
+
+    # Determine max registers per thread.
+    num_warp_elements = config.m_warp * config.n_warp
     if num_warp_elements > 64 * 32:
         max_registers = 255
     else:
@@ -442,8 +448,8 @@ def _benchmark_single(
     """Benchmark a single kernel configuration against PyTorch."""
     print(f"Benchmarking: m={m}, n={n}, k={k}")
     print(
-        f"Config: warp_m={config.warp_m}, warp_n={config.warp_n}, "
-        f"chunk_k16={config.chunk_k16}, unroll_depth={config.unroll_depth}"
+        f"Config: warp_m={config.m_warp}, warp_n={config.n_warp}, "
+        f"chunk_k16={config.k16_chunk}, unroll_depth={config.unroll_depth}"
     )
     print(f"Warmup: {warmup}, Iterations: {iters}")
     print()
@@ -567,11 +573,11 @@ if __name__ == "__main__":
         _benchmark()
     else:
         config = MmaConfig(
-            warp_m=args.warp_m,
-            warp_n=args.warp_n,
-            warps_m=args.warps_m,
-            warps_n=args.warps_n,
-            chunk_k16=args.chunk_k16,
+            m_warp=args.warp_m,
+            n_warp=args.warp_n,
+            m_warps=args.warps_m,
+            n_warps=args.warps_n,
+            k16_chunk=args.chunk_k16,
             unroll_depth=args.unroll_depth,
             wave_size=args.wave_size,
         )
