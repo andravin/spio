@@ -4,7 +4,7 @@ from typing import Dict, Union, Generator, List, Tuple
 from dataclasses import dataclass, field
 
 from .dim import dim_name_to_dim_or_fold_class_name
-from .dims import Dims, Strides, compute_full_strides
+from .dims import Dims, Strides, compute_full_strides, is_dims_arg
 from .fragment_type import FragmentType
 from .fragment import Fragment
 from .data_type import dtype, get_dtype_veclen, get_dtype_with_veclen
@@ -26,31 +26,96 @@ class Tensor(GenSpecsWithContext):
 
     When used with the Generators container, class_name can be omitted and will
     be set from the attribute name.
-
-    Attributes:
-        data_type (Union[dtype, FragmentType, str]): The data type of the tensor elements.
-        dims (Dims): A dictionary mapping dimension names to their sizes.
-        class_name (str): The name of the custom tensor class (optional with Generators).
-        strides (Strides): An optional dictionary mapping dimension names to their strides.
-        constant (bool): Whether the tensor is constant.
-        derived_dims (List[DerivedDimension]): List of derived dimensions used in dims.
-        ancestors (List["Tensor"]): List of tensors from which this tensor is derived.
     """
 
-    data_type: Union[dtype, FragmentType, str]
-    dims: Dims
-    class_name: str = None
-    strides: Strides = None
-    constant: bool = False
-    derived_dims: List[DerivedDimension] = None
-    ancestors: List["Tensor"] = None
-    _initialized: bool = False
+    def __init__(
+        self,
+        *args,
+        data_type: Union[dtype, FragmentType, str] = None,
+        dims: Dims = None,
+        class_name: str = None,
+        strides: Strides = None,
+        constant: bool = False,
+        derived_dims: List[DerivedDimension] = None,
+        ancestors: List["Tensor"] = None,
+        _initialized: bool = False,
+    ):
+        """Initialize the Tensor generator.
 
-    def __post_init__(self):
+        Args:
+            data_type (Union[dtype, FragmentType, str]): The data type of the tensor elements.
+            dims (Dims): A dictionary mapping dimension names to their sizes.
+            class_name (str): The name of the custom tensor class (optional with Generators).
+            strides (Strides): An optional dictionary mapping dimension names to their strides.
+            constant (bool): Whether the tensor is constant.
+            derived_dims (List[DerivedDimension]): List of derived dimensions used in dims.
+            ancestors (List["Tensor"]): List of tensors from which this tensor is derived.
+        """
+        # Process positional arguments for backward compatibility.
+        if len(args) > 0:
+            dim_args = []
+            for arg in args:
+                if isinstance(arg, Dims):
+                    if dims is not None:
+                        raise ValueError("Multiple dims specified.")
+                    dims = arg
+                elif isinstance(arg, (tuple, list)):
+                    if dims is not None:
+                        raise ValueError("Multiple dims specified.")
+                    dim_args.extend(arg)
+                elif (
+                    is_dims_arg(arg)
+                    or isinstance(arg, dict)
+                    or isinstance(arg, SizedDerivedDimension)
+                ):
+                    dim_args.append(arg)
+                elif isinstance(arg, (dtype, FragmentType, Fragment)) or (
+                    isinstance(arg, str) and data_type is None
+                ):
+                    if data_type is not None:
+                        raise ValueError("Multiple data types specified.")
+                    data_type = arg
+                elif isinstance(arg, str):
+                    if class_name is not None:
+                        raise ValueError("Multiple class names specified.")
+                    class_name = arg
+                else:
+                    raise ValueError(
+                        f"Unexpected positional argument type: {type(arg)}"
+                    )
+            if dim_args:
+                if dims is not None:
+                    raise ValueError("Dimensions specified multiple times.")
+                # Handle legacy dict syntax: Tensor(dtype, {"dim": size, ...})
+                # If only a single dict is passed, spread it as kwargs to Dims
+                if len(dim_args) == 1 and isinstance(dim_args[0], dict):
+                    dims = Dims(**dim_args[0])
+                else:
+                    dims = Dims(*dim_args)
+
+        self.dims = dims
+        self.data_type = data_type
+        self.class_name = class_name
+        self.strides = strides
+        self.constant = constant
+        self.derived_dims = derived_dims if derived_dims is not None else []
+        self.ancestors = ancestors if ancestors is not None else []
+        self._initialized = _initialized
         if isinstance(self.dims, dict):
             self.dims = Dims(**self.dims)
         if isinstance(self.strides, dict):
-            self.strides = Strides(**self.strides)
+            # Check if this is a computed strides dict (may have non-string keys)
+            # vs a user-provided dict (should have string keys only)
+            has_non_string_keys = any(
+                not isinstance(k, str) for k in self.strides.keys()
+            )
+            if not has_non_string_keys:
+                self.strides = Strides(**self.strides)
+            # else: keep as dict - it's a computed strides dict from _ensure_initialized
+        elif isinstance(self.strides, tuple):
+            self.strides = Strides(*self.strides)
+        elif is_dims_arg(self.strides):
+            self.strides = Strides(self.strides)
         # Defer validation and stride computation until first use
         # This allows Dim objects to have their names set after Tensor creation
 
@@ -142,8 +207,14 @@ class Tensor(GenSpecsWithContext):
             )
         new_derived_dims = list(self.derived_dims) if self.derived_dims else []
         new_derived_dims.append(derived_dim)
-        new_ancestors = list(self.ancestors) if self.ancestors else []
-        new_ancestors.append(self)
+        # Only add self to ancestors if it has a class_name.
+        # Otherwise, pass through self's ancestors to avoid anonymous
+        # tensors in the ancestor chain.
+        if self.class_name is not None:
+            new_ancestors = list(self.ancestors) if self.ancestors else []
+            new_ancestors.append(self)
+        else:
+            new_ancestors = self.ancestors
         return Tensor(
             data_type=self.data_type,
             dims=self.dims,
@@ -152,6 +223,29 @@ class Tensor(GenSpecsWithContext):
             constant=self.constant,
             derived_dims=new_derived_dims,
             ancestors=new_ancestors,
+            _initialized=True,  # Strides already computed
+        )
+
+    def as_constant(self) -> "Tensor":
+        """Return a new Tensor with constant=True."""
+        self._ensure_initialized()
+        # If self has a class_name, add it to ancestors.
+        # Otherwise, pass through self's ancestors to avoid anonymous
+        # tensors in the ancestor chain.
+        if self.class_name is not None:
+            new_ancestors = list(self.ancestors) if self.ancestors else []
+            new_ancestors.append(self)
+        else:
+            new_ancestors = self.ancestors
+        return Tensor(
+            data_type=self.data_type,
+            dims=self.dims,
+            class_name=None,
+            strides=self.strides,
+            constant=True,
+            derived_dims=self.derived_dims,
+            ancestors=new_ancestors,
+            _initialized=True,
         )
 
     def vector_length(self, width: int, constant: bool = None) -> "Tensor":
@@ -234,14 +328,181 @@ class Tensor(GenSpecsWithContext):
         # Get the new dtype with the target vector length
         new_dtype = get_dtype_with_veclen(self.data_type, width)
 
-        new_ancestors = list(self.ancestors) if self.ancestors else []
-        new_ancestors.append(self)
+        if self.class_name is not None:
+            new_ancestors = list(self.ancestors) if self.ancestors else []
+            new_ancestors.append(self)
+        else:
+            new_ancestors = self.ancestors
         return Tensor(
             data_type=new_dtype,
             dims=new_dims,
             class_name=None,
             strides=new_strides,
             constant=self.constant if constant is None else constant,
+            derived_dims=self.derived_dims,
+            ancestors=new_ancestors,
+        )
+
+    def __truediv__(self, other) -> "Tensor":
+        """Divide tensor by a Fragment or dtype.
+
+        When dividing by a Fragment:
+        Creates a new Tensor where each dimension matching a Fragment dimension
+        is divided by the Fragment's size for that dimension. The resulting
+        tensor uses the Fragment as its data_type.
+
+        The division is performed using the StaticDim/StaticFold division operator,
+        which means dividing a StaticDim by an integer produces a StaticFold
+        (a folded dimension).
+
+        When dividing by a dtype:
+        Returns a new Tensor with the specified vector type by calling
+        vector_length() with the dtype's vector length.
+
+        Args:
+            other: A Fragment object or dtype enum value.
+
+        Returns:
+            For Fragment: A new Tensor with dimensions divided by Fragment sizes
+            For dtype: A new Tensor with the wider vector type
+
+        Raises:
+            TypeError: If other is not a Fragment or dtype.
+            ValueError: If the Fragment's dtype doesn't match the Tensor's dtype.
+            ValueError: If a Fragment dimension is not found in the Tensor.
+            ValueError: If a Tensor dimension is not evenly divisible by the Fragment size.
+
+        Example:
+            # Divide by Fragment
+            I = Dim()
+            K = Dim()
+            i_warp = I(64)
+            k_chunk = K(32)
+            tensor = Tensor((k_chunk, i_warp), data_type=dtype.half)
+            frag = Fragment(FragmentType.M16_K16_F16_A, I, K)
+            result = tensor / frag  # dims are (k_chunk/16, i_warp/16)
+
+            # Divide by dtype
+            tensor2 = Tensor((i, j), data_type=dtype.half2)
+            result2 = tensor2 / dtype.half8  # equivalent to vector_length(8)
+        """
+        from .data_type import dtype, get_dtype_veclen
+
+        # Handle dtype division - delegate to vector_length
+        if isinstance(other, dtype):
+            # Verify scalar type compatibility
+            if isinstance(self.data_type, dtype):
+                self_scalar = self.data_type.value.scalar_dtype
+                other_scalar = other.value.scalar_dtype
+                if self_scalar != other_scalar:
+                    raise ValueError(
+                        f"Cannot divide tensor with scalar type {self_scalar.name} "
+                        f"by dtype with scalar type {other_scalar.name}"
+                    )
+            veclen = other.value.veclen
+            return self.vector_length(veclen)
+
+        # Handle Fragment division
+        from .fragment import Fragment
+        from .dim_arg import normalize_dim_arg
+
+        if not isinstance(other, Fragment):
+            raise TypeError(
+                f"Tensor division requires a Fragment or dtype, got {type(other).__name__}"
+            )
+
+        self._ensure_initialized()
+
+        # Verify dtype compatibility
+        fragment_dtype = other.fragment_type.value.dtype
+        if isinstance(self.data_type, dtype) and self.data_type != fragment_dtype:
+            raise ValueError(
+                f"Fragment dtype ({fragment_dtype}) doesn't match "
+                f"Tensor dtype ({self.data_type})"
+            )
+
+        # Get fragment dimension names and sizes
+        row_name = normalize_dim_arg(other.row)
+        col_name = normalize_dim_arg(other.col)
+        row_size = other.fragment_type.value.num_rows
+        col_size = other.fragment_type.value.num_cols
+
+        # Build mapping of fragment dim names to their divisor sizes
+        fragment_dims = {row_name: row_size, col_name: col_size}
+
+        # Check if dims uses object args (StaticDim/StaticFold)
+        if self.dims.has_object_args():
+            # Object-based dims - use StaticDim/StaticFold division
+            new_dim_args = []
+            matched_fragment_dims = set()
+
+            for static_arg in self.dims.iter_args():
+                # Get the normalized name for matching
+                dim_name = normalize_dim_arg(static_arg)
+
+                if dim_name in fragment_dims:
+                    divisor = fragment_dims[dim_name]
+                    # Use the StaticDim/StaticFold division operator
+                    # This produces a StaticFold with the divided size
+                    new_dim_args.append(static_arg / divisor)
+                    matched_fragment_dims.add(dim_name)
+                else:
+                    # Keep dimension unchanged
+                    new_dim_args.append(static_arg)
+
+            # Check that all fragment dimensions were matched
+            unmatched = set(fragment_dims.keys()) - matched_fragment_dims
+            if unmatched:
+                raise ValueError(
+                    f"Fragment dimensions {list(unmatched)} not found in Tensor dimensions"
+                )
+
+            new_dims = Dims(*new_dim_args)
+        else:
+            # Legacy string-based dims
+            new_dims_dict = {}
+            for dim_key, dim_size in self.dims.items():
+                dim_name = (
+                    dim_key.upper()
+                    if isinstance(dim_key, str)
+                    else normalize_dim_arg(dim_key)
+                )
+
+                if dim_name in fragment_dims:
+                    divisor = fragment_dims[dim_name]
+                    if dim_size % divisor != 0:
+                        raise ValueError(
+                            f"Tensor dimension '{dim_name}' (size {dim_size}) is not "
+                            f"evenly divisible by Fragment dimension size ({divisor})"
+                        )
+                    new_size = dim_size // divisor
+                    if new_size > 0:
+                        new_dims_dict[dim_key] = new_size
+                    del fragment_dims[dim_name]
+                else:
+                    new_dims_dict[dim_key] = dim_size
+
+            if fragment_dims:
+                raise ValueError(
+                    f"Fragment dimensions {list(fragment_dims.keys())} not found in Tensor dimensions"
+                )
+
+            new_dims = Dims(
+                **{
+                    (k.upper() if isinstance(k, str) else normalize_dim_arg(k)): v
+                    for k, v in new_dims_dict.items()
+                }
+            )
+
+        new_ancestors = list(self.ancestors) if self.ancestors else []
+        new_ancestors.append(self)
+
+        return Tensor(
+            data_type=other,
+            dims=new_dims,
+            class_name=None,
+            strides=None,  # Let strides be recomputed
+            constant=self.constant,
             derived_dims=self.derived_dims,
             ancestors=new_ancestors,
         )
@@ -435,6 +696,32 @@ class CursorInitializer(GenSpecsWithContext):
         return self.tensor.strides
 
 
+def _lookup_stride(strides: Dict, key: str) -> int:
+    """Look up a stride by key, handling Dim object keys.
+
+    The strides dict may have Dim objects as keys (for derived dims with
+    unresolved names at computation time). At code generation time, we
+    look up by the resolved string name.
+    """
+    # First try direct string lookup
+    if key in strides:
+        return strides[key]
+
+    # Check for Dim object keys whose name matches
+    from .dim import Dim
+    from .fold import Fold
+
+    for k, v in strides.items():
+        if isinstance(k, (Dim, Fold)):
+            dim_name = k.dim_name if isinstance(k, Dim) else k.fold_name
+            if dim_name is not None and dim_name.upper() == key.upper():
+                return v
+
+    raise KeyError(
+        f"Stride not found for key '{key}'. Available keys: {list(strides.keys())}"
+    )
+
+
 def _generate_tensor(
     class_name: str,
     data_type_name: str,
@@ -459,7 +746,7 @@ def _generate_tensor(
             size = dim_value
         dim_class = dim_name_to_dim_or_fold_class_name(name)
         size_str = str(size)
-        stride = strides[cached_key]
+        stride = _lookup_stride(strides, cached_key)
         dim_infos.append(f"spio::DimInfo<{dim_class}, {size_str}, {stride}>")
 
     # Add derived dimension class names after all DimInfo entries

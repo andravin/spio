@@ -14,7 +14,7 @@ i = I(4)
 k = K(32)
 
 # Define tensor with folded dimensions.
-A = Tensor(dtype.float, Dims(k / 8, i, k % 8))
+A = Tensor((k / 8, i, k % 8), dtype.float)
 
 # Define a fold alias.
 K8 = K / 8

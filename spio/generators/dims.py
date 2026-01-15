@@ -28,7 +28,7 @@ def _counter_to_alpha(n: int) -> str:
     return "".join(reversed(result))
 
 
-def _is_static_dim_or_fold(arg) -> bool:
+def is_dims_arg(arg) -> bool:
     """Check if arg is a StaticDim or StaticFold."""
     # Import here to avoid circular import
     from .fold import StaticFold
@@ -51,7 +51,7 @@ def _is_derived_dim_dict(arg) -> bool:
 
 def _is_valid_dims_arg(arg) -> bool:
     """Check if arg is a valid Dims positional argument."""
-    return _is_static_dim_or_fold(arg) or _is_derived_dim_dict(arg)
+    return is_dims_arg(arg) or _is_derived_dim_dict(arg)
 
 
 def _parse_dim_name_and_fold(name: str) -> Tuple[str, int]:
@@ -110,7 +110,7 @@ def _compute_fold_sizes(
         base_dim_folds[group_key].append((name, fold_factor, size))
 
     # Compute auto-sizes for each group
-    for base_name, folds in base_dim_folds.items():
+    for _, folds in base_dim_folds.items():
         # Sort by fold factor descending (coarsest first)
         folds_sorted = sorted(folds, key=lambda x: x[1], reverse=True)
 
@@ -228,11 +228,24 @@ class Dims:
                     # Extract name and value from single-item dict
                     name, value = next(iter(arg.items()))
                     self._derived_dims.append((name.upper(), value))
-                elif _is_static_dim_or_fold(arg):
+                elif isinstance(arg, SizedDerivedDimension):
+                    # SizedDerivedDimension with offset_dim set - store for lazy resolution
+                    # We can't resolve the name yet because Dim objects may not have names set
+                    offset_dim = getattr(arg, "offset_dim", None)
+                    if offset_dim is not None:
+                        # Store (offset_dim_obj, derived_dim) for lazy name resolution
+                        self._derived_dims.append((offset_dim, arg))
+                    else:
+                        raise ValueError(
+                            f"SizedDerivedDimension {type(arg).__name__} must have "
+                            f"offset_dim set when used as a positional argument. "
+                            f"Use dict(name={type(arg).__name__}(...)) to specify an alias."
+                        )
+                elif is_dims_arg(arg):
                     static_args.append(arg)
                 else:
                     raise TypeError(
-                        f"Expected StaticDim, StaticFold, or dict(name=DerivedDimension), "
+                        f"Expected StaticDim, StaticFold, SizedDerivedDimension, or dict(name=DerivedDimension), "
                         f"got {type(arg).__name__}. "
                         f"Use Dim()(size), Fold()(size), or dict(swizzle=Checkerboard(...))."
                     )
@@ -277,13 +290,29 @@ class Dims:
             else:
                 self._dims_cache = {}
 
-        # Add derived dimensions (like Checkerboard) to the cache
-        if self._derived_dims and not self._derived_dims_added:
-            for name, value in self._derived_dims:
-                self._dims_cache[name] = value
-            self._derived_dims_added = True
-
         return self._dims_cache
+
+    def _get_dims_with_derived(self) -> Dict[str, DimValue]:
+        """Get dims including derived dimensions (for code generation).
+
+        This resolves derived dimension names and should only be called
+        after all Dim objects have their names set (i.e., at code generation time).
+        """
+        result = dict(self._dims)
+
+        if self._derived_dims:
+            from .dim_arg import normalize_dim_arg
+
+            for name_or_dim, value in self._derived_dims:
+                # Name can be a string (already resolved) or a Dim/Fold object (needs resolution)
+                if isinstance(name_or_dim, str):
+                    name = name_or_dim
+                else:
+                    # Resolve Dim/Fold object to its name now
+                    name = normalize_dim_arg(name_or_dim).upper()
+                result[name] = value
+
+        return result
 
     def _static_args_to_entries(self) -> List[DimEntry]:
         """Convert StaticDim/StaticFold args to entries for _compute_fold_sizes.
@@ -301,7 +330,12 @@ class Dims:
 
         for arg in self._dim_args:
             dim_name = arg.dim_name
-            dim_or_fold = arg.fold if isinstance(arg, StaticFold) else arg.dim
+            if isinstance(arg, StaticFold):
+                dim_or_fold = arg.fold
+            elif isinstance(arg, StaticDim):
+                dim_or_fold = arg.dim
+            else:
+                raise TypeError(f"Unexpected arg type: {type(arg).__name__}")
 
             # Auto-name anonymous folds/dims
             if dim_name is None:
@@ -326,7 +360,7 @@ class Dims:
                 group_key = id(base_dim) if not isinstance(base_dim, str) else base_dim
             else:
                 fold_factor = 1
-                # StaticDim: group by self
+                # StaticDim: group by base Dim object identity
                 group_key = id(arg.dim)
 
             entries.append((dim_name, arg.size, fold_factor, group_key))
@@ -389,9 +423,20 @@ class Dims:
         return cached_key
 
     def items(self) -> Generator[Tuple[str, DimValue], None, None]:
-        """Get the dimensions as a generator of (name, value) pairs."""
+        """Get the dimensions as a generator of (name, value) pairs.
+
+        Includes both regular dimensions and derived dimensions with resolved string names.
+        Derived dimensions with unresolved Dim object names are skipped (they'll be
+        resolved at code generation time).
+        """
         for key, value in self._dims.items():
             yield self._resolve_current_name(key), value
+
+        # Also include derived dimensions with string names
+        for name, value in self._derived_dims:
+            if isinstance(name, str):
+                yield name, value
+            # else: skip - name is a Dim object that hasn't been resolved yet
 
     def items_with_cached_key(
         self,
@@ -400,26 +445,88 @@ class Dims:
 
         Used by code generators that need both the cached key (for stride lookup)
         and the current name (for generated code).
+
+        Includes derived dimensions. For derived dims with Dim object names,
+        the name is resolved at this point (code generation time).
         """
+        from .dim_arg import normalize_dim_arg
+
         for key, value in self._dims.items():
             yield key, self._resolve_current_name(key), value
 
+        # Include derived dimensions
+        for name_or_dim, value in self._derived_dims:
+            if isinstance(name_or_dim, str):
+                # Already a string name
+                yield name_or_dim, name_or_dim, value
+            else:
+                # Dim object - resolve its name now (at code generation time)
+                resolved_name = normalize_dim_arg(name_or_dim).upper()
+                yield resolved_name, resolved_name, value
+
     def keys(self) -> Generator[str, None, None]:
-        """Get the names of the dimensions."""
+        """Get the names of the dimensions.
+
+        Includes both regular dimensions and derived dimensions with resolved string names.
+        Derived dimensions with unresolved Dim object names are skipped (they'll be
+        resolved at code generation time).
+        """
         for key in self._dims.keys():
             yield self._resolve_current_name(key)
 
+        # Also include derived dimensions with string names
+        for name, _value in self._derived_dims:
+            if isinstance(name, str):
+                yield name
+            # else: skip - name is a Dim object that hasn't been resolved yet
+
     def values(self) -> Generator[DimValue, None, None]:
-        """Get the values of the dimensions."""
-        return self._dims.values()
+        """Get the values of the dimensions.
+
+        Includes both regular dimensions and derived dimensions with resolved string names.
+        Derived dimensions with unresolved Dim object names are skipped (they'll be
+        resolved at code generation time).
+        """
+        for value in self._dims.values():
+            yield value
+
+        # Also include derived dimensions with string names
+        for name, value in self._derived_dims:
+            if isinstance(name, str):
+                yield value
+            # else: skip - name is a Dim object that hasn't been resolved yet
 
     def __getitem__(self, key) -> DimValue:
-        """Get the value of a dimension by its name."""
-        return self._dims[key]
+        """Get the value of a dimension by its name.
+
+        Checks both regular dimensions and derived dimensions.
+        """
+        if key in self._dims:
+            return self._dims[key]
+
+        # Check derived dimensions
+        for name, value in self._derived_dims:
+            if isinstance(name, str) and name == key:
+                return value
+
+        raise KeyError(key)
 
     def __contains__(self, key) -> bool:
-        """Check if a dimension is present in the Dims object."""
-        return key in self._dims
+        """Check if a dimension is present in the Dims object.
+
+        Checks both regular dimensions and derived dimensions (like Checkerboard).
+        """
+        if key in self._dims:
+            return True
+
+        # Also check derived dimensions
+        for name, _value in self._derived_dims:
+            if isinstance(name, str) and name == key:
+                return True
+            # If name is a Dim object, we can't compare it to a string key
+            # (the name will be resolved at code generation time)
+
+        return False
 
     def iter_args(self) -> Generator[DimsArg, None, None]:
         """Iterate over the original StaticDim/StaticFold arguments.
@@ -444,24 +551,28 @@ class Dims:
         Only returns objects from the new StaticDim/StaticFold path; the legacy
         keyword path doesn't have access to the original Dim/Fold objects.
         """
-        from .fold import StaticFold
-
-        if self._dim_args is None:
-            return []
-
-        # Trigger resolution to ensure anonymous folds/dims get named
-        _ = self._dims
+        from .fold import StaticFold, Fold
+        from .dim import Dim
 
         result = []
-        for arg in self._dim_args:
-            if isinstance(arg, StaticFold):
-                # Include the Fold and its base Dim (if it's a Dim object)
-                result.append(arg.fold)
-                if not isinstance(arg.fold.dim, str):
-                    result.append(arg.fold.dim)
-            else:
-                # StaticDim: include the Dim
-                result.append(arg.dim)
+
+        # Include Dim/Fold objects from StaticDim/StaticFold args
+        if self._dim_args is not None:
+            for arg in self._dim_args:
+                if isinstance(arg, StaticFold):
+                    # Include the Fold and its base Dim (if it's a Dim object)
+                    result.append(arg.fold)
+                    if not isinstance(arg.fold.dim, str):
+                        result.append(arg.fold.dim)
+                else:
+                    # StaticDim: include the Dim
+                    result.append(arg.dim)
+
+        # Include offset_dim objects from derived dims (e.g., Checkerboard with offset_dim=SWIZZLE)
+        for name_or_dim, value in self._derived_dims:
+            if isinstance(name_or_dim, (Dim, Fold)):
+                result.append(name_or_dim)
+
         return result
 
 
@@ -498,7 +609,7 @@ class Strides:
         if args:
             # New-style: positional StaticDim/StaticFold arguments
             for arg in args:
-                if not _is_static_dim_or_fold(arg):
+                if not is_dims_arg(arg) and not isinstance(arg, SizedDerivedDimension):
                     raise TypeError(
                         f"Expected StaticDim or StaticFold, got {type(arg).__name__}. "
                         f"Use Dim()(stride) or Fold()(stride), e.g., I(64)."
@@ -593,6 +704,9 @@ def compute_full_strides(
     Uses object-based matching when both dims and strides were created with
     StaticDim/StaticFold objects. Falls back to string-based matching for
     legacy keyword syntax.
+
+    Note: Derived dimensions with unresolved names (stored with Dim object as key)
+    are skipped here - they're handled at code generation time when names are resolved.
     """
     if given_strides is None:
         given_strides = Strides()  # Empty Strides
@@ -611,7 +725,7 @@ def compute_full_strides(
         # Get resolved sizes from the dims dict (handles -1 auto-computation)
         resolved_sizes = dims._dims
 
-        # Build combined list: first the static dims, then derived dims (in that order)
+        # Build combined list: first the static dims, then derived dims with resolved names
         # When reversed, derived dims are processed first (they have the highest stride),
         # then static dims in reverse order
         items_to_process = []
@@ -629,11 +743,21 @@ def compute_full_strides(
                         dim_name = f"{base_name}{arg.fold.stride}"
             items_to_process.append((dim_name, arg, resolved_sizes.get(dim_name)))
 
-        # Derived dimensions - these come after static dims
-        for name, value in dims._derived_dims:
-            items_to_process.append(
-                (name, None, value)
-            )  # None = no object for stride lookup
+        # Derived dimensions - only SizedDerivedDimension contributes to strides
+        # Regular DerivedDimension (without size) doesn't affect stride calculation
+        for name_or_dim, value in dims._derived_dims:
+            if not isinstance(value, SizedDerivedDimension):
+                # Skip non-sized derived dimensions - they don't contribute to strides
+                continue
+
+            if isinstance(name_or_dim, str):
+                # Already resolved string name
+                items_to_process.append((name_or_dim, None, value))
+            else:
+                # Unresolved Dim object - use a placeholder key for now
+                # The key doesn't matter for stride calculation, only the size does
+                # We use the Dim object itself as a temporary key
+                items_to_process.append((name_or_dim, None, value))
 
         for dim_name, arg, dim_value in reversed(items_to_process):
             # Try object-based stride lookup (only for static dims)

@@ -9,6 +9,36 @@ from .gen_specs import GenSpecs
 from .derived_dimension import DerivedDimension
 
 
+class _FragmentSize:
+    def __init__(self, fragment: "Fragment"):
+        """Initialize the fragment attributes with the given fragment."""
+        self.fragment = fragment
+
+    def __call__(self, dim):
+        """Return the size of the given dimension in this fragment.
+
+        Args:
+            dim: The dimension to get the size for. Can be a string, Dim, or Fold.
+
+        Returns:
+            The size of the dimension (num_rows for row dim, num_cols for col dim).
+
+        Raises:
+            ValueError: If the dimension is not part of this fragment.
+        """
+        # Normalize the input dimension to a string name
+        dim_name = normalize_dim_arg(dim)
+        row_name = normalize_dim_arg(self.fragment.row)
+        col_name = normalize_dim_arg(self.fragment.col)
+
+        if dim_name == row_name:
+            return self.fragment.fragment_type.value.num_rows
+        elif dim_name == col_name:
+            return self.fragment.fragment_type.value.num_cols
+        else:
+            raise ValueError(f"Dimension {dim} not part of fragment.")
+
+
 @dataclass
 class Fragment(GenSpecs):
     """Fragment code generator.
@@ -61,7 +91,8 @@ class Fragment(GenSpecs):
         """Generate the fragment class code as a type alias."""
         row_dim = normalize_dim_arg(self.row)
         col_dim = normalize_dim_arg(self.col)
-        fragment_class = f"spio::{self.fragment_type.value}<{row_dim}, {col_dim}>"
+        fragment_type_name = self.fragment_type.value.class_name
+        fragment_class = f"spio::{fragment_type_name}<{row_dim}, {col_dim}>"
         return f"using {self.class_name} = {fragment_class};\n"
 
     @property
@@ -78,6 +109,11 @@ class Fragment(GenSpecs):
     def dim_names(self) -> Tuple[str, str]:
         """Return the names of the dimensions."""
         return (normalize_dim_arg(self.row), normalize_dim_arg(self.col))
+
+    @property
+    def size(self) -> _FragmentSize:
+        """Return the size callable for this fragment."""
+        return _FragmentSize(self)
 
 
 class FragmentLoadIndex(GenSpecs, DerivedDimension):

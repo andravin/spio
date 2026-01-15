@@ -3,7 +3,7 @@
 /*@spio
 I = Dim()
 J = Dim()
-A = Tensor(dtype.float, Dims(I(10), J(10)))
+A = Tensor((I(10), J(10)), dtype.float)
 @spio*/
 
 UTEST(Lesson2, RelativeMovement) {
