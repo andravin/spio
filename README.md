@@ -68,8 +68,8 @@ Typed dimensions also enable something we call **dimensional projection**: a coo
 // Define tensors A and B using dimensions I(16) × K(32) and K(32) × J(64).
 //
 /*@spio
-A = Tensor(dtype.float, Dims(I(16), K(32)))
-B = Tensor(dtype.float, Dims(K(32), J(64)))
+A = Tensor((I(16), K(32)), dtype.float)
+B = Tensor((K(32), J(64)), dtype.float)
 @spio*/
 UTEST(Lesson1, Commutativity) {
 
@@ -115,7 +115,7 @@ Spio uses Cursors: lightweight, multi-dimensional pointers that traverse tensor 
 /*@spio
 I = Dim()
 J = Dim()
-A = Tensor(dtype.float, Dims(I(10), J(10)))
+A = Tensor((I(10), J(10)), dtype.float)
 @spio*/
 
 UTEST(Lesson2, RelativeMovement) {
@@ -179,7 +179,7 @@ i = I(4)
 k = K(32)
 
 # Define tensor with folded dimensions.
-A = Tensor(dtype.float, Dims(k / 8, i, k % 8))
+A = Tensor((k / 8, i, k % 8), dtype.float)
 
 # Define a fold alias.
 K8 = K / 8
@@ -223,7 +223,7 @@ Spio accumulates subscripts in logical coordinates before folding, so repeated s
 
 ```cpp
 // Example: K(4) + K(4) = K(4 + 4), which carries into K8.
-EXPECT_TRUE(*a[i][K(4)][K(4)] == *a[i][K8(1)]);
+EXPECT_TRUE(*a[i][K(4)][K(4)] == *a[i][K(4 + 4)]);
 
 // This also works when the sum crosses fold boundaries.
 // K(7) + K(5) = K(12) = K8(1) + K(4)
@@ -251,17 +251,28 @@ J = Dim()
 K = Dim()
 
 # Define tensors for matrices A, B, and C.
-A = Tensor(dtype.float, Dims(I(16), K(32)))
-B = Tensor(dtype.float, Dims(K(32), J(64)))
-C = Tensor(dtype.float, Dims(I(16), J(64)))
+A = Tensor((I(16), K(32)), dtype.float)
+B = Tensor((K(32), J(64)), dtype.float)
+C = Tensor((I(16), J(64)), dtype.float)
 
 # Define a tensor for tiles of matrix C with custom stride.
-C_tile = Tensor(dtype.float, Dims(I(8), J(32)), strides=Strides(I(64)))
-
+C_tile = Tensor((I(8), J(32)), dtype.float, strides=I(64))
 @spio*/
 UTEST(Lesson4, DimensionalProjection) {
+    // Create data for matrices a, b, and c.
+    A::data_type a_data[A::storage_size()];
+    B::data_type b_data[B::storage_size()];
+    C::data_type c_data[C::storage_size()];
 
-    // ... create tensors a, b, and c with types A, B, and C.
+    // Initialize with counting numbers.
+    std::iota(std::begin(a_data), std::end(a_data), 1.0f);
+    std::iota(std::begin(b_data), std::end(b_data), 1.0f);
+    std::iota(std::begin(c_data), std::end(c_data), 1.0f);
+
+    // Construct matrices a, b, and c.
+    auto a = A(a_data);
+    auto b = B(b_data);
+    auto c = C(c_data);
 
     // Select coordinates (I, J) for the tiles.
     //
@@ -324,11 +335,11 @@ i = I(512)
 j = J(512)
 
 # Define compound indices for blocks and threads.
-BlockIndex = CompoundIndex(Dims(i / 16, j / 16))
-ThreadIndex = CompoundIndex(Dims(i % 16, j % 16))
+BlockIndex = CompoundIndex(i / 16, j / 16)
+ThreadIndex = CompoundIndex(i % 16, j % 16)
 
 # Define tensor A using dimensions i x j
-A = Tensor(dtype.float, Dims(i, j))
+A = Tensor((i, j), dtype.float)
 
 # Define aliases for I / 16 and J / 16.
 I16 = I / 16
@@ -404,7 +415,7 @@ Seamless integration with PyTorch through custom operators and `torch.compile` s
 
 ## Performance Results
 
-### Algorithm Innovation
+### Memory-Efficient Grouped Convolution
 
 The cuDNN Conv2d kernels use "implicit GEMM" with 1D horizontal tiling, causing excessive memory traffic due to overlapping reads in the convolution halo. Spio uses 2D tiling with a circular-buffer overlap-add algorithm that:
 

@@ -575,3 +575,68 @@ class TestDimArgSupport:
         assert "using I16" in code
         # Fragment type name includes MMA_ prefix
         assert "MMA_M16_N16_F32_C<I16, I>" in code
+
+    def test_checkerboard_with_static_dim_auto_size(self):
+        """Checkerboard auto-computes size from StaticDim/StaticFold."""
+        I = Dim()
+        K = Dim()
+        K8 = K.fold(8)
+
+        # Using StaticFold objects: i_block/16 gives size=8, K8(4) gives size=4
+        # Auto-computed size = 8 * 4 = 32
+        i_block = I(128)
+        cb = Checkerboard(pairs_dim=i_block / 16, colors_dim=K8(4))
+
+        assert cb.size == 32
+
+    def test_checkerboard_with_static_dim_explicit_size_matches(self):
+        """Checkerboard accepts matching explicit size with StaticDim."""
+        I = Dim()
+        K = Dim()
+        K8 = K.fold(8)
+
+        i_block = I(128)
+        # Explicit size matches computed: 8 * 4 = 32
+        cb = Checkerboard(pairs_dim=i_block / 16, colors_dim=K8(4), size=32)
+
+        assert cb.size == 32
+
+    def test_checkerboard_with_static_dim_mismatched_size_raises(self):
+        """Checkerboard raises error if explicit size doesn't match computed."""
+        import pytest
+
+        I = Dim()
+        K = Dim()
+        K8 = K.fold(8)
+
+        i_block = I(128)
+        # Computed size would be 8 * 4 = 32, but we specify 64
+        with pytest.raises(ValueError, match="doesn't match computed size"):
+            Checkerboard(pairs_dim=i_block / 16, colors_dim=K8(4), size=64)
+
+    def test_checkerboard_extracts_dim_from_static(self):
+        """Checkerboard extracts underlying Dim/Fold from StaticDim/StaticFold."""
+        I = Dim()
+        K = Dim()
+        K8 = K.fold(8)
+
+        i_block = I(128)
+        cb = Checkerboard(pairs_dim=i_block / 16, colors_dim=K8(4))
+
+        # The pairs_dim should be a Fold (from i_block / 16), not StaticFold
+        from spio.generators.fold import Fold
+
+        assert isinstance(cb.pairs_dim, Fold)
+        assert isinstance(cb.colors_dim, Fold)
+
+    def test_checkerboard_partial_static_uses_default_size(self):
+        """Checkerboard with only one Static* arg uses default size."""
+        I = Dim()
+        K = Dim()
+        K8 = K.fold(8)
+
+        # Only colors_dim is a StaticFold, pairs_dim is just a Dim
+        cb = Checkerboard(pairs_dim=I, colors_dim=K8(4))
+
+        # Without both having sizes, defaults to 32
+        assert cb.size == 32

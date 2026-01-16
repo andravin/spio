@@ -30,8 +30,8 @@ UTEST(Lesson1, TypeSafety) {
 // Define tensors A and B using dimensions I(16) × K(32) and K(32) × J(64).
 //
 /*@spio
-A = Tensor(dtype.float, Dims(I(16), K(32)))
-B = Tensor(dtype.float, Dims(K(32), J(64)))
+A = Tensor((I(16), K(32)), dtype.float)
+B = Tensor((K(32), J(64)), dtype.float)
 @spio*/
 UTEST(Lesson1, Commutativity) {
 

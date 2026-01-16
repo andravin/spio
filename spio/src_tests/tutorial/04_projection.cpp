@@ -11,12 +11,12 @@ J = Dim()
 K = Dim()
 
 # Define tensors for matrices A, B, and C.
-A = Tensor(dtype.float, Dims(I(16), K(32)))
-B = Tensor(dtype.float, Dims(K(32), J(64)))
-C = Tensor(dtype.float, Dims(I(16), J(64)))
+A = Tensor((I(16), K(32)), dtype.float)
+B = Tensor((K(32), J(64)), dtype.float)
+C = Tensor((I(16), J(64)), dtype.float)
 
 # Define a tensor for tiles of matrix C with custom stride.
-C_tile = Tensor(dtype.float, Dims(I(8), J(32)), strides=Strides(I(64)))
+C_tile = Tensor((I(8), J(32)), dtype.float, strides=I(64))
 @spio*/
 UTEST(Lesson4, DimensionalProjection) {
     // Create data for matrices a, b, and c.

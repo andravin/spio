@@ -13,11 +13,11 @@ i = I(512)
 j = J(512)
 
 # Define compound indices for blocks and threads.
-BlockIndex = CompoundIndex(Dims(i / 16, j / 16))
-ThreadIndex = CompoundIndex(Dims(i % 16, j % 16))
+BlockIndex = CompoundIndex(i / 16, j / 16)
+ThreadIndex = CompoundIndex(i % 16, j % 16)
 
 # Define tensor A using dimensions i x j
-A = Tensor(dtype.float, Dims(i, j))
+A = Tensor((i, j), dtype.float)
 
 # Define aliases for I / 16 and J / 16.
 I16 = I / 16

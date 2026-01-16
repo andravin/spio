@@ -3,7 +3,7 @@
 from typing import List, Generator
 from dataclasses import dataclass
 
-from .dims import Dims, Strides, compute_full_strides
+from .dims import Dims, Strides, compute_full_strides, is_dims_arg
 from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
 from .dim_arg import DimArg, normalize_dim_arg
 from .built_in import BuiltIn
@@ -11,7 +11,6 @@ from .gen_specs import GenSpecsWithContext, GenSpecs
 from .derived_dimension import DerivedDimension
 
 
-@dataclass
 class CompoundIndex(GenSpecsWithContext, DerivedDimension):
     """CUDA Code generator for custom index classes.
 
@@ -29,27 +28,92 @@ class CompoundIndex(GenSpecsWithContext, DerivedDimension):
     When used with the Generators container, class_name can be omitted and will
     be set from the attribute name.
 
+    Can be created with positional dim args:
+        CompoundIndex(i_block, j_block)
+
+    Or one positional dim arg that is a tuple:
+        CompoundIndex((i / 16, j / 16), init=BuiltIn.BLOCK_IDX_X)
+
+    Or with keyword dims:
+        CompoundIndex(dims=Dims(i=16, j=32), init=BuiltIn.BLOCK_IDX_X)
+
     Attributes:
         dims (Dims): A dictionary mapping dimension names to their sizes.
         class_name (str): The name of the custom index class (optional with Generators).
         strides (Strides): Optional strides for the dimensions.
         dummies (List[str]): List of dimension names that will not be applied to tensor subscripts.
+        init (BuiltIn): Optional built-in to initialize the index from (e.g., THREAD_IDX_X).
     """
 
-    dims: Dims
-    class_name: str = None
-    strides: Strides = None
-    dummies: List[str] = None
-    init: BuiltIn = None
+    def __init__(
+        self,
+        *dim_args,
+        dims: Dims = None,
+        class_name: str = None,
+        strides: Strides = None,
+        dummies: List[str] = None,
+        init: BuiltIn = None,
+    ):
+        """Initialize a CompoundIndex.
 
-    def __post_init__(self):
-        # Ensure strides are calculated for each dimension
+        Args:
+            *dim_args: Positional dimension arguments (StaticDim, StaticFold, tuples, etc.)
+            dims: A Dims object or dict mapping dimension names to sizes.
+            class_name: The name of the generated C++ class.
+            strides: Optional strides for dimensions (computed if not provided).
+            dummies: List of dimension names that won't be applied to tensor subscripts.
+            init: Built-in value to initialize the index from.
+        """
+        # Process positional arguments
+        if len(dim_args) > 0:
+            if dims is not None:
+                raise ValueError("Cannot specify both positional args and dims=")
+            collected_args = []
+            for arg in dim_args:
+                if isinstance(arg, Dims):
+                    if collected_args:
+                        raise ValueError("Dims object must be the only positional arg")
+                    dims = arg
+                    break
+                elif isinstance(arg, (tuple, list)):
+                    collected_args.extend(arg)
+                elif is_dims_arg(arg) or isinstance(arg, dict):
+                    collected_args.append(arg)
+                else:
+                    raise ValueError(
+                        f"Unexpected positional argument type: {type(arg)}"
+                    )
+            if collected_args:
+                # Handle legacy dict syntax: CompoundIndex({"dim": size, ...})
+                if len(collected_args) == 1 and isinstance(collected_args[0], dict):
+                    dims = Dims(**collected_args[0])
+                else:
+                    dims = Dims(*collected_args)
+
+        self.dims = dims
+        self.class_name = class_name
+        self.strides = strides
+        self.dummies = dummies or []
+        self.init = init
+
+        # Normalize dims and strides
         if isinstance(self.dims, dict):
             self.dims = Dims(**self.dims)
+        elif isinstance(self.dims, tuple):
+            self.dims = Dims(*self.dims)
         if isinstance(self.strides, dict):
             self.strides = Strides(**self.strides)
+        elif isinstance(self.strides, tuple):
+            self.strides = Strides(*self.strides)
+        elif is_dims_arg(self.strides):
+            self.strides = Strides(self.strides)
         self.strides = compute_full_strides(self.dims, self.strides)
-        self.dummies = self.dummies or []
+
+    def __repr__(self) -> str:
+        return (
+            f"CompoundIndex(dims={self.dims!r}, class_name={self.class_name!r}, "
+            f"strides={self.strides!r}, dummies={self.dummies!r}, init={self.init!r})"
+        )
 
     def _set_class_name(self, name: str) -> None:
         """Set the class name for this index.
