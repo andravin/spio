@@ -255,7 +255,7 @@ def _get_specs(m: int, n: int, k: int, cfg: MmaConfig):
     # Async loaders
     # The loader automatically chooses 1D or 2D based on num_warps vs inner_axis_size
     k_chunk = K(cfg.k_chunk)
-    g.ALoader = AsyncStripLoader(
+    g.ALoader = AsyncLoader(
         smem_tensor=g.AStoreSmem,
         gmem_tensor=g.AGlobal,
         inner_axis=i_block / 16,
@@ -263,7 +263,7 @@ def _get_specs(m: int, n: int, k: int, cfg: MmaConfig):
         num_warps=cfg.warps,
         num_buffers=2,
     )
-    g.BLoader = AsyncStripLoader(
+    g.BLoader = AsyncLoader(
         smem_tensor=g.BStoreSmem,
         gmem_tensor=g.BGlobal,
         inner_axis=j_block / 16,

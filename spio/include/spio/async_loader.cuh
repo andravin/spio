@@ -1,5 +1,5 @@
-#ifndef SPIO_ASYNC_STRIP_LOADER_H_
-#define SPIO_ASYNC_STRIP_LOADER_H_
+#ifndef SPIO_ASYNC_LOADER_H_
+#define SPIO_ASYNC_LOADER_H_
 
 #include "spio/macros.h"
 #include "spio/memory.cuh"
@@ -24,16 +24,16 @@ namespace spio {
     template <typename SmemCursor, typename GlobalCursor, typename data_type, int smem_stride,
               int global_stride, int num_loads, int smem_buffer_stride, int global_buffer_stride,
               int num_buffers>
-    class AsyncStripLoader {
+    class AsyncLoader {
         data_type* _smem_ptr;
         const data_type* _global_ptr;
         bool _mask;
 
     public:
-        /// @brief Construct AsyncStripLoader from raw pointers, recording inbounds mask.
+        /// @brief Construct AsyncLoader from raw pointers, recording inbounds mask.
         /// @param smem Raw shared memory pointer at the starting position.
         /// @param global Raw global memory pointer at the starting position.
-        __device__ AsyncStripLoader(data_type* smem, const data_type* global) {
+        __device__ AsyncLoader(data_type* smem, const data_type* global) {
             auto smem_cursor = SmemCursor(smem);
             auto global_cursor = GlobalCursor(global);
             _smem_ptr = smem_cursor.get();
@@ -86,7 +86,7 @@ namespace spio {
     /// @tparam inner_step_size The step size in InnerStepDim units.
     /// @tparam smem_buffer_stride The stride between shared memory buffers.
     /// @tparam global_buffer_stride The stride between global memory buffers.
-    /// @details Extends AsyncStripLoader to handle 2D iteration patterns where each thread
+    /// @details Extends AsyncLoader to handle 2D iteration patterns where each thread
     /// needs to load multiple elements along two dimensions (e.g., i/j and k16).
     ///
     /// The constructor accepts raw pointers, constructs cursors internally, and
@@ -96,17 +96,17 @@ namespace spio {
               int global_stride_inner, int num_inner, int smem_stride_outer,
               int global_stride_outer, int num_outer, typename InnerStepDim, int inner_step_size,
               int smem_buffer_stride, int global_buffer_stride, int num_buffers>
-    class AsyncStripLoader2D {
+    class AsyncLoader2D {
         data_type* _smem_ptr;
         const data_type* _global_ptr;
         bool _masks[num_inner];
 
     public:
-        /// @brief Construct AsyncStripLoader2D from raw pointers, recording per-inner-load
+        /// @brief Construct AsyncLoader2D from raw pointers, recording per-inner-load
         /// masks.
         /// @param smem Raw shared memory pointer at the starting position.
         /// @param global Raw global memory pointer at the starting position.
-        __device__ AsyncStripLoader2D(data_type* smem, const data_type* global) {
+        __device__ AsyncLoader2D(data_type* smem, const data_type* global) {
             auto smem_cursor = SmemCursor(smem);
             auto global_cursor = GlobalCursor(global);
             _smem_ptr = smem_cursor.get();

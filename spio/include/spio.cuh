@@ -8,7 +8,7 @@
 #include "spio/fragment_load_index.h"
 #include "spio/fragment_index.h"
 #include "spio/checkerboard_index.h"
-#include "spio/async_strip_loader.cuh"
+#include "spio/async_loader.cuh"
 #include "spio/strip_loader_params.h"
 #include "spio/mathutil.h"
 #include "spio/allocator.h"
