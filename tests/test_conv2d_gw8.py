@@ -109,12 +109,14 @@ def _get_test_params(has_bias=False) -> List[Conv2dGw8Params]:
     return model_tests + conv_rxs_tests + padding_tests + group_tests + misc_tests
 
 
+@pytest.mark.smoke
 def test_kernel_conv2d_gw8_sanity():
     """Sanity test for the Conv2dGw8 kernel."""
     params = Conv2dGw8Params(n=4, c=64, h=16, w=32, padding=1, r=3, s=3, has_bias=True)
     run_kernel_test(conv2d_gw8_kernel_factory, params)
 
 
+@pytest.mark.smoke
 def test_kernel_conv2d_gw8_sanity_2():
     """Second sanity test for the Conv2dGw8 kernel."""
     config = Conv2dGw8Config(groups=6, block_p=8, block_n=2)
@@ -133,6 +135,7 @@ def test_kernel_conv2d_gw8_sanity_2():
     run_kernel_test(conv2d_gw8_kernel_factory, params, configs=[config])
 
 
+@pytest.mark.smoke
 def test_kernel_conv2d_gw8_sanity_3():
     """Third sanity test for the Conv2dGw8 kernel."""
     params = Conv2dGw8Params(n=1, c=64, h=8, w=16, padding=1, r=3, s=3, has_bias=False)
@@ -140,12 +143,14 @@ def test_kernel_conv2d_gw8_sanity_3():
     run_kernel_test(conv2d_gw8_kernel_factory, params, configs=[config])
 
 
+@pytest.mark.smoke
 def test_kernel_conv2d_gw8_wgrad_sanity():
     """Sanity test for the Conv2dGw8 wgrad kernel."""
     params = Conv2dGw8Params(n=4, c=64, h=16, w=32, padding=1, r=3, s=3)
     run_grad_kernel_test(conv2d_gw8_wgrad_kernel_factory, params)
 
 
+@pytest.mark.smoke
 def test_kernel_conv2d_gw8_wgrad_range_base_loop_failure_case():
     """This test failed when using a range-based loop over kernel-rows r.
 
@@ -171,6 +176,7 @@ def test_kernel_conv2d_gw8_wgrad_range_base_loop_failure_case():
     run_grad_kernel_test(conv2d_gw8_wgrad_kernel_factory, params, configs=[config])
 
 
+@pytest.mark.smoke
 def test_functional_conv2d_gw8_grad_sanity():
     """Sanity test for the Conv2dGw8 functional gradient."""
     params = Conv2dGw8Params(
@@ -179,48 +185,56 @@ def test_functional_conv2d_gw8_grad_sanity():
     run_grad_function_test(conv2d_gw8, params)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_kernel_conv2d_gw8(params: Conv2dGw8Params):
     """Test the Conv2dGw8 kernel."""
     run_kernel_test(conv2d_gw8_kernel_factory, params)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_kernel_conv2d_gw8_wgrad(params: Conv2dGw8Params):
     """Test the Conv2dGw8 wgrad kernel."""
     run_grad_kernel_test(conv2d_gw8_wgrad_kernel_factory, params)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_kernel_conv2d_gw8_igrad(params: Conv2dGw8Params):
     """Test the Conv2dGw8 dgrad kernel."""
     run_grad_kernel_test(conv2d_gw8_kernel_factory, params, igrad=True)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_functional_conv2d_gw8(params: Conv2dGw8Params):
     """Test the conv2d_gw8 op."""
     run_function_test(conv2d_gw8, params)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_functional_conv2d_gw8_grad(params: Conv2dGw8Params):
     """Test the gradients of the conv2d_gw8 op."""
     run_grad_function_test(conv2d_gw8, params)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_conv2d_gw8_layer(params: Conv2dGw8Params):
     """Test the Conv2dGw8 layer."""
     run_layer_test(Conv2dGw8, params)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("params", _random_sample_test_params())
 def test_conv2d_gw8_layer_torchcompile(params: Conv2dGw8Params):
     """Test the Conv2dGw8 layer with torchcompile."""
     run_layer_test(Conv2dGw8, params, torchcompile=True)
 
 
+@pytest.mark.smoke
 def test_conv2d_gw8_op_check():
     """Test whether  the conv2d_gw8 custom op has been registered with PyTorch correctly."""
     params = Conv2dGw8Params(n=4, c=64, h=16, w=32, padding=1, r=3, s=3, has_bias=True)

@@ -111,6 +111,7 @@ class ConfigError(Exception):
 # -----------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize("config", CONFIGS)
 @pytest.mark.parametrize(
     "m, n, k",
