@@ -1,6 +1,7 @@
 .vscode
 .env
 .github/
+CLAUDE.md
 
 *.out
 *.cubin
