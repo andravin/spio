@@ -7,8 +7,9 @@
 
 namespace spio
 {
-    /// @brief A fair, warp-based semaphore.
-    /// This semaphore ensures that threads are served in the order they requested access.
+    /// A fair, warp-based semaphore.
+    ///
+    /// Ensures that threads are served in the order they requested access.
     class WarpSemaphore
     {
         static constexpr unsigned patience_ns = 20;
@@ -16,13 +17,16 @@ namespace spio
     public:
         using data_type = unsigned;
 
-        /// @brief  Constructor
-        /// You must synchronize the warps that participate in the semaphore after calling this constructor
-        /// and before calling acquire() or release().
-        /// @param next_reservation pointer to a shared memory variable that holds the next reservation index.
-        /// @param next_execution pointer to a shared memory variable that holds the next execution index.
-        /// @param count the initial semaphore count.
-        /// @param tid this thread's unique identifier among the threads that participate in the semaphore.
+        /// Constructs the semaphore with initial count.
+        ///
+        /// You must synchronize the participating warps after construction and before
+        /// calling acquire() or release().
+        ///
+        /// Parameters:
+        ///   next_reservation   Pointer to shared memory for reservation index.
+        ///   next_execution     Pointer to shared memory for execution index.
+        ///   count              Initial semaphore count.
+        ///   tid                Thread's unique identifier among participants.
         __device__ WarpSemaphore(
             data_type *__restrict__ next_reservation,
             data_type *__restrict__ next_execution,
@@ -40,7 +44,7 @@ namespace spio
             __syncwarp();
         }
 
-        /// @brief  Acquire the semaphore for this warp.
+        /// Acquires the semaphore for this warp.
         __device__ void acquire()
         {
             if (_is_first_lane)
@@ -60,7 +64,7 @@ namespace spio
             __syncwarp();
         }
 
-        /// @brief Release this warp from the semaphore.
+        /// Releases this warp from the semaphore.
         __device__ void release()
         {
             __threadfence_block();

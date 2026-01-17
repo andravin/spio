@@ -207,15 +207,17 @@ namespace spio {
             return other;
         }
 
-        /// @brief Add a single dimension to empty coordinates.
+        /// Adds a single dimension to empty coordinates.
         template <typename Dim> DEVICE constexpr auto operator+(Dim d) const {
             static_assert(detail::is_dim_like_v<Dim>, "Argument must be a dimension type");
             return make_coordinates(d);
         }
     };
 
-    /// @brief represents a set of indices for multiple dimensions
-    /// @tparam Dims The dimension types contained in these coordinates
+    /// Represents a set of indices for multiple dimensions.
+    ///
+    /// Template parameters:
+    ///   Dims   The dimension types contained in these coordinates.
     template <typename... Dims> struct Coordinates {
         static_assert(sizeof...(Dims) > 0, "Coordinates must have at least one dimension.");
 
@@ -223,19 +225,19 @@ namespace spio {
 
         detail::tuple<Dims...> values;
 
-        /// @brief Default constructor - initializes all dimensions to zero.
+        /// Default constructor - initializes all dimensions to zero.
         DEVICE constexpr Coordinates() : values(Dims(0)...) {}
 
         DEVICE constexpr Coordinates(Dims... dims) : values(dims...) {}
 
-        /// @brief Get the value of a specific dimension by exact type.
+        /// Gets the value of a specific dimension by exact type.
         template <typename DimType> DEVICE constexpr auto& get() {
             static_assert(detail::tuple_contains<DimType, detail::tuple<Dims...>>::value,
                           "Requested DimType is not part of these Coordinates.");
             return detail::tuple_get_by_type<DimType>(values);
         }
 
-        /// @brief Get the value of a specific dimension by exact type (const version).
+        /// Gets the value of a specific dimension by exact type (const version).
         template <typename DimType> DEVICE constexpr const auto& get() const {
             static_assert(detail::tuple_contains<DimType, detail::tuple<Dims...>>::value,
                           "Requested DimType is not part of these Coordinates.");
@@ -252,7 +254,7 @@ namespace spio {
             return detail::add_normalized_coordinates(normalize(), other.normalize());
         }
 
-        /// @brief Add a type with coordinates() method (e.g., CompoundIndex types).
+        /// Adds a type with coordinates() method (e.g., CompoundIndex types).
         template <
             typename T,
             detail::enable_if_t<detail::has_coordinates_v<T> && !detail::is_dim_like_v<T>, int> = 0>
@@ -260,7 +262,7 @@ namespace spio {
             return *this + t.coordinates();
         }
 
-        /// @brief Add a single dimension to coordinates.
+        /// Adds a single dimension to coordinates.
         template <typename Dim,
                   detail::enable_if_t<detail::is_dim_like_v<Dim> && !detail::has_coordinates_v<Dim>,
                                       int> = 0>
@@ -268,7 +270,7 @@ namespace spio {
             return *this + make_coordinates(d);
         }
 
-        /// @brief Compare coordinates with a single dimension.
+        /// Compares coordinates with a single dimension.
         template <typename Dim, detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
         DEVICE constexpr bool operator<(Dim d) const {
             return *this < make_coordinates(d);
@@ -334,7 +336,7 @@ namespace spio {
             return !(*this == other);
         }
 
-        /// @brief Compare with a type that has coordinates() method (e.g., CompoundIndex types).
+        /// Compares with a type that has coordinates() method (e.g., CompoundIndex types).
         template <
             typename T,
             detail::enable_if_t<detail::has_coordinates_v<T> && !detail::is_dim_like_v<T>, int> = 0>
@@ -377,7 +379,7 @@ namespace spio {
             return *this != t.coordinates();
         }
 
-        /// @brief Get the number of dimensions in these coordinates.
+        /// Returns the number of dimensions in these coordinates.
         DEVICE static constexpr int num_dims() {
             return sizeof...(Dims);
         }
@@ -414,71 +416,72 @@ namespace spio {
     // Orthogonal dimension operators: different dim types produce Coordinates
     // ============================================================================
 
-    /// @brief Add two orthogonal dimensions to produce Coordinates (e.g., I(1) + J(2))
+    /// Adds two orthogonal dimensions to produce Coordinates (e.g., I(1) + J(2)).
     template <typename T, typename U,
               detail::enable_if_t<detail::is_orthogonal_dims_v<T, U>, int> = 0>
     DEVICE constexpr auto operator+(T lhs, U rhs) {
         return make_coordinates(lhs, rhs);
     }
 
-    /// @brief Subtract two orthogonal dimensions to produce Coordinates (e.g., I(1) - J(2))
-    /// The second dimension is negated: I(1) - J(2) == make_coordinates(I(1), J(-2))
+    /// Subtracts two orthogonal dimensions to produce Coordinates (e.g., I(1) - J(2)).
+    ///
+    /// The second dimension is negated: I(1) - J(2) == make_coordinates(I(1), J(-2)).
     template <typename T, typename U,
               detail::enable_if_t<detail::is_orthogonal_dims_v<T, U>, int> = 0>
     DEVICE constexpr auto operator-(T lhs, U rhs) {
         return make_coordinates(lhs, U(-rhs.get()));
     }
 
-    /// @brief Add a dimension to coordinates (Dim + Coordinates)
+    /// Adds a dimension to coordinates (Dim + Coordinates).
     template <typename Dim, typename... CoordDims,
               detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
     DEVICE constexpr auto operator+(Dim d, const Coordinates<CoordDims...>& coords) {
         return make_coordinates(d) + coords;
     }
 
-    /// @brief Compare dimension with coordinates (Dim < Coordinates)
+    /// Compares dimension with coordinates (Dim < Coordinates).
     template <typename Dim, typename... CoordDims,
               detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
     DEVICE constexpr bool operator<(Dim d, const Coordinates<CoordDims...>& coords) {
         return make_coordinates(d) < coords;
     }
 
-    /// @brief Compare dimension with coordinates (Dim <= Coordinates)
+    /// Compares dimension with coordinates (Dim <= Coordinates).
     template <typename Dim, typename... CoordDims,
               detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
     DEVICE constexpr bool operator<=(Dim d, const Coordinates<CoordDims...>& coords) {
         return make_coordinates(d) <= coords;
     }
 
-    /// @brief Compare dimension with coordinates (Dim > Coordinates)
+    /// Compares dimension with coordinates (Dim > Coordinates).
     template <typename Dim, typename... CoordDims,
               detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
     DEVICE constexpr bool operator>(Dim d, const Coordinates<CoordDims...>& coords) {
         return make_coordinates(d) > coords;
     }
 
-    /// @brief Compare dimension with coordinates (Dim >= Coordinates)
+    /// Compares dimension with coordinates (Dim >= Coordinates).
     template <typename Dim, typename... CoordDims,
               detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
     DEVICE constexpr bool operator>=(Dim d, const Coordinates<CoordDims...>& coords) {
         return make_coordinates(d) >= coords;
     }
 
-    /// @brief Compare dimension with coordinates (Dim == Coordinates)
+    /// Compares dimension with coordinates (Dim == Coordinates).
     template <typename Dim, typename... CoordDims,
               detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
     DEVICE constexpr bool operator==(Dim d, const Coordinates<CoordDims...>& coords) {
         return make_coordinates(d) == coords;
     }
 
-    /// @brief Compare dimension with coordinates (Dim != Coordinates)
+    /// Compares dimension with coordinates (Dim != Coordinates).
     template <typename Dim, typename... CoordDims,
               detail::enable_if_t<detail::is_dim_like_v<Dim>, int> = 0>
     DEVICE constexpr bool operator!=(Dim d, const Coordinates<CoordDims...>& coords) {
         return make_coordinates(d) != coords;
     }
 
-    /// @brief Iterator for iterating over all coordinate combinations using CompoundIndex
+    /// Iterator for iterating over all coordinate combinations using CompoundIndex.
     template <typename IndexType> class CoordinatesIterator {
     public:
         using coordinates_type = decltype(IndexType(0).coordinates());
@@ -506,7 +509,7 @@ namespace spio {
         int _offset;
     };
 
-    /// @brief Range for iterating over all coordinate combinations using CompoundIndex
+    /// Range for iterating over all coordinate combinations using CompoundIndex.
     template <typename IndexType> class CoordinatesRange {
     public:
         using iterator = CoordinatesIterator<IndexType>;
@@ -523,15 +526,16 @@ namespace spio {
         }
     };
 
-    /// @brief Create a range that iterates over all coordinates of a tensor
+    /// Creates a range that iterates over all coordinates of a tensor.
     template <typename DataType, typename... DimInfos>
     DEVICE constexpr auto range(const Tensor<DataType, DimInfos...>&) {
         return CoordinatesRange<CompoundIndex<DimInfos...>>();
     }
 
-    /// @brief Create a range that iterates over all fragment coordinates
-    /// Works with any fragment type that has a tensor_type alias
-    /// Exclude dim-like types to avoid ambiguity with range(dim_type)
+    /// Creates a range that iterates over all fragment coordinates.
+    ///
+    /// Works with any fragment type that has a tensor_type alias.
+    /// Excludes dim-like types to avoid ambiguity with range(dim_type).
     template <typename FragmentType, detail::enable_if_t<detail::has_tensor_type_v<FragmentType> &&
                                                              !detail::is_dim_like_v<FragmentType>,
                                                          int> = 0>

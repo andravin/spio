@@ -7,8 +7,7 @@
 #include "spio/dim.h"
 #include "spio/dim_info.h"
 
-/// @file
-/// @brief CompoundIndex classes for matrix multiply-accumulate (MMA) fragments.
+/// CompoundIndex classes for matrix multiply-accumulate (MMA) fragments.
 ///
 /// The ldmatrix.xn instructions (for n in {1, 2, 4}) load n float16 matrix fragments
 /// of size 8 x 8. The addresses for the rows (m) or columns (n) of each matrix fragment
@@ -45,7 +44,7 @@
 /// There is a separate class for each A and B matrix size that the MMA instructions
 /// support.
 namespace spio {
-    /// @brief Base class for A-matrix load-index using 8x8 fragments.
+    /// Base class for A-matrix load-index using 8x8 fragments.
     template <typename OffsetType = LANE>
     class _MMA_A_88_F16_LoadIndex : public CompoundIndexBase<OffsetType> {
     public:
@@ -62,7 +61,7 @@ namespace spio {
         };
     };
 
-    /// @brief Base class for B-matrix load-index using 8x8 fragments.
+    /// Base class for B-matrix load-index using 8x8 fragments.
     template <typename OffsetType = LANE>
     class _MMA_B_88_F16_LoadIndex : public CompoundIndexBase<OffsetType> {
     public:
@@ -83,9 +82,12 @@ namespace spio {
         }
     };
 
-    /// @brief Indices for A-matrix shape M16 x K8 x float16 for use with ldmatrix.
-    /// @tparam RowDim The dimension type for rows (i)
-    /// @tparam ColDim The dimension type for columns (k)
+    /// Indices for A-matrix shape M16 x K8 x float16 for use with ldmatrix.
+    ///
+    /// Template parameters:
+    ///   RowDim      Dimension type for rows (i).
+    ///   ColDim      Dimension type for columns (k).
+    ///   OffsetType  Dimension type for the linear offset.
     template <typename RowDim, typename ColDim, typename OffsetType = LANE>
     class MMA_A_M16_K8_F16_LoadIndex : public _MMA_A_88_F16_LoadIndex<OffsetType> {
     private:
@@ -94,9 +96,7 @@ namespace spio {
     public:
         using Base::Base;
 
-        /// @brief Get dimension value by type
-        /// @tparam Dim The dimension type to retrieve
-        /// @return The dimension value with the proper type
+        /// Gets dimension value by type.
         template <typename Dim> DEVICE constexpr auto get() const {
             if constexpr (std::is_same_v<Dim, RowDim>) {
                 return RowDim(Base::_i0());
@@ -118,7 +118,7 @@ namespace spio {
             return get<Fold<ColDim, 8>>();
         }
 
-        /// @brief Get coordinates for this load index
+        /// Returns coordinates for this load index.
         DEVICE constexpr auto coordinates() const {
             return make_coordinates(get<RowDim>(), get<Fold<ColDim, 8>>());
         }
@@ -135,9 +135,12 @@ namespace spio {
         }
     };
 
-    /// @brief Indices for A-matrix shape M16 x K16 x float16 for use with ldmatrix.
-    /// @tparam RowDim The dimension type for rows (i)
-    /// @tparam ColDim The dimension type for columns (k)
+    /// Indices for A-matrix shape M16 x K16 x float16 for use with ldmatrix.
+    ///
+    /// Template parameters:
+    ///   RowDim      Dimension type for rows (i).
+    ///   ColDim      Dimension type for columns (k).
+    ///   OffsetType  Dimension type for the linear offset.
     template <typename RowDim, typename ColDim, typename OffsetType = LANE>
     class MMA_A_M16_K16_F16_LoadIndex : public _MMA_A_88_F16_LoadIndex<OffsetType> {
     private:
@@ -146,9 +149,7 @@ namespace spio {
     public:
         using Base::Base;
 
-        /// @brief Get dimension value by type
-        /// @tparam Dim The dimension type to retrieve
-        /// @return The dimension value with the proper type
+        /// Gets dimension value by type.
         template <typename Dim> DEVICE constexpr auto get() const {
             if constexpr (std::is_same_v<Dim, RowDim>) {
                 return RowDim(Base::_i0());
@@ -170,7 +171,7 @@ namespace spio {
             return get<Fold<ColDim, 8>>();
         }
 
-        /// @brief Get coordinates for this load index
+        /// Returns coordinates for this load index.
         DEVICE constexpr auto coordinates() const {
             return make_coordinates(get<RowDim>(), get<Fold<ColDim, 8>>());
         }
@@ -187,9 +188,12 @@ namespace spio {
         }
     };
 
-    /// @brief Indices for B-matrix shape N8 x K8 x float16 for use with ldmatrix.
-    /// @tparam RowDim The dimension type for rows (k)
-    /// @tparam ColDim The dimension type for columns (j)
+    /// Indices for B-matrix shape N8 x K8 x float16 for use with ldmatrix.
+    ///
+    /// Template parameters:
+    ///   RowDim      Dimension type for rows (k).
+    ///   ColDim      Dimension type for columns (j).
+    ///   OffsetType  Dimension type for the linear offset.
     template <typename RowDim, typename ColDim, typename OffsetType = LANE>
     class MMA_B_N8_K8_F16_LoadIndex : public _MMA_B_88_F16_LoadIndex<OffsetType> {
     private:
@@ -198,9 +202,7 @@ namespace spio {
     public:
         using Base::Base;
 
-        /// @brief Get dimension value by type
-        /// @tparam Dim The dimension type to retrieve
-        /// @return The dimension value with the proper type
+        /// Gets dimension value by type.
         template <typename Dim> DEVICE constexpr auto get() const {
             if constexpr (std::is_same_v<Dim, ColDim>) {
                 return ColDim(Base::_j0());
@@ -222,7 +224,7 @@ namespace spio {
             return get<Fold<RowDim, 8>>();
         }
 
-        /// @brief Get coordinates for this load index
+        /// Returns coordinates for this load index.
         DEVICE constexpr auto coordinates() const {
             return make_coordinates(get<ColDim>(), get<Fold<RowDim, 8>>());
         }
@@ -239,9 +241,12 @@ namespace spio {
         }
     };
 
-    /// @brief Indices for B-matrix shape N8 x K16 x float16 for use with ldmatrix.
-    /// @tparam RowDim The dimension type for rows (k)
-    /// @tparam ColDim The dimension type for columns (j)
+    /// Indices for B-matrix shape N8 x K16 x float16 for use with ldmatrix.
+    ///
+    /// Template parameters:
+    ///   RowDim      Dimension type for rows (k).
+    ///   ColDim      Dimension type for columns (j).
+    ///   OffsetType  Dimension type for the linear offset.
     template <typename RowDim, typename ColDim, typename OffsetType = LANE>
     class MMA_B_N8_K16_F16_LoadIndex : public _MMA_B_88_F16_LoadIndex<OffsetType> {
     private:
@@ -250,9 +255,7 @@ namespace spio {
     public:
         using Base::Base;
 
-        /// @brief Get dimension value by type
-        /// @tparam Dim The dimension type to retrieve
-        /// @return The dimension value with the proper type
+        /// Gets dimension value by type.
         template <typename Dim> DEVICE constexpr auto get() const {
             if constexpr (std::is_same_v<Dim, ColDim>) {
                 return ColDim(Base::_j0());
@@ -274,7 +277,7 @@ namespace spio {
             return get<Fold<RowDim, 8>>();
         }
 
-        /// @brief Get coordinates for this load index
+        /// Returns coordinates for this load index.
         DEVICE constexpr auto coordinates() const {
             return make_coordinates(get<ColDim>(), get<Fold<RowDim, 8>>());
         }
@@ -291,9 +294,12 @@ namespace spio {
         }
     };
 
-    /// @brief Indices for B-matrix shape N16 x K16 x float16 for use with ldmatrix.
-    /// @tparam RowDim The dimension type for rows (k)
-    /// @tparam ColDim The dimension type for columns (j)
+    /// Indices for B-matrix shape N16 x K16 x float16 for use with ldmatrix.
+    ///
+    /// Template parameters:
+    ///   RowDim      Dimension type for rows (k).
+    ///   ColDim      Dimension type for columns (j).
+    ///   OffsetType  Dimension type for the linear offset.
     template <typename RowDim, typename ColDim, typename OffsetType = LANE>
     class MMA_B_N16_K16_F16_LoadIndex : public _MMA_B_88_F16_LoadIndex<OffsetType> {
     private:
@@ -302,9 +308,7 @@ namespace spio {
     public:
         using Base::Base;
 
-        /// @brief Get dimension value by type
-        /// @tparam Dim The dimension type to retrieve
-        /// @return The dimension value with the proper type
+        /// Gets dimension value by type.
         template <typename Dim> DEVICE constexpr auto get() const {
             if constexpr (std::is_same_v<Dim, ColDim>) {
                 return ColDim(Base::_j0() + Base::_j8());
@@ -326,7 +330,7 @@ namespace spio {
             return get<Fold<RowDim, 8>>();
         }
 
-        /// @brief Get coordinates for this load index
+        /// Returns coordinates for this load index.
         DEVICE constexpr auto coordinates() const {
             return make_coordinates(get<ColDim>(), get<Fold<RowDim, 8>>());
         }

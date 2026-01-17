@@ -68,13 +68,14 @@ namespace spio {
         }
     };
 
-    /// @brief A base class for tensor dimensions using CRTP.
-    /// Spio uses "typed tensors" which means that each tensor dimensions is a unique types.
-    /// This prevents accidental mixing of different dimensions in index arithmetic
-    /// expressions or subscripting operations.
-    /// Normally, all dimensions classes referenced by custom tensors and indexes are
-    /// generated automatically by the code generation system.
-    /// @tparam Derived The derived dimension type (CRTP pattern)
+    /// Base class for tensor dimensions using CRTP.
+    ///
+    /// Spio uses typed tensors where each dimension is a unique type, preventing
+    /// accidental mixing of different dimensions in index arithmetic or subscripting.
+    /// Dimension classes are typically generated automatically by the code generation system.
+    ///
+    /// Template parameters:
+    ///   Derived   The derived dimension type (CRTP pattern).
     template <typename Derived> class Dim : public BaseDim<Derived> {
     public:
         using dim_type = Derived;
@@ -94,10 +95,13 @@ namespace spio {
         DEVICE constexpr Dim(const Fold<Derived, Stride> folded_dim)
             : Base(folded_dim.unfold().get()) {}
 
-        /// @brief Fold the dimension by a given stride.
-        /// @tparam Stride the stride to fold by.
-        /// @return a Fold object that is the result of folding the current dimension by the given
-        /// stride.
+        /// Folds the dimension by a given stride.
+        ///
+        /// Template parameters:
+        ///   Stride   The stride to fold by.
+        ///
+        /// Returns:
+        ///   A Fold object representing the folded dimension.
         template <int Stride> DEVICE constexpr auto fold() const {
             if constexpr (Stride == 1) {
                 return static_cast<const Derived&>(*this);
@@ -106,8 +110,10 @@ namespace spio {
             }
         }
 
-        /// @brief Unfold the dimension to its base type.
-        /// @return itself, since Dim is already the base type with stride 1.
+        /// Unfolds the dimension to its base type.
+        ///
+        /// Returns:
+        ///   Itself, since Dim is already the base type with stride 1.
         DEVICE constexpr Derived unfold() const {
             return static_cast<const Derived&>(*this);
         }
@@ -116,15 +122,19 @@ namespace spio {
             return Module<Derived, Size, 1>(get());
         }
 
-        /// @brief Cast the dimension to a new dimension type.
-        /// @tparam NewDimType the type to cast the dimension to.
-        /// @return the same dimension index value in a new dimension type.
+        /// Casts the dimension to a new dimension type.
+        ///
+        /// Template parameters:
+        ///   NewDimType   The target dimension type.
+        ///
+        /// Returns:
+        ///   The same index value in the new dimension type.
         template <class NewDimType> DEVICE constexpr NewDimType cast() const {
             return NewDimType(get());
         }
     };
 
-    /// @brief A folded dimension with stride.
+    /// A folded dimension with stride.
     template <class DimType, int Stride> class Fold : public BaseDim<Fold<DimType, Stride>> {
         static_assert(Stride > 0, "Fold stride must be positive");
 
@@ -168,7 +178,7 @@ namespace spio {
         }
     };
 
-    /// @brief A dimension with both size and stride (bounded).
+    /// A dimension with both size and stride (bounded).
     template <class DimType, int Size, int Stride>
     class Module : public BaseDim<Module<DimType, Size, Stride>> {
         static_assert(Size > 0, "Module size must be positive");
