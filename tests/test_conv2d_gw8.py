@@ -144,6 +144,7 @@ def test_kernel_conv2d_gw8_sanity_3():
 
 
 @pytest.mark.smoke
+@pytest.mark.slow
 def test_kernel_conv2d_gw8_wgrad_sanity():
     """Sanity test for the Conv2dGw8 wgrad kernel."""
     params = Conv2dGw8Params(n=4, c=64, h=16, w=32, padding=1, r=3, s=3)
