@@ -1,8 +1,8 @@
-import code
+"""Create tests from the tutorial examples."""
+
 from subprocess import CalledProcessError
 from tempfile import NamedTemporaryFile
 import os
-from typing import Callable
 import re
 
 from importlib_resources import files as importlib_resources_files

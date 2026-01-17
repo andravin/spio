@@ -12,7 +12,7 @@ from .fragment_index import FragmentIndex, FragmentLoadIndex
 from .macros import Macro
 from .params import ParamsSpec
 from .checkerboard import Checkerboard
-from .async_strip_loader import AsyncStripLoader
+from .async_loader import AsyncLoader
 from .dim import (
     Dim,
     StaticDim,
@@ -51,7 +51,7 @@ __all__ = GENERATORS + [
     "FragmentType",
     "dtype",
     "Checkerboard",
-    "AsyncStripLoader",
+    "AsyncLoader",
     "dim_name_to_dim_or_fold_class_name",
     "Dims",
     "Strides",

@@ -1648,20 +1648,20 @@ UTEST(TensorDerivedDim, fragment_load_index_subscript)
 
 
 @_cpp_test
-def _test_async_strip_loader_2d_iteration():
-    """Test AsyncStripLoader2D iteration pattern.
+def _test_async_loader_2d_iteration():
+    """Test AsyncLoader2D iteration pattern.
 
     This test verifies that the 2D strip loader correctly iterates over
     two dimensions when loading data. We test the pattern for 4 warps (128 threads)
     loading an 8x1 tile (same as 8 i16 elements x 1 k16 element).
 
-    We don't include the actual async_strip_loader.cuh since it requires CUDA
+    We don't include the actual async_loader.cuh since it requires CUDA
     device code. Instead, we test the iteration logic directly.
     """
     return """
 
 // Test helper: track which positions were visited and compute offsets
-// This mirrors the AsyncStripLoader2D iteration pattern without CUDA dependencies
+// This mirrors the AsyncLoader2D iteration pattern without CUDA dependencies
 template <int smem_stride_inner, int global_stride_inner, int num_inner,
           int smem_stride_outer, int global_stride_outer, int num_outer>
 struct TestLoader2DIteration {
@@ -1683,7 +1683,7 @@ struct TestLoader2DIteration {
     }
 };
 
-UTEST(AsyncStripLoader2D, four_warps_8x1_tile_iteration)
+UTEST(AsyncLoader2D, four_warps_8x1_tile_iteration)
 {
     // 4 warps (128 threads) loading 8 i16 elements x 1 k16 element
     // Each warp loads 2 elements along i16 (8 / 4 = 2)
@@ -1698,7 +1698,7 @@ UTEST(AsyncStripLoader2D, four_warps_8x1_tile_iteration)
     //   - First load: position w (offset = w * smem_stride_element)
     //   - Second load: position w+4 (offset = (w+4) * smem_stride_element)
     //
-    // Template params for AsyncStripLoader2D:
+    // Template params for AsyncLoader2D:
     //   smem_stride_inner = 4 * element_stride (skip 4 warps)
     //   num_inner = 2 (each warp loads 2 elements)
     //   smem_stride_outer = k16 stride
@@ -1782,7 +1782,7 @@ UTEST(AsyncStripLoader2D, four_warps_8x1_tile_iteration)
     }
 }
 
-UTEST(AsyncStripLoader2D, four_warps_8x2_tile_iteration)
+UTEST(AsyncLoader2D, four_warps_8x2_tile_iteration)
 {
     // 4 warps (128 threads) loading 8 i16 elements x 2 k16 elements
     // Each warp loads 2 i16 positions and iterates over both k16 values
@@ -1831,10 +1831,10 @@ UTEST(AsyncStripLoader2D, four_warps_8x2_tile_iteration)
     EXPECT_EQ(loader.global_offsets[3], 8196);
 }
 
-UTEST(AsyncStripLoader2D, eight_warps_8x1_tile_iteration)
+UTEST(AsyncLoader2D, eight_warps_8x1_tile_iteration)
 {
     // 8 warps loading 8 i16 x 1 k16 = perfect 1:1 mapping
-    // This is the baseline case that works with AsyncStripLoader
+    // This is the baseline case that works with AsyncLoader
     // num_inner = 1, num_outer = 1
 
     constexpr int num_warps = 8;

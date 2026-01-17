@@ -15,7 +15,7 @@ AxisArg = Union[DimArg, StaticDim, StaticFold]
 
 
 @dataclass
-class AsyncStripLoader(GenSpecs):
+class AsyncLoader(GenSpecs):
     """CUDA Code generator for async strip loader classes.
 
     This class generates custom strip loader classes that load data
@@ -141,7 +141,7 @@ class AsyncStripLoader(GenSpecs):
             gmem_buffer_stride,
             self.num_buffers,
         )
-        base = f"spio::AsyncStripLoader<{base_params}>"
+        base = f"spio::AsyncLoader<{base_params}>"
 
         return f"""
 class {self.class_name} : public {base}
@@ -210,7 +210,7 @@ class {self.class_name} : public {base}
             gmem_buffer_stride,
             self.num_buffers,
         )
-        base = f"spio::AsyncStripLoader2D<{base_params}>"
+        base = f"spio::AsyncLoader2D<{base_params}>"
 
         return f"""
 class {self.class_name} : public {base}
