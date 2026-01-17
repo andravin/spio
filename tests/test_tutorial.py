@@ -36,6 +36,7 @@ RESOURCE_PACKAGES = [
 ]
 
 
+@pytest.mark.smoke
 @pytest.mark.skipif(not ENABLE_CPP_TESTS, reason="NVCC support not required by default")
 @pytest.mark.parametrize(
     "example",

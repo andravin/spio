@@ -18,6 +18,8 @@ from spio.generators import (
     generate,
 )
 
+pytestmark = pytest.mark.smoke
+
 
 class TestGeneratorsBasic:
     """Test basic Generators functionality."""

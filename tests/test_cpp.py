@@ -50,6 +50,7 @@ TEST_SOURCES = []
 CPP_TESTS_FILTER = os.environ.get("SPIO_CPP_TESTS_FILTER", None)
 
 
+@pytest.mark.smoke
 @pytest.mark.skipif(
     not ENABLE_CPP_TESTS, reason="NVCC support not required by default."
 )
