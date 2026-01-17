@@ -5,12 +5,13 @@
 
 namespace spio
 {
-    /// @brief Perform D = A x B + C matrix-multiplication with tensor cores.
-    /// @param d Output matrix in float32
-    /// @param a Input matrix A is a 16 x 16 fragmentin float16.
-    /// @param b Input matrix B is an 16 x 8 fragment float16.
-    /// @param c Accumulate matrix C is a 16 x 8 fragment in float32.
-    /// https://docs.nvidia.com/cuda/parallel-thread-execution/#multiply-and-accumulate-instruction-mma
+    /// Performs D = A x B + C matrix-multiplication with tensor cores.
+    ///
+    /// Parameters:
+    ///   d   Output matrix, 16 x 8 fragment in float32.
+    ///   a   Input matrix A, 16 x 16 fragment in float16.
+    ///   b   Input matrix B, 16 x 8 fragment in float16.
+    ///   c   Accumulate matrix C, 16 x 8 fragment in float32.
     __device__ void mma_m16_n8_k16(
         float4 &d,
         uint4 a,
@@ -30,12 +31,13 @@ namespace spio
               "f"(c.x), "f"(c.y), "f"(c.z), "f"(c.w));
     }
 
-    /// @brief Perform  D= A x B + C matrix-multiplication with tensor cores.
-    /// @param d Output matrix is a 16 x 8 fragment in float32.
-    /// @param a Input matrix A is a 16 x 8 fragment in float16.
-    /// @param b Input matrix B is an 8 x 8 fragment in float16.
-    /// @param c Accumulate matrix C is a 16 x 8 fragment in float32.
-    /// @return
+    /// Performs D = A x B + C matrix-multiplication with tensor cores.
+    ///
+    /// Parameters:
+    ///   d   Output matrix, 16 x 8 fragment in float32.
+    ///   a   Input matrix A, 16 x 8 fragment in float16.
+    ///   b   Input matrix B, 8 x 8 fragment in float16.
+    ///   c   Accumulate matrix C, 16 x 8 fragment in float32.
     __device__ void mma_m16_n8_k8(
         float4 &d,
         uint2 a,

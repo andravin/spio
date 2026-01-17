@@ -5,35 +5,47 @@
 
 namespace spio
 {
-    /// @brief A simple pipeline class.
-    /// This class is used to manage the state of a pipeline with multiple stages.
-    /// Each stage is represented by a bit in an unsigned integer.
-    /// The pipeline can be stepped forward, and the active stages can be checked.
+    /// Manages the state of a pipeline with multiple stages.
+    ///
+    /// Each stage is represented by a bit in an unsigned integer. The pipeline
+    /// can be stepped forward, and active stages can be checked.
     class Pipeline
     {
     public:
-        /// @brief Constructor.
-        /// @param state the initial state of the pipeline.
+        /// Constructs a pipeline with an initial state.
+        ///
+        /// Parameters:
+        ///   state   Initial state bitmask (default 0).
         DEVICE Pipeline(unsigned state = 0) : _state(state) {}
 
-        /// @brief Check if a stage is active.
-        /// @param stage the bitmask of the stage to check.
-        /// @return True if the stage is active, false otherwise.
+        /// Checks if a stage is active.
+        ///
+        /// Parameters:
+        ///   stage   Bitmask of the stage to check.
+        ///
+        /// Returns:
+        ///   True if the stage is active.
         DEVICE bool active(unsigned stage) const { return (stage & _state) != 0; }
 
-        /// @brief Check if two stages are active.
-        /// @param stage_1 the bitmask of the first stage to check.
-        /// @param stage_2 the bitmask of the second stage to check.
-        /// @return True if both stage_1 and stage_2 are active, false otherwise.
+        /// Checks if two stages are both active.
+        ///
+        /// Parameters:
+        ///   stage_1   Bitmask of the first stage.
+        ///   stage_2   Bitmask of the second stage.
+        ///
+        /// Returns:
+        ///   True if both stages are active.
         DEVICE bool active(unsigned stage_1, unsigned stage_2) const
         {
             return ((stage_1 | stage_2) & _state) == (stage_1 | stage_2);
         }
 
-        /// @brief Step the pipeline.
-        /// All pipeline stages are shifted one bit to the left. Logically this
-        /// shifts a task to the next stage in the pipeline.
-        /// @param active Set to true to to activate the first pipeline stage.
+        /// Steps the pipeline forward by one stage.
+        ///
+        /// Shifts all stages one bit to the left, moving tasks to the next stage.
+        ///
+        /// Parameters:
+        ///   active   If true, activates the first pipeline stage.
         DEVICE void step(bool active)
         {
             _state <<= 1;

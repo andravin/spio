@@ -31,10 +31,12 @@ namespace spio {
         static constexpr auto max_value = DimType(Size - 1);
     };
 
-    /// @brief Store information about a tensor dimension.
-    /// @tparam DimType the dimension type
-    /// @tparam Size the size of the dimension
-    /// @tparam Stride the stride of the dimension
+    /// Stores information about a tensor dimension.
+    ///
+    /// Template parameters:
+    ///   DimType   The dimension type.
+    ///   Size      The size of the dimension.
+    ///   Stride    The stride of the dimension.
     template <typename DimType, int Size, int Stride> struct DimInfo : DimSize<DimType, Size> {
         using Base = DimSize<DimType, Size>;
         using Base::dim_type;
@@ -264,9 +266,11 @@ namespace spio {
     }
 
     namespace detail {
-        /// @brief Check if a dimension exists in the tensor.
-        /// @tparam DimType the dimension type to check
-        /// @tparam DimInfos the dimension infos
+        /// Checks if a dimension exists in the tensor.
+        ///
+        /// Template parameters:
+        ///   DimType    The dimension type to check.
+        ///   DimInfos   The dimension infos.
         template <typename DimType, typename... DimInfos> struct has_dim;
 
         template <typename DimType, typename FirstDimInfo, typename... RestDimInfos>
@@ -291,7 +295,7 @@ namespace spio {
                                       typename find_dim_info_impl<DimType, RestDimInfos...>::info>;
         };
 
-        /// @brief Base case with dummy DimInfo instantiation for error handling.
+        /// Base case with dummy DimInfo instantiation for error handling.
         template <typename DimType> struct find_dim_info_impl<DimType> {
             using info = DimInfo<DimType, 0, 1>;
         };
@@ -299,9 +303,11 @@ namespace spio {
 
     // Type traits for dim_info operations
     namespace dim_traits {
-        /// @brief Find dimension info for a given dimension type.
-        /// @tparam DimType the dimension type to find
-        /// @tparam ...DimInfos the dimension infos
+        /// Finds dimension info for a given dimension type.
+        ///
+        /// Template parameters:
+        ///   DimType      The dimension type to find.
+        ///   ...DimInfos  The dimension infos.
         template <typename DimType, typename... DimInfos> struct find_dim_info {
             // First check if dimension exists and show a clear error message if it doesn't.
             static_assert(detail::has_dim<DimType, DimInfos...>::value,
@@ -313,16 +319,20 @@ namespace spio {
             using info = typename impl::info;
         };
 
-        /// @brief Check if a dimension exists in the tensor (public interface).
-        /// @tparam DimType the dimension type to check
-        /// @tparam DimInfos the dimension infos
+        /// Checks if a dimension exists in the tensor (public interface).
+        ///
+        /// Template parameters:
+        ///   DimType    The dimension type to check.
+        ///   DimInfos   The dimension infos.
         template <typename DimType, typename... DimInfos> struct has_dimension {
             static constexpr bool value = detail::has_dim<DimType, DimInfos...>::value;
         };
 
-        /// @brief Get the size of a specific dimension.
-        /// @tparam DimType the dimension type
-        /// @tparam DimInfos the dimension infos
+        /// Gets the size of a specific dimension.
+        ///
+        /// Template parameters:
+        ///   DimType    The dimension type.
+        ///   DimInfos   The dimension infos.
         template <typename DimType, typename... DimInfos> struct dimension_size {
             static constexpr DimType value = find_dim_info<DimType, DimInfos...>::info::size;
         };
@@ -344,13 +354,16 @@ namespace spio {
                                                         DimInfo<DimType, Size, Stride>>;
         };
 
-        /// @brief Replace all occurrences of a base dimension with another base dimension.
-        /// @details This preserves the fold structure. For example:
+        /// Replaces all occurrences of a base dimension with another base dimension.
+        ///
+        /// This preserves the fold structure. For example:
         ///   - DimInfo<X, Size, Stride> -> DimInfo<Y, Size, Stride>
         ///   - DimInfo<Fold<X, 8>, Size, Stride> -> DimInfo<Fold<Y, 8>, Size, Stride>
-        /// @tparam FromBaseDim the base dimension to replace
-        /// @tparam ToBaseDim the base dimension to replace with
-        /// @tparam DimInfoType the DimInfo to transform
+        ///
+        /// Template parameters:
+        ///   FromBaseDim   The base dimension to replace.
+        ///   ToBaseDim     The base dimension to replace with.
+        ///   DimInfoType   The DimInfo to transform.
         template <typename FromBaseDim, typename ToBaseDim, typename DimInfoType>
         struct replace_dimension;
 
@@ -364,7 +377,7 @@ namespace spio {
         // Tuple-based variants for use with dim_infos alias
         // ========================================================================
 
-        /// @brief Check if a dimension exists in a tuple of DimInfos.
+        /// Checks if a dimension exists in a tuple of DimInfos.
         template <typename DimType, typename InfosTuple> struct tuple_has_dimension;
 
         template <typename DimType> struct tuple_has_dimension<DimType, detail::tuple<>> {
@@ -378,7 +391,7 @@ namespace spio {
                 tuple_has_dimension<DimType, detail::tuple<RestInfos...>>::value;
         };
 
-        /// @brief Find dimension info from a tuple of DimInfos.
+        /// Finds dimension info from a tuple of DimInfos.
         template <typename DimType, typename InfosTuple> struct tuple_find_dim_info_impl;
 
         template <typename DimType> struct tuple_find_dim_info_impl<DimType, detail::tuple<>> {

@@ -10,10 +10,13 @@
 
 namespace spio {
 
-    /// @brief Compound index for mapping a linear offset to multidimensional coordinates
-    /// @details This class is the inverse of Tensor - it maps a linear offset
-    /// (like a thread index) back to typed dimension coordinates.
-    /// @tparam DimInfos The dimension information types (same as in Tensor)
+    /// Compound index for mapping a linear offset to multidimensional coordinates.
+    ///
+    /// The inverse of Tensor - maps a linear offset (like a thread index) back to
+    /// typed dimension coordinates.
+    ///
+    /// Template parameters:
+    ///   DimInfos   Dimension information types (same as in Tensor).
     template <typename... DimInfos> class CompoundIndex : public CompoundIndexBase<OFFSET> {
     public:
         // Total number of elements (product of all dimension sizes)
@@ -21,21 +24,27 @@ namespace spio {
 
         using CompoundIndexBase::CompoundIndexBase;
 
-        /// @brief Cast dimensions by replacing all occurrences of a base dimension.
-        /// @details Replaces all dimensions with base type FromDim to use base type ToDim,
-        /// preserving any fold structure. For example, if the index has Fold<X, 16> and Fold<X, 8>,
-        /// casting from X to Y produces Fold<Y, 16> and Fold<Y, 8>.
-        /// @tparam FromDim the base dimension to replace
-        /// @tparam ToDim the base dimension to replace with
+        /// Casts dimensions by replacing all occurrences of a base dimension.
+        ///
+        /// Replaces all dimensions with base type FromDim to use base type ToDim,
+        /// preserving any fold structure.
+        ///
+        /// Template parameters:
+        ///   FromDim   The base dimension to replace.
+        ///   ToDim     The base dimension to replace with.
         template <typename FromDim, typename ToDim> DEVICE constexpr auto cast() const {
             using NewIndex = CompoundIndex<
                 typename dim_traits::replace_dimension<FromDim, ToDim, DimInfos>::type...>;
             return NewIndex(offset());
         }
 
-        /// @brief Get the typed coordinate for a specific dimension
-        /// @tparam DimType The dimension type to extract
-        /// @return A typed dimension value
+        /// Gets the typed coordinate for a specific dimension.
+        ///
+        /// Template parameters:
+        ///   DimType   The dimension type to extract.
+        ///
+        /// Returns:
+        ///   A typed dimension value.
         template <typename DimType> DEVICE constexpr auto get() const {
             using dim_info = typename dim_traits::find_dim_info<DimType, DimInfos...>::info;
             return dim_info::offset_to_dim(offset().get());
@@ -51,12 +60,12 @@ namespace spio {
             return dim_traits::dimension_size<DimType, DimInfos...>::value;
         }
 
-        /// @brief Get the number of dimensions in this index.
+        /// Returns the number of dimensions in this index.
         DEVICE static constexpr int num_dims() {
             return sizeof...(DimInfos);
         }
 
-        /// @brief Convert this CompoundIndex to a Coordinates object.
+        /// Converts this CompoundIndex to a Coordinates object.
         /// Returns Coordinates with Module types to preserve size/stride info for optimization.
         DEVICE constexpr auto coordinates() const {
             // get<DimType>() returns Module<base_dim, size, stride>
@@ -69,7 +78,7 @@ namespace spio {
         // Partition iterator and range for cooperative iteration
         // ========================================================================
 
-        /// @brief Iterator that yields IndexType for each partitioned offset.
+        /// Iterator that yields IndexType for each partitioned offset.
         template <typename IndexType, int Stride> class PartitionIterator {
         public:
             DEVICE constexpr PartitionIterator(int offset, int end) : _offset(offset), _end(end) {}
@@ -92,7 +101,7 @@ namespace spio {
             int _end;
         };
 
-        /// @brief A range that partitions an index's offset space.
+        /// A range that partitions an index's offset space.
         template <typename IndexType, int Stride> class PartitionRange {
         public:
             DEVICE constexpr PartitionRange(int start, int end) : _start(start), _end(end) {}
@@ -110,11 +119,16 @@ namespace spio {
             int _end;
         };
 
-        /// Partition this index's offset space by PartitionDim from partition_idx.
+        /// Partitions this index's offset space by PartitionDim from partition_idx.
+        ///
         /// Each thread handles offsets: start, start+stride, start+2*stride, ...
-        /// @tparam PartitionDim The dimension to partition by (e.g., LANE)
-        /// @param partition_idx Provides get<PartitionDim>() for start and size<PartitionDim>() for
-        /// stride
+        ///
+        /// Template parameters:
+        ///   PartitionDim   The dimension to partition by (e.g., LANE).
+        ///
+        /// Parameters:
+        ///   partition_idx   Provides get<PartitionDim>() for start and
+        ///                   size<PartitionDim>() for stride.
         template <typename PartitionDim, typename PartitionIndexType>
         DEVICE static constexpr auto partition(PartitionIndexType partition_idx) {
             constexpr int stride = PartitionIndexType::template size<PartitionDim>().get();

@@ -31,7 +31,7 @@ namespace std {
 
 namespace spio {
 
-    /// @brief Base class for all MMA indices that use 8x8 fragments.
+    /// Base class for all MMA indices that use 8x8 fragments.
     class _MMA_88_Index : public CompoundIndexBase<LANE> {
     public:
         using CompoundIndexBase::CompoundIndexBase;
@@ -45,9 +45,11 @@ namespace spio {
         };
     };
 
-    /// @brief Matrix A index for 8x8 fragments with float16 elements.
-    /// @tparam RowDim The dimension type for rows (i)
-    /// @tparam ColDim The dimension type for columns (k)
+    /// Matrix A index for 8x8 fragments with float16 elements.
+    ///
+    /// Template parameters:
+    ///   RowDim   Dimension type for rows (i).
+    ///   ColDim   Dimension type for columns (k).
     template <typename RowDim, typename ColDim> class MMA_A_88_F16_Index : public _MMA_88_Index {
     private:
         using Base = _MMA_88_Index;
@@ -108,9 +110,11 @@ namespace spio {
         }
     };
 
-    /// @brief Matrix B index for 8x8 fragments with float16 elements.
-    /// @tparam RowDim The dimension type for rows (k)
-    /// @tparam ColDim The dimension type for columns (j)
+    /// Matrix B index for 8x8 fragments with float16 elements.
+    ///
+    /// Template parameters:
+    ///   RowDim   Dimension type for rows (k).
+    ///   ColDim   Dimension type for columns (j).
     template <typename RowDim, typename ColDim> class MMA_B_88_F16_Index : public _MMA_88_Index {
     private:
         using Base = _MMA_88_Index;
@@ -172,9 +176,11 @@ namespace spio {
         }
     };
 
-    /// @brief Matrix C index for 8x8 fragments with float32 elements.
-    /// @tparam RowDim The dimension type for rows (i)
-    /// @tparam ColDim The dimension type for columns (j)
+    /// Matrix C index for 8x8 fragments with float32 elements.
+    ///
+    /// Template parameters:
+    ///   RowDim   Dimension type for rows (i).
+    ///   ColDim   Dimension type for columns (j).
     template <typename RowDim, typename ColDim> class MMA_C_88_F32_Index : public _MMA_88_Index {
     private:
         using Base = _MMA_88_Index;
@@ -224,7 +230,6 @@ namespace spio {
         }
 
         // Return a compound index that points to the given fragment.
-        // @param idx The fragment index
         auto DEVICE constexpr fragment_coord(int idx = 0) const {
             return make_coordinates(get<RowDim>(idx), get<Fold<ColDim, 8>>(idx));
         }

@@ -9,13 +9,15 @@
 
 namespace spio
 {
-    /// @brief  A warp-safe circular FIFO.
-    /// The user must ensure the size of the FIFO never exceeds its capacity.
+    /// A warp-safe circular FIFO.
     ///
-    /// To manage access to a limited number of resources, you can call WarpFifo::make_resourece_queue()
-    /// to construct a FIFO that is initialized with the resource identifiers [0, num_resources).
-    /// Then you acquire a resource-id by calling pop() and release it by calling push().
-    /// @tparam Capacity
+    /// The user must ensure the size of the FIFO never exceeds its capacity.
+    /// To manage access to a limited number of resources, call make_resource_queue()
+    /// to construct a FIFO initialized with resource identifiers [0, num_resources).
+    /// Acquire a resource-id by calling pop() and release it by calling push().
+    ///
+    /// Template parameters:
+    ///   Capacity   Maximum number of elements the FIFO can hold (must be <= 32).
     template <unsigned Capacity>
     class WarpFifo
     {
@@ -32,28 +34,35 @@ namespace spio
 
         static constexpr unsigned smem_size = capacity + 2;
 
-        /// @brief  Constructor
-        /// The user must initialize the FIFO array head and tail indexes to their initial values
-        /// before calling the constructor. Empty slots must be initialized to SENTINEL_VALUE.
-        /// @param fifo pointer to the shared memory array that holds the FIFO slots.
-        /// @param head pointer to the shared memory value that holds the index of the next element to read.
-        /// @param tail pointer to the shared memory value that holds the index of the next element to write.
-        /// @param tid the thread's unique identifier among the threads that participate in the FIFO.
+        /// Constructs a WarpFifo from pre-initialized shared memory.
+        ///
+        /// The user must initialize the FIFO array, head, and tail indexes before calling.
+        /// Empty slots must be initialized to sentinel_value.
+        ///
+        /// Parameters:
+        ///   fifo   Pointer to the shared memory array holding FIFO slots.
+        ///   head   Pointer to the index of the next element to read.
+        ///   tail   Pointer to the index of the next element to write.
+        ///   tid    Thread's unique identifier among participating threads.
         __device__ WarpFifo(data_type *fifo, unsigned *head, unsigned *tail, int tid)
             : _fifo(fifo), _head(head), _tail(tail), _is_first_lane(tid % 32 == 0)
         {
         }
 
-        /// @brief  Create a resource queue.
-        /// This function initializes the FIFO array with "resource" identifiers [0, num_resources)
-        /// and the remaining slots with SENTINEL_VALUE. The head and tail indexes are initialized
-        /// to 0 and num_resources, respectively. The user must ensure that num_resources <= Capacity.
-        /// @param fifo pointer to the shared memory array that holds the FIFO slots.
-        /// @param head pointer to the shared memory value that holds the index of the next element to read.
-        /// @param tail pointer to the shared memory value that holds the index of the next element to write.
-        /// @param tid the thread's unique identifier among the threads that participate in the FIFO.
-        /// @param num_resources the number of resources to initialize the FIFO with. Must be less than or equal to Capacity.
-        /// @return WarpFifo initialized with the requested number of resource ids [0, num_resources).
+        /// Creates a resource queue initialized with resource identifiers.
+        ///
+        /// Initializes the FIFO array with identifiers [0, num_resources) and remaining
+        /// slots with sentinel_value. Sets head to 0 and tail to num_resources.
+        ///
+        /// Parameters:
+        ///   fifo           Pointer to the shared memory array holding FIFO slots.
+        ///   head           Pointer to the index of the next element to read.
+        ///   tail           Pointer to the index of the next element to write.
+        ///   tid            Thread's unique identifier among participating threads.
+        ///   num_resources  Number of resources (must be <= Capacity).
+        ///
+        /// Returns:
+        ///   WarpFifo initialized with resource ids [0, num_resources).
         __device__ static WarpFifo make_resource_queue(data_type *fifo, unsigned *head, unsigned *tail, int tid, int num_resources)
         {
             if (tid < capacity)
@@ -68,14 +77,17 @@ namespace spio
             return WarpFifo(fifo, head, tail, tid);
         }
 
-        /// @brief Create a resource queue.
-        /// This is a simpler form of the make_resource_queue() function that uses a single shared memory buffer.
-        /// The buffer must be large enough to hold the FIFO array, the head and tail indexes. The total size
-        /// of the buffer must be WarpFifo::smem_size.
-        /// @param smem_buffer a shared memory buffer of size WarpFifo::smem_size
-        /// @param tid the thread's unique identifier among the threads that participate in the FIFO.
-        /// @param num_resources the number of resources to initialize the FIFO with. Must be less than or equal to Capacity.
-        /// @return WarpFifo initialized with the requested number of resource ids [0, num_resources).
+        /// Creates a resource queue using a single shared memory buffer.
+        ///
+        /// Simplified form that uses one contiguous buffer for the FIFO array, head, and tail.
+        ///
+        /// Parameters:
+        ///   smem_buffer    Shared memory buffer of size WarpFifo::smem_size.
+        ///   tid            Thread's unique identifier among participating threads.
+        ///   num_resources  Number of resources (must be <= Capacity).
+        ///
+        /// Returns:
+        ///   WarpFifo initialized with resource ids [0, num_resources).
         __device__ static WarpFifo make_resource_queue(data_type *smem_buffer, int tid, int num_resources)
         {
             return make_resource_queue(
@@ -86,26 +98,33 @@ namespace spio
                 num_resources);
         }
 
-        /// @brief  Allocate a resource queue.
-        /// @param allocator the allocator object to use for allocating the shared memory buffer.
-        /// @param tid the thread's unique identifier among the threads that participate in the FIFO.
-        /// @param num_resources the number of resources to initialize the FIFO with. Must be less than or equal to Capacity.
-        /// @return WarpFifo initialized with the requested number of resource ids [0, num_resources).
+        /// Allocates and creates a resource queue using a StackAllocator.
+        ///
+        /// Parameters:
+        ///   allocator      Allocator for the shared memory buffer.
+        ///   tid            Thread's unique identifier among participating threads.
+        ///   num_resources  Number of resources (must be <= Capacity).
+        ///
+        /// Returns:
+        ///   WarpFifo initialized with resource ids [0, num_resources).
         __device__ static WarpFifo allocate_resource_queue(StackAllocator &allocator, int tid, int num_resources)
         {
             auto smem_buffer = allocator.allocate<data_type>(smem_size);
             return make_resource_queue(smem_buffer, tid, num_resources);
         }
 
-        /// @brief  Deallocate the shared memory buffer used by the FIFO.
-        /// @param allocator the allocator object that was used to allocate the shared memory buffer.
+        /// Deallocates the shared memory buffer used by the FIFO.
+        ///
+        /// Parameters:
+        ///   allocator   The allocator that was used to allocate the buffer.
         __device__ void deallocate(StackAllocator &allocator)
         {
             allocator.deallocate(_fifo, smem_size);
         }
 
-        /// @brief Push a value into the FIFO.
-        /// Only the first thread in each warp performs the push operation. All threads in the warp synchronize afterwards.
+        /// Pushes a value into the FIFO.
+        ///
+        /// Only the first thread in each warp performs the push. All threads synchronize after.
         /// The user must ensure the FIFO does not overflow.
         __device__ void push(data_type value)
         {
@@ -118,10 +137,12 @@ namespace spio
             __syncwarp();
         }
 
-        /// @brief Pop the next element from the FIFO and return it to all threads in the warp.
-        /// Each warp pops one element from the FIFO. The popped value is broadcast to all lanes.
-        /// This method performs a busy-wait loop until the FIFO is not empty.
-        /// @return The next element in the FIFO.
+        /// Pops the next element from the FIFO and broadcasts it to all warp threads.
+        ///
+        /// Each warp pops one element. Performs a busy-wait loop until the FIFO is not empty.
+        ///
+        /// Returns:
+        ///   The next element in the FIFO.
         __device__ data_type pop()
         {
             data_type value;
@@ -150,9 +171,12 @@ namespace spio
         bool _is_first_lane;
     };
 
-    /// @brief A guard that pops a value from a WarpFifo and pushes it back when the guard goes out of scope.
-    /// This protects against the user forgetting to push the value back into the FIFO after using it.
-    /// @tparam Capacity
+    /// RAII guard that pops a value from a WarpFifo and pushes it back on destruction.
+    ///
+    /// Protects against forgetting to push the value back after using it.
+    ///
+    /// Template parameters:
+    ///   Capacity   Capacity of the underlying WarpFifo.
     template <unsigned Capacity>
     class WarpFifoGuard
     {
@@ -161,20 +185,22 @@ namespace spio
 
         using data_type = typename Fifo::data_type;
 
-        /// @brief  Construct the guard by popping a value from the WarpFifo.
-        /// @param fifo the WarpFifo to pop the value from.
+        /// Constructs the guard by popping a value from the WarpFifo.
+        ///
+        /// Parameters:
+        ///   fifo   The WarpFifo to pop the value from.
         __device__ WarpFifoGuard(Fifo &fifo) : _fifo(fifo)
         {
             _value = _fifo.pop();
         }
 
-        /// @brief  Destructor that pushes the value back into the WarpFifo.
+        /// Destructor that pushes the value back into the WarpFifo.
         __device__ ~WarpFifoGuard()
         {
             _fifo.push(_value);
         }
 
-        /// @brief  Get the value that was popped from the WarpFifo.
+        /// Returns the value that was popped from the WarpFifo.
         __device__ data_type value() const
         {
             return _value;

@@ -5,35 +5,25 @@
 
 namespace spio
 {
-    /// @brief Stack based allocator for shared memory.
+    /// Stack-based allocator for shared memory.
     ///
-    /// This is a simple allocator that uses a pointer to shared memory and
-    /// increments the pointer as memory is allocated. It does not check for
-    /// memory leaks or double deallocation. It is the user's responsibility to
-    /// ensure that the memory is deallocated in the reverse order of allocation.
+    /// Uses a pointer to shared memory and increments it as memory is allocated.
+    /// Does not check for memory leaks or double deallocation. The user must
+    /// deallocate memory in the reverse order of allocation.
     ///
-    /// It is not necessary to deallocate shared memory at the end of the kernel,
-    /// as it is automatically freed when the kernel exits.
-    ///
-    /// The purpose of the deallocate function is to allow the user to free memory
-    /// so that it can be reused for another allocation. This is useful for shared
-    /// memory buffers that are only used in one stage of the kernel, such as input loading,
-    /// main loop, and output writing. The user can deallocate the memory that is specific
-    /// to a stage after it is no longer needed, allowing the memory to be reused for the next stage.
+    /// Shared memory is automatically freed when the kernel exits, so deallocation
+    /// is only needed to reuse memory for another allocation within the kernel.
     class StackAllocator
     {
-        /// @brief Calculate the size of an array of type T in terms of unsigned integers.
-        /// @param size The number of elements in the array.
-        /// @return The size of the array in terms of unsigned integers.
-        /// @tparam T The type of the elements in the array.
+        /// Calculates the size of an array of type T in unsigned integer units.
         template <typename T>
         static constexpr DEVICE int _unsigned_size(int size) { return size * (sizeof(T) / sizeof(unsigned)); }
 
-        /// @brief  Cast the shared memory pointer to a pointer of type T.
+        /// Casts the shared memory pointer to a pointer of type T.
         template <typename T>
         DEVICE T *_cast() { return reinterpret_cast<T *>(_stack_ptr); }
 
-        /// @brief Compile time check to ensure that the size of T is a multiple of the size of unsigned and greater than zero.
+        /// Compile-time check that sizeof(T) is a positive multiple of sizeof(unsigned).
         template <typename T>
         DEVICE void _static_check()
         {
@@ -42,14 +32,21 @@ namespace spio
         }
 
     public:
-        /// @brief Construct the allocator with a pointer to shared memory.
-        /// @details The pointer must be aligned to the size of unsigned.
+        /// Constructs the allocator with a pointer to shared memory.
+        ///
+        /// The pointer must be aligned to the size of unsigned.
         DEVICE StackAllocator(void *smem_ptr) : _stack_ptr(reinterpret_cast<unsigned *>(smem_ptr)) {}
 
-        /// @brief Allocate an array of type T in shared memory.
-        /// @tparam T the data-type of the array elements.
-        /// @param size the number of elements in the array.
-        /// @return a pointer to the array.
+        /// Allocates an array of type T in shared memory.
+        ///
+        /// Template parameters:
+        ///   T       Element type.
+        ///
+        /// Parameters:
+        ///   size    Number of elements to allocate.
+        ///
+        /// Returns:
+        ///   Pointer to the allocated array.
         template <typename T>
         DEVICE T *allocate(int size)
         {
@@ -59,12 +56,17 @@ namespace spio
             return ptr;
         }
 
-        /// @brief Deallocate an array of type T in shared memory.
-        /// @details The user must deallocate the memory in the reverse order of allocation.
-        /// @details The pointer to the array is only used to infer the data-type.
-        /// @tparam T the data-type of the array elements.
-        /// @param ptr the pointer to the array to deallocate.
-        /// @param size the number of elements in the array.
+        /// Deallocates an array of type T in shared memory.
+        ///
+        /// Must deallocate in reverse order of allocation. The pointer is only
+        /// used to infer the element type.
+        ///
+        /// Template parameters:
+        ///   T       Element type.
+        ///
+        /// Parameters:
+        ///   ptr     Pointer to the array (used only for type inference).
+        ///   size    Number of elements to deallocate.
         template <typename T>
         DEVICE void deallocate(T *ptr, int size)
         {

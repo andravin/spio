@@ -11,8 +11,9 @@
 
 namespace spio {
 
-    /// @brief CRTP mixin that provides tensor-like access for fragment classes.
-    /// Derived classes must define `tensor_type` and provide `data()` method.
+    /// CRTP mixin that provides tensor-like access for fragment classes.
+    ///
+    /// Derived classes must define tensor_type and provide data() method.
     template <typename Derived> class FragmentTensorAccess {
     public:
         __device__ auto as_tensor() {
@@ -91,8 +92,10 @@ namespace spio {
         T _data[NUM_FRAGMENTS];
     };
 
-    /// @brief Base class for half-precision matrix fragments.
-    /// @tparam NUM_FRAGMENTS The number of 8x8 matrix fragments.
+    /// Base class for half-precision matrix fragments.
+    ///
+    /// Template parameters:
+    ///   NUM_FRAGMENTS   Number of 8x8 matrix fragments.
     template <int NUM_FRAGMENTS> class _MMA_F16 : public _MMA<NUM_FRAGMENTS, __half2> {
     public:
         using Base = _MMA<NUM_FRAGMENTS, __half2>;
@@ -140,8 +143,10 @@ namespace spio {
         }
     };
 
-    /// @brief Base class for single-precision matrix fragments.
-    /// @tparam NUM_FRAGMENTS The number of 8x8 matrix fragments.
+    /// Base class for single-precision matrix fragments.
+    ///
+    /// Template parameters:
+    ///   NUM_FRAGMENTS   Number of 8x8 matrix fragments.
     template <int NUM_FRAGMENTS> class _MMA_F32 : public _MMA<NUM_FRAGMENTS, float2> {
     public:
         using Base = _MMA<NUM_FRAGMENTS, float2>;
@@ -191,8 +196,12 @@ namespace spio {
         }
     };
 
-    /// @brief  Template base class for 16-row fp16 matrix fragments for operand A.
-    /// @tparam _NUM_FRAGMENTS_K Number of 8-column fragments (i.e. the K-dimension).
+    /// Template base class for 16-row fp16 matrix fragments for operand A.
+    ///
+    /// Template parameters:
+    ///   RowDim            Dimension type for rows.
+    ///   ColDim            Dimension type for columns.
+    ///   _NUM_FRAGMENTS_K  Number of 8-column fragments (K-dimension).
     template <typename RowDim, typename ColDim, int _NUM_FRAGMENTS_K>
     class _MMA_M16_N8_F16_A : public _MMA_F16<2 * _NUM_FRAGMENTS_K> {
     public:
@@ -204,8 +213,12 @@ namespace spio {
         using col_dim = ColDim;
     };
 
-    /// @brief  Template base class for 8-column fp16 matrix fragments for operand B.
-    /// @tparam _NUM_FRAGMENTS_K Number of 8-row matrix fragments (i.e. the K-dimension).
+    /// Template base class for 8-column fp16 matrix fragments for operand B.
+    ///
+    /// Template parameters:
+    ///   RowDim            Dimension type for rows.
+    ///   ColDim            Dimension type for columns.
+    ///   _NUM_FRAGMENTS_K  Number of 8-row fragments (K-dimension).
     template <typename RowDim, typename ColDim, int _NUM_FRAGMENTS_K>
     class _MMA_M16_N8_F16_B : public _MMA_F16<_NUM_FRAGMENTS_K> {
     public:
@@ -217,8 +230,7 @@ namespace spio {
         using col_dim = ColDim;
     };
 
-    /// @brief  C or D matrix with float32 elements for M16_N8_K* matrix multiplication with float32
-    /// accumulation.
+    /// C or D matrix with float32 elements for M16_N8_K* matrix multiplication.
     /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
     template <typename RowDim, typename ColDim>
     class MMA_M16_N8_F32_C : public _MMA_F32<2>,
@@ -250,22 +262,32 @@ namespace spio {
             Tensor<data_type, DimInfo<Fold<ColDim, 8>, 2, 2>, DimInfo<Fold<RowDim, 8>, 2, 1>>;
     };
 
-    /// @brief  Mixin class for loading fragments from memory.
-    /// @tparam Derived The derived fragment class that provides load() and load_trans() methods.
+    /// Mixin class for loading fragments from memory.
+    ///
+    /// Template parameters:
+    ///   Derived   The derived fragment class with load() and load_trans() methods.
     template <typename Derived> class FragmentLoader {
     public:
-        /// @brief Load a fragment from memory.
-        /// @param p The pointer to the memory to load the fragment from.
-        /// @return The loaded fragment.
+        /// Loads a fragment from memory.
+        ///
+        /// Parameters:
+        ///   p   Pointer to the memory to load from.
+        ///
+        /// Returns:
+        ///   The loaded fragment.
         static __device__ Derived load_new(const void* p) {
             Derived ret;
             ret.load(p);
             return ret;
         }
 
-        /// @brief Load a transposed fragment from memory.
-        /// @param p The pointer to the memory to load the fragment from.
-        /// @return The loaded fragment.
+        /// Loads a transposed fragment from memory.
+        ///
+        /// Parameters:
+        ///   p   Pointer to the memory to load from.
+        ///
+        /// Returns:
+        ///   The loaded fragment.
         static __device__ Derived load_trans_new(const void* p) {
             Derived ret;
             ret.load_trans(p);
@@ -273,7 +295,7 @@ namespace spio {
         }
     };
 
-    /// @brief A matrix with float16 elements for M16_N8_K8 matrix multiplication.
+    /// A matrix with float16 elements for M16_N8_K8 matrix multiplication.
     template <typename RowDim, typename ColDim>
     class MMA_M16_K8_F16_A : public _MMA_M16_N8_F16_A<RowDim, ColDim, 1>,
                              public FragmentLoader<MMA_M16_K8_F16_A<RowDim, ColDim>>,
@@ -312,7 +334,7 @@ namespace spio {
         }
     };
 
-    /// @brief A matrix with float16 elements for M16_N8_K16 matrix multiplication.
+    /// A matrix with float16 elements for M16_N8_K16 matrix multiplication.
     template <typename RowDim, typename ColDim>
     class MMA_M16_K16_F16_A : public _MMA_M16_N8_F16_A<RowDim, ColDim, 2>,
                               public FragmentLoader<MMA_M16_K16_F16_A<RowDim, ColDim>>,
@@ -389,7 +411,7 @@ namespace spio {
         }
     };
 
-    /// @brief B matrix with float16 elements for M16_N8_K16 matrix multiplication.
+    /// B matrix with float16 elements for M16_N8_K16 matrix multiplication.
     /// https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-fragments-for-mma-m16n8k16-with-floating-point-type
     template <typename RowDim, typename ColDim>
     class MMA_N8_K16_F16_B : public _MMA_M16_N8_F16_B<RowDim, ColDim, 2>,

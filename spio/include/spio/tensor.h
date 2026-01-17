@@ -10,7 +10,7 @@
 
 namespace spio {
 
-    /// @brief Base class for tensor data.
+    /// Base class for tensor data.
     template <typename _data_type> class Data {
     public:
         using data_type = _data_type;
@@ -46,7 +46,7 @@ namespace spio {
     // Implementation details
     namespace detail {
 
-        /// @brief Update dimension info by replacing a given dimension with a new size.
+        /// Updates dimension info by replacing a given dimension with a new size.
         template <typename DimType, int SliceSize, typename Tuple, typename Result = tuple<>>
         struct update_dim_info;
 
@@ -409,7 +409,7 @@ namespace spio {
 
     } // namespace detail
 
-    /// @brief A multi-dimensional pointer that traverses tensor dimensions.
+    /// A multi-dimensional pointer that traverses tensor dimensions.
     ///
     /// Cursor stores logical coordinates and defers folding to physical offset until
     /// pointer access. This enables correct cross-fold carry behavior when accumulating
@@ -420,8 +420,9 @@ namespace spio {
     /// logical coordinates to a physical pointer, and subsequent BaseCursor::step()
     /// calls will not handle cross-fold carry.
     ///
-    /// @tparam DataType the data type of the tensor
-    /// @tparam Params template parameters (DimInfo types are extracted automatically)
+    /// Template parameters:
+    ///   DataType   The data type of the tensor.
+    ///   Params     Template parameters (DimInfo types are extracted automatically).
     template <typename DataType, typename... Params> class Cursor : public Data<DataType> {
         // Extract DimInfo types from Params
         template <typename InfosTuple> struct unpack_dim_infos;
@@ -459,7 +460,8 @@ namespace spio {
             return Base::get() + compute_offset();
         }
 
-        /// @brief Get the base pointer without applying coordinate offset.
+        /// Returns the base pointer without applying coordinate offset.
+        ///
         /// Used internally when constructing a new cursor with updated coordinates.
         DEVICE constexpr data_type* base_ptr() const {
             return Base::get();
@@ -500,8 +502,7 @@ namespace spio {
             any_coordinate_matches_impl<DimsTuple>::value;
 
     public:
-        /// @brief Subscript operator for dimension-like types, Coordinates, or types with
-        /// coordinates().
+        /// Subscript operator for dimension-like types, Coordinates, or types with coordinates().
         template <typename T> DEVICE constexpr Cursor operator[](T t) const {
             if constexpr (detail::is_coordinates_v<T>) {
                 using derived_tuple = derived_dims;
@@ -537,14 +538,16 @@ namespace spio {
             return *this;
         }
 
-        /// @brief Get size for a specific dimension as it exists in the cursor.
+        /// Returns size for a specific dimension as it exists in the cursor.
+        ///
         /// Fails to compile if the exact dimension does not exist in the cursor.
         template <typename DimType> DEVICE static constexpr DimType size() {
             using info = typename dim_traits::tuple_find_dim_info<DimType, dim_infos>::info;
             return DimType(info::size);
         }
 
-        /// @brief Get the total extent in the requested dimension's base type.
+        /// Returns the total extent in the requested dimension's base type.
+        ///
         /// Returns the size of the coarsest fold, converted to the requested dimension type.
         template <typename DimType> DEVICE static constexpr DimType extent() {
             using RequestedBaseDim = typename DimType::dim_type;
@@ -564,14 +567,15 @@ namespace spio {
             return DimType(size<coarsest_dim_type>());
         }
 
-        /// @brief Get Coordinates that include the extent for each base dimension.
+        /// Returns Coordinates that include the extent for each base dimension.
         DEVICE static constexpr auto extents() {
             using coarsest_infos = detail::coarsest_dim_infos_t<dim_infos>;
             return make_sizes_from_infos(coarsest_infos{});
         }
 
-        /// @brief Check if all coordinates are within bounds.
-        /// @return true if each coordinate is less than the corresponding extent.
+        /// Checks if all coordinates are within bounds.
+        ///
+        /// Returns true if each coordinate is less than the corresponding extent.
         DEVICE constexpr bool inbounds() const {
             return _coords < extents();
         }
@@ -594,7 +598,7 @@ namespace spio {
         coordinates_type _coords;
     };
 
-    /// @brief A cursor with direct pointer arithmetic (no coordinate tracking).
+    /// A cursor with direct pointer arithmetic (no coordinate tracking).
     ///
     /// BaseCursor is used for performance-critical inner loops where you want direct
     /// pointer manipulation without the overhead of coordinate tracking. It is typically
@@ -604,8 +608,9 @@ namespace spio {
     /// It does NOT handle cross-fold carry behavior. If you need cross-fold carry,
     /// use Cursor instead.
     ///
-    /// @tparam DataType the data type of the tensor
-    /// @tparam Params template parameters (DimInfo types are extracted automatically)
+    /// Template parameters:
+    ///   DataType   The data type of the tensor.
+    ///   Params     Template parameters (DimInfo types are extracted automatically).
     template <typename DataType, typename... Params> class BaseCursor : public Data<DataType> {
     public:
         using dim_infos = detail::filter_dim_infos_t<Params...>;
@@ -621,15 +626,20 @@ namespace spio {
         static constexpr bool has_dimension_v =
             dim_traits::tuple_has_dimension<DimType, dim_infos>::value;
 
-        /// @brief Subscript operator that returns a new Cursor at the specified dimension index.
-        /// @tparam DimType the dimension to apply the subscript index to.
-        /// @param d the subscript index.
-        /// @return a new Cursor that points to the element at the specified dimension index.
+        /// Subscript operator that returns a new Cursor at the specified dimension index.
+        ///
+        /// Template parameters:
+        ///   DimType   The dimension to apply the subscript index to.
+        ///
+        /// Parameters:
+        ///   d   The subscript index.
+        ///
+        /// Returns a new Cursor that points to the element at the specified dimension index.
         template <typename T> DEVICE constexpr cursor_type operator[](T t) const {
             return cursor_type(Base::get())[t];
         }
 
-        /// @brief Increment the cursor in a specific dimension type.
+        /// Increments the cursor in a specific dimension type.
         template <typename DimType> DEVICE BaseCursor& step(DimType d = 1) {
             constexpr int stride =
                 dim_traits::tuple_find_dim_info<DimType, dim_infos>::info::stride;
@@ -638,9 +648,11 @@ namespace spio {
         }
     };
 
-    /// @brief Tensor class.
-    /// @tparam DataType the data type of the tensor
-    /// @tparam Params template parameters (DimInfo types are extracted automatically)
+    /// Tensor class for multi-dimensional data storage.
+    ///
+    /// Template parameters:
+    ///   DataType   The data type of the tensor.
+    ///   Params     Template parameters (DimInfo types are extracted automatically).
     template <typename DataType, typename... Params> class Tensor : public Data<DataType> {
         // Helper to unpack dim_infos tuple for template instantiation
         template <typename InfosTuple> struct unpack_for_compound_index;
@@ -736,17 +748,17 @@ namespace spio {
             return make_sizes_from_infos(coarsest_infos{});
         }
 
-        /// @brief Subscript operator with any dimension type or Coordinates.
+        /// Subscript operator with any dimension type or Coordinates.
         template <typename T> DEVICE constexpr cursor_type operator[](T t) const {
             return cursor_type(get())[t];
         }
 
-        /// @brief Get a cursor at a specific offset.
+        /// Returns a cursor at a specific offset.
         DEVICE constexpr cursor_type offset(int offset) const {
             return cursor_type(get(), offset);
         }
 
-        /// @brief Slice method to create a view with a different offset and size in one dimension.
+        /// Creates a view with a different offset and size in one dimension.
         template <int SliceSize, typename SliceDimType>
         DEVICE constexpr auto slice(SliceDimType slice_start) {
             using updated_infos =
@@ -757,23 +769,23 @@ namespace spio {
             return tensor_type((*this)[slice_start].get());
         }
 
-        /// @brief Load data from a source cursor that points to a shared memory buffer.
+        /// Loads data from a source cursor that points to a shared memory buffer.
         template <typename SrcCursorType> DEVICE void load(SrcCursorType src) {
             load_dispatch<SrcCursorType, dim_infos>(*this, src);
         }
 
-        /// @brief Apply a custom function to each element of the tensor
+        /// Applies a custom function to each element of the tensor.
         template <typename F> DEVICE void apply(F func) {
             apply_dispatch<F, dim_infos>(*this, func);
         }
 
-        /// @brief Fill the tensor with zeros.
+        /// Fills the tensor with zeros.
         DEVICE void zero() {
             auto zero_func = [](auto obj) { obj->zero(); };
             apply(zero_func);
         }
 
-        /// @brief Fill the tensor with a specified value.
+        /// Fills the tensor with a specified value.
         template <typename Vector> DEVICE void fill(Vector value) {
             auto fill_func = [value](auto obj) { obj->fill(value); };
             apply(fill_func);
@@ -784,7 +796,8 @@ namespace spio {
             apply(add_func);
         }
 
-        /// @brief Get the base pointer without applying coordinate offset.
+        /// Returns the base pointer without applying coordinate offset.
+        ///
         /// Used internally when constructing a new cursor with updated coordinates.
         DEVICE constexpr data_type* base_ptr() const {
             return Base::get();
@@ -797,13 +810,13 @@ namespace spio {
                 typename Infos::dim_type(Infos::size)...);
         }
 
-        /// @brief Base case for loading data from a source cursor.
+        /// Base case for loading data from a source cursor.
         template <typename DstCursorType, typename SrcCursorType>
         DEVICE static void load_impl(DstCursorType dst, SrcCursorType src) {
             dst->load(src.get());
         }
 
-        /// @brief Recursive case for loading data from a source cursor.
+        /// Recursive case for loading data from a source cursor.
         template <typename DstCursorType, typename SrcCursorType, typename FirstDimInfo,
                   typename... RestDimInfos>
         DEVICE static void load_impl(DstCursorType dst, SrcCursorType src) {
@@ -814,7 +827,7 @@ namespace spio {
             }
         }
 
-        /// @brief Dispatcher that unpacks dim_infos tuple for load_impl.
+        /// Dispatcher that unpacks dim_infos tuple for load_impl.
         template <typename SrcCursorType, typename InfosTuple> struct load_dispatch_impl;
 
         template <typename SrcCursorType, typename... Infos>
@@ -829,13 +842,13 @@ namespace spio {
             load_dispatch_impl<SrcCursorType, InfosTuple>::dispatch(tensor, src);
         }
 
-        /// @brief Base case for applying a function to tensor elements.
+        /// Base case for applying a function to tensor elements.
         template <typename F, typename CursorType>
         DEVICE static void apply_impl(CursorType obj, F func) {
             func(obj);
         }
 
-        /// @brief Recursive case for applying a function to tensor elements.
+        /// Recursive case for applying a function to tensor elements.
         template <typename F, typename CursorType, typename FirstDimInfo, typename... RestDimInfos>
         DEVICE static void apply_impl(CursorType obj, F func) {
             using FirstDimType = typename FirstDimInfo::dim_type;
@@ -845,7 +858,7 @@ namespace spio {
             }
         }
 
-        /// @brief Dispatcher that unpacks dim_infos tuple for apply_impl.
+        /// Dispatcher that unpacks dim_infos tuple for apply_impl.
         template <typename F, typename InfosTuple> struct apply_dispatch_impl;
 
         template <typename F, typename... Infos>

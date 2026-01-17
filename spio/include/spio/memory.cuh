@@ -4,19 +4,15 @@
 #include <cuda_pipeline.h>
 
 namespace spio {
-    /// @brief Convenience interface to CUDA's __pipline_memcpy_async.
-    /// This template function simplifies the interface to the CUDA pipeline memcpy.
-    /// It infers the load size from the data_type of the src and dst arguments. It
-    /// also zero-fills the entire element if the mask is false.
-    /// @param dst Destination pointer.
-    /// @param src Source pointer.
-    /// @param mask if false, this thread skips the memcpy and fills its element with zeros instead.
+    /// Convenience interface to CUDA's async memcpy with zero-fill support.
     ///
-    /// Uses inline PTX instead of __pipeline_memcpy_async() because the intrinsic
-    /// generates redundant code: paired LDGSTS instructions with duplicated address
-    /// arithmetic for the in-bounds and out-of-bounds paths, even though only one
-    /// path executes. The inline PTX generates a single LDGSTS with the src-size
-    /// operand controlling zero-fill behavior.
+    /// Simplifies the CUDA pipeline memcpy interface. Infers load size from data_type.
+    /// Uses inline PTX for optimal code generation.
+    ///
+    /// Parameters:
+    ///   dst    Destination pointer in shared memory.
+    ///   src    Source pointer in global memory.
+    ///   mask   If false, zero-fills instead of copying.
     template <typename data_type>
     __device__ void memcpy_async(data_type* dst, const data_type* __restrict__ src,
                                  bool mask = true) {
