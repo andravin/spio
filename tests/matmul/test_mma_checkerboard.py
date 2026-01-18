@@ -80,6 +80,7 @@ class MmaConfig:
             max_registers = 255
         else:
             max_registers = 128
+        return max_registers
 
     @property
     def block(self) -> tuple[int, int, int]:
