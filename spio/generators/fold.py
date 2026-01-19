@@ -1,6 +1,6 @@
 """Code generator for custom folded-dimension template classes."""
 
-from typing import Tuple, Union, TYPE_CHECKING
+from typing import Tuple, Union
 from dataclasses import dataclass
 
 from .gen_specs import GenSpecs
@@ -171,9 +171,8 @@ class Fold(GenSpecs):
         base_dim = self.dim if isinstance(self.dim, Dim) else None
         if base_dim is not None:
             return base_dim.fold(new_stride)
-        else:
-            # Legacy string-based fold
-            return Fold(dim=self.dim, stride=new_stride)
+        # Legacy string-based fold
+        return Fold(dim=self.dim, stride=new_stride)
 
     def __truediv__(self, divisor: int) -> "Fold":
         """Create a coarser Fold by increasing the stride by the divisor.

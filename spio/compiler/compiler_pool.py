@@ -18,7 +18,7 @@ LONG_TIMEOUT = 999
 # Reference:
 # https://stackoverflow.com/questions/11312525/catch-ctrlc-sigint-and-exit-multiprocesses-gracefully-in-python
 old_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
-pool = Pool(workers)
+pool = Pool(workers)  # pylint: disable=consider-using-with
 signal.signal(signal.SIGINT, old_handler)
 
 

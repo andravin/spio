@@ -75,7 +75,7 @@ class CompoundIndex(GenSpecsWithContext, DerivedDimension):
                         raise ValueError("Dims object must be the only positional arg")
                     dims = arg
                     break
-                elif isinstance(arg, (tuple, list)):
+                if isinstance(arg, (tuple, list)):
                     collected_args.extend(arg)
                 elif is_dims_arg(arg) or isinstance(arg, dict):
                     collected_args.append(arg)
@@ -160,7 +160,8 @@ class CompoundIndex(GenSpecsWithContext, DerivedDimension):
             g.ComputeIndex = CompoundIndex(Dims(warp=4, lane=32), init=BuiltIn.THREAD_IDX_X)
             g.partition_c_smem = g.CLoadSmemIndex.partition("lane", g.ComputeIndex)
 
-            # Generates: auto partition_c_smem() { return CLoadSmemIndex::partition<LANE>(ComputeIndex()); }
+            # Generates:
+            #   auto partition_c_smem() { return CLoadSmemIndex::partition<LANE>(ComputeIndex()); }
             # In kernel: for (auto p : partition_c_smem()) { ... }
         """
         return CompoundIndexPartition(

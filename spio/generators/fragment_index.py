@@ -114,7 +114,9 @@ class FragmentIndex(GenSpecs):
         col_dim_class = dim_name_to_dim_or_fold_class_name(self.col_name)
 
         # Generate the type alias
-        return f"using {self.class_name} = spio::{desc.fragment_index}<{row_dim_class}, {col_dim_class}>;"
+        using_name = self.class_name
+        template = f"spio::{desc.fragment_index}<{row_dim_class}, {col_dim_class}>"
+        return f"using {using_name} = {template};"
 
     @property
     def dim_names(self) -> Tuple[str, str]:
@@ -141,7 +143,9 @@ class FragmentLoadIndex(FragmentIndex):
         col_dim_class = dim_name_to_dim_or_fold_class_name(self.col_name)
 
         # Generate the type alias
-        return f"using {self.class_name} = spio::{desc.fragment_load_index}<{row_dim_class}, {col_dim_class}>;"
+        using_name = self.class_name
+        template = f"spio::{desc.fragment_load_index}<{row_dim_class}, {col_dim_class}>"
+        return f"using {using_name} = {template};"
 
 
 def fragment_load_supported(fragment_type: FragmentType) -> bool:

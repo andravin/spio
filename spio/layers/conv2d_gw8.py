@@ -1,6 +1,6 @@
 """PyTorch module for Conv2d with group width equal to 8."""
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 from torch import nn
@@ -25,7 +25,7 @@ class Conv2dGw8(nn.Conv2d):
     Params = Conv2dGw8Params
 
     @staticmethod
-    def make(*args, **kwargs) -> nn.Module:
+    def make(*args, **kwargs) -> Optional[nn.Module]:
         """Create a Conv2dGw8 module if possible.
 
         If the parameters match the requirements, return a new Conv2dGw8

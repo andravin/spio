@@ -7,7 +7,7 @@ from .gen_specs import GenSpecs
 from ..util import divup
 
 if TYPE_CHECKING:
-    from .fold import Fold
+    from .fold import Fold, StaticFold
 
 
 @dataclass(frozen=True, eq=False)
@@ -80,6 +80,7 @@ class StaticDim:
             i = I(16)
             i8 = i.fold(8)  # StaticFold of i with stride 8
         """
+        # pylint: disable-next=import-outside-toplevel  # circular import
         from .fold import StaticFold
 
         # Reuse the Dim's fold cache to ensure consistent Fold objects
@@ -110,6 +111,7 @@ class StaticDim:
             i = I(17)
             i8 = i.fold_up(8)  # StaticFold with size 3 (ceil(17/8) = 3)
         """
+        # pylint: disable-next=import-outside-toplevel  # circular import
         from .fold import StaticFold
 
         # Reuse the Dim's fold cache to ensure consistent Fold objects
@@ -226,6 +228,7 @@ class Dim(GenSpecs):
             K8 = K.fold(8)  # Fold of K with stride 8
             K8 = K.fold(8, "K8")  # Fold with explicit name
         """
+        # pylint: disable-next=import-outside-toplevel  # circular import
         from .fold import Fold
 
         # Cache Fold objects by stride for consistent identity
@@ -268,7 +271,8 @@ class Dim(GenSpecs):
     def generate(self):
         """Generate the C++ code for a dimension class using CRTP."""
         class_name = self.class_name
-        return f"struct {class_name} : spio::Dim<{class_name}> {{ using spio::Dim<{class_name}>::Dim; }};\n"
+        return f"struct {class_name} : spio::Dim<{class_name}> " \
+               f"{{ using spio::Dim<{class_name}>::Dim; }};\n"
 
     @property
     def dim_names(self) -> Tuple[str,]:
@@ -286,8 +290,7 @@ def _get_dim_or_fold_class_name(name: str, stride: int):
     dim_class_name = _format_dim_class_name(name)
     if stride is None:
         return dim_class_name
-    else:
-        return _format_fold_template_instance(dim_class_name, stride)
+    return _format_fold_template_instance(dim_class_name, stride)
 
 
 def _get_dim_name_and_stride(name: str) -> Tuple[str, int]:

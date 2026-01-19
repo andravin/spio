@@ -66,7 +66,7 @@ class Stats:
         return 2.0 * self.macs / self.bytes
 
     @property
-    def accumulation_depths(self) -> int:
+    def accumulation_depths(self) -> List[int]:
         """The accumulation depths of the calculations."""
         return [
             getattr(self, f"{output_tensor}_accumulation_depth")

@@ -3,8 +3,10 @@
 from typing import Dict, Union, Generator, List, Tuple
 from dataclasses import dataclass, field
 
-from .dim import dim_name_to_dim_or_fold_class_name
+from .dim import Dim, dim_name_to_dim_or_fold_class_name
+from .fold import Fold
 from .dims import Dims, Strides, compute_full_strides, is_dims_arg
+from .dim_arg import normalize_dim_arg
 from .fragment_type import FragmentType
 from .fragment import Fragment
 from .data_type import dtype, get_dtype_veclen, get_dtype_with_veclen
@@ -65,8 +67,7 @@ class Tensor(GenSpecsWithContext):
                     dim_args.extend(arg)
                 elif (
                     is_dims_arg(arg)
-                    or isinstance(arg, dict)
-                    or isinstance(arg, SizedDerivedDimension)
+                    or isinstance(arg, (dict, SizedDerivedDimension))
                 ):
                     dim_args.append(arg)
                 elif isinstance(arg, (dtype, FragmentType, Fragment)) or (
@@ -139,7 +140,8 @@ class Tensor(GenSpecsWithContext):
                 for stride_name in self.strides.keys():
                     if stride_name not in self.dims:
                         raise ValueError(
-                            f"Stride name '{stride_name}' not found in dims {list(self.dims.keys())}."
+                            f"Stride name '{stride_name}' not found in dims "
+                            f"{list(self.dims.keys())}."
                         )
         for name, value in self.dims.items():
             if isinstance(value, SizedDerivedDimension):
@@ -386,7 +388,6 @@ class Tensor(GenSpecsWithContext):
             tensor2 = Tensor((i, j), data_type=dtype.half2)
             result2 = tensor2 / dtype.half8  # equivalent to vector_length(8)
         """
-        from .data_type import dtype, get_dtype_veclen
 
         # Handle dtype division - delegate to vector_length
         if isinstance(other, dtype):
@@ -403,9 +404,6 @@ class Tensor(GenSpecsWithContext):
             return self.vector_length(veclen)
 
         # Handle Fragment division
-        from .fragment import Fragment
-        from .dim_arg import normalize_dim_arg
-
         if not isinstance(other, Fragment):
             raise TypeError(
                 f"Tensor division requires a Fragment or dtype, got {type(other).__name__}"
@@ -484,7 +482,8 @@ class Tensor(GenSpecsWithContext):
 
             if fragment_dims:
                 raise ValueError(
-                    f"Fragment dimensions {list(fragment_dims.keys())} not found in Tensor dimensions"
+                    f"Fragment dimensions {list(fragment_dims.keys())} "
+                    f"not found in Tensor dimensions"
                 )
 
             new_dims = Dims(
@@ -708,9 +707,6 @@ def _lookup_stride(strides: Dict, key: str) -> int:
         return strides[key]
 
     # Check for Dim object keys whose name matches
-    from .dim import Dim
-    from .fold import Fold
-
     for k, v in strides.items():
         if isinstance(k, (Dim, Fold)):
             dim_name = k.dim_name if isinstance(k, Dim) else k.fold_name
@@ -757,9 +753,8 @@ def _generate_tensor(
     if len(dim_infos) <= 3:
         dim_info_str = ", ".join(dim_infos)
         return f"using {class_name} = spio::Tensor<{data_type_name}, {dim_info_str}>;\n"
-    else:
-        dim_info_str = ",\n    ".join(dim_infos)
-        return f"using {class_name} = spio::Tensor<{data_type_name},\n    {dim_info_str}\n>;\n"
+    dim_info_str = ",\n    ".join(dim_infos)
+    return f"using {class_name} = spio::Tensor<{data_type_name},\n    {dim_info_str}\n>;\n"
 
 
 def header():

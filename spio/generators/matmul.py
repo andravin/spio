@@ -67,15 +67,15 @@ class Matmul(GenSpecs):
         # Generate function signature
         lines.append("/**")
         lines.append(
-            f" * Optimized matrix multiplication function for specific tensor formats."
+            " * Optimized matrix multiplication function for specific tensor formats."
         )
         lines.append(f" * - Tensor A dimensions: {', '.join(a_dims)}")
         lines.append(f" * - Tensor B dimensions: {', '.join(b_dims)}")
         lines.append(f" * - Output dimensions: {', '.join(a_only_dims + b_only_dims)}")
         lines.append(f" * - Reduction dimensions: {', '.join(reduction_dims)}")
-        lines.append(f" * Using reduction-first traversal order.")
+        lines.append(" * Using reduction-first traversal order.")
         if self.use_zigzag:
-            lines.append(f" * Using zigzag traversal for all dimensions.")
+            lines.append(" * Using zigzag traversal for all dimensions.")
         lines.append(
             " * Note: Tensors must be initialized before calling this function."
         )
@@ -189,10 +189,9 @@ class Matmul(GenSpecs):
 
     def _build_subscript_chain(self, dims: Set[str], available_dims: Set[str]) -> str:
         """Build a chain of subscript operators for the given dimensions."""
-        subscripts = ""
-        for dim in sorted(list(dims.intersection(available_dims))):
-            subscripts += f"[{dim}_idx]"
-        return subscripts
+        return "".join(
+            f"[{dim}_idx]" for dim in sorted(dims.intersection(available_dims))
+        )
 
     def _get_dim_class_name(self, dim_name: str) -> str:
         """Get the C++ class name for a dimension."""

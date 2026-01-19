@@ -25,7 +25,7 @@ def compile_with_nvcc(
     lineinfo=False,
     pre_includes=None,
     run_args=None,
-) -> int:
+) -> subprocess.CompletedProcess:
     """Compile CUDA source files with nvcc.
 
     Kernel compilation should use compile_with_nvrtc instead.

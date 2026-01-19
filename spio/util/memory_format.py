@@ -13,22 +13,20 @@ class SixteenChannelsLast:
         """Transpose a tensor from [k, c] to [c16, k, 16c]."""
         if tensor.dim() == 2:
             return tensor.view(tensor.shape[0], -1, 16).permute(1, 0, 2).contiguous()
-        elif tensor.dim() == 4:
+        if tensor.dim() == 4:
             n, _, h, w = tensor.shape
             return tensor.view(n, -1, 16, h, w).permute(1, 0, 3, 4, 2).contiguous()
-        else:
-            raise NotImplementedError(f"{tensor.dim()}D tensor not supported")
+        raise NotImplementedError(f"{tensor.dim()}D tensor not supported")
 
     @staticmethod
     def unformat(tensor: torch.Tensor) -> torch.Tensor:
         """Transpose a tensor from [c16, k, 16c] to [k, c]."""
         if tensor.dim() == 3:
             return tensor.permute(1, 0, 2).contiguous().view(tensor.shape[1], -1)
-        elif tensor.dim() == 5:
+        if tensor.dim() == 5:
             _, n, h, w, _ = tensor.shape
             return tensor.permute(1, 0, 4, 2, 3).contiguous().view(n, -1, h, w)
-        else:
-            raise NotImplementedError(f"{tensor.dim()}D tensor not supported")
+        raise NotImplementedError(f"{tensor.dim()}D tensor not supported")
 
 
 def check_channels_last(args: List[torch.Tensor]):
