@@ -31,9 +31,7 @@ class _CoordinatesSpec(GenSpecs):
         """Validate that dims types."""
         for dim in self.dims:
             if not isinstance(dim, (Dim, Fold)):
-                raise TypeError(
-                    f"Coordinates dims must be Dim or Fold instances, got {type(dim)}"
-                )
+                raise TypeError(f"Coordinates dims must be Dim or Fold instances, got {type(dim)}")
 
     def _set_class_name(self, name: str) -> None:
         """Set the coordinate name for this Coordinates.
@@ -89,8 +87,6 @@ class Coordinates(_CoordinatesSpec):
         object.__setattr__(instance, "coord_name", coord_name)
         return instance
 
-    def __init__(
-        self, *_args, coord_name: str = None
-    ):  # pylint: disable=super-init-not-called
+    def __init__(self, *_args, coord_name: str = None):  # pylint: disable=super-init-not-called
         # Attributes set in __new__; calling parent __init__ would fail on frozen dataclass
         self.__post_init__()

@@ -61,7 +61,7 @@ class KernelParamsLogger(ContextDecorator):
         kernel_factory: "KernelFactory",
         params: Params,
         device: Any,
-        **kernel_kwargs
+        **kernel_kwargs,
     ):
         """Log kernel parameters.
 
@@ -105,9 +105,7 @@ def _log_kernel_params(func):
             params = args[2]
             device = args[3]
             kernel_kwargs = kwargs.copy()
-            logger._log_params(
-                kernel_cache, kernel_factory, params, device, **kernel_kwargs
-            )
+            logger._log_params(kernel_cache, kernel_factory, params, device, **kernel_kwargs)
         return func(*args, **kwargs)
 
     return wrapper

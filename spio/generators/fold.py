@@ -89,9 +89,7 @@ class StaticFold:
         if not isinstance(divisor, int):
             return NotImplemented
         if self.size % divisor != 0:
-            raise ValueError(
-                f"Divisor {divisor} is not divisible into size {self.size}."
-            )
+            raise ValueError(f"Divisor {divisor} is not divisible into size {self.size}.")
         new_stride = self.fold.stride * divisor
         new_fold = self.fold.fold(new_stride)
         new_size = self.size // divisor
@@ -203,9 +201,7 @@ class Fold(GenSpecs):
 
     def generate(self):
         dim_class_name = dim_name_to_dim_or_fold_class_name(self.dim_name)
-        fold_template_instance = _format_fold_template_instance(
-            dim_class_name, self.stride
-        )
+        fold_template_instance = _format_fold_template_instance(dim_class_name, self.stride)
         fold_class_name = _format_dim_class_name(self.fold_name)
 
         if self.init is None:

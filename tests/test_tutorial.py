@@ -71,9 +71,7 @@ def _compile_dim_example(example_name: str):
         specs = _extract_specs(cpp_source)
         if specs:
             generated_code = generate(specs, utest_dim_printers=True)
-            with NamedTemporaryFile(
-                prefix="spio_", suffix=".h", mode="w", delete=False
-            ) as f:
+            with NamedTemporaryFile(prefix="spio_", suffix=".h", mode="w", delete=False) as f:
                 f.write(generated_code)
                 generated_headers.append(f.name)
 

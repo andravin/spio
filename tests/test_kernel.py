@@ -9,9 +9,7 @@ from spio.util import divup, assert_all_close_with_acc_depth
 
 def test_add_kernel():
     """Compile and run a simple CUDA kernel."""
-    _, add_kernel = compile_and_load_kernel(
-        kernel_name="add", src_module="spio.src_tests"
-    )
+    _, add_kernel = compile_and_load_kernel(kernel_name="add", src_module="spio.src_tests")
 
     x1 = torch.arange(25, dtype=torch.float32, device="cuda").reshape(5, 5)
     x2 = torch.arange(25, dtype=torch.float32, device="cuda").reshape(5, 5)

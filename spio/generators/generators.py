@@ -69,9 +69,7 @@ def generate(
     gen_specs = list(gen_specs) + list(used_generators_by_id.values())
 
     # 1. Find explicitly declared Fold specs
-    explicit_folds = {
-        spec.fold_name: spec for spec in gen_specs if isinstance(spec, Fold)
-    }
+    explicit_folds = {spec.fold_name: spec for spec in gen_specs if isinstance(spec, Fold)}
 
     # Track all fold names - these are NOT base dimensions
     fold_names = set(explicit_folds.keys())

@@ -98,8 +98,7 @@ BASE_CONFIGS = [
 ]
 
 CONFIGS = [
-    replace(config, wave_size=wave_size)
-    for config, wave_size in product(BASE_CONFIGS, WAVE_SIZE)
+    replace(config, wave_size=wave_size) for config, wave_size in product(BASE_CONFIGS, WAVE_SIZE)
 ]
 
 
@@ -112,10 +111,13 @@ class ConfigError(Exception):
 # -----------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("config", [
-    *CONFIGS[:-1],
-    pytest.param(CONFIGS[-1], marks=pytest.mark.smoke),
-])
+@pytest.mark.parametrize(
+    "config",
+    [
+        *CONFIGS[:-1],
+        pytest.param(CONFIGS[-1], marks=pytest.mark.smoke),
+    ],
+)
 @pytest.mark.parametrize(
     "m, n, k",
     [
@@ -148,9 +150,7 @@ def _get_specs(m: int, n: int, k: int, cfg: MmaConfig):
     assert n % 128 == 0, "Kernel requires N to be a multiple of 128."
     assert m % 128 == 0, "Kernel requires M to be a multiple of 128."
     if k % cfg.k_chunk != 0:
-        raise ConfigError(
-            f"K ({k}) must be a multiple of k_chunk ({cfg.k_chunk}) for this config."
-        )
+        raise ConfigError(f"K ({k}) must be a multiple of k_chunk ({cfg.k_chunk}) for this config.")
 
     # Base dimensions
     I = Dim()
@@ -364,9 +364,7 @@ def _benchmark():
         for n in range(1024, 1024 * 9, 1024):
             try:
                 _, kernel, grid, smem_size = _compile_kernel(n, n, n, cfg=config)
-                fn = partial(
-                    kernel.launch, grid, config.block, shared_mem_bytes=smem_size
-                )
+                fn = partial(kernel.launch, grid, config.block, shared_mem_bytes=smem_size)
                 args_lists = _make_matrix_lists(n, n, n)
                 _benchmark_kernel(fn, args_lists, n, n, n)
             except ConfigError:
@@ -504,15 +502,9 @@ def _parse_args():
         action="store_true",
         help="Benchmark all configurations (default behavior if no args).",
     )
-    parser.add_argument(
-        "-m", type=int, default=4096, help="M dimension (default: 4096)."
-    )
-    parser.add_argument(
-        "-n", type=int, default=4096, help="N dimension (default: 4096)."
-    )
-    parser.add_argument(
-        "-k", type=int, default=4096, help="K dimension (default: 4096)."
-    )
+    parser.add_argument("-m", type=int, default=4096, help="M dimension (default: 4096).")
+    parser.add_argument("-n", type=int, default=4096, help="N dimension (default: 4096).")
+    parser.add_argument("-k", type=int, default=4096, help="K dimension (default: 4096).")
     parser.add_argument(
         "--warp-m",
         type=int,

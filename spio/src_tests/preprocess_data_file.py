@@ -48,9 +48,7 @@ def _preprocess_data_lines(lines):
                         elif field.endswith("ms"):
                             time_val = float(field[:-2])  # Already in milliseconds
                         else:
-                            time_val = float(
-                                field
-                            )  # Assume it's already in milliseconds
+                            time_val = float(field)  # Assume it's already in milliseconds
                             raise ValueError(f"Unexpected time unit inf field: {field}")
                         field = str(time_val)
                 fields.append(field)

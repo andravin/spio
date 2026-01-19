@@ -65,10 +65,7 @@ class Tensor(GenSpecsWithContext):
                     if dims is not None:
                         raise ValueError("Multiple dims specified.")
                     dim_args.extend(arg)
-                elif (
-                    is_dims_arg(arg)
-                    or isinstance(arg, (dict, SizedDerivedDimension))
-                ):
+                elif is_dims_arg(arg) or isinstance(arg, (dict, SizedDerivedDimension)):
                     dim_args.append(arg)
                 elif isinstance(arg, (dtype, FragmentType, Fragment)) or (
                     isinstance(arg, str) and data_type is None
@@ -81,9 +78,7 @@ class Tensor(GenSpecsWithContext):
                         raise ValueError("Multiple class names specified.")
                     class_name = arg
                 else:
-                    raise ValueError(
-                        f"Unexpected positional argument type: {type(arg)}"
-                    )
+                    raise ValueError(f"Unexpected positional argument type: {type(arg)}")
             if dim_args:
                 if dims is not None:
                     raise ValueError("Dimensions specified multiple times.")
@@ -107,9 +102,7 @@ class Tensor(GenSpecsWithContext):
         if isinstance(self.strides, dict):
             # Check if this is a computed strides dict (may have non-string keys)
             # vs a user-provided dict (should have string keys only)
-            has_non_string_keys = any(
-                not isinstance(k, str) for k in self.strides.keys()
-            )
+            has_non_string_keys = any(not isinstance(k, str) for k in self.strides.keys())
             if not has_non_string_keys:
                 self.strides = Strides(**self.strides)
             # else: keep as dict - it's a computed strides dict from _ensure_initialized
@@ -133,9 +126,7 @@ class Tensor(GenSpecsWithContext):
         # Validate strides are in dims - but only for string-based (legacy) mode.
         # Object-based mode uses identity matching in compute_full_strides.
         if self.strides is not None:
-            use_object_matching = (
-                self.dims.has_object_args() and self.strides.has_object_args()
-            )
+            use_object_matching = self.dims.has_object_args() and self.strides.has_object_args()
             if not use_object_matching:
                 for stride_name in self.strides.keys():
                     if stride_name not in self.dims:
@@ -204,9 +195,7 @@ class Tensor(GenSpecsWithContext):
         """
         self._ensure_initialized()
         if not isinstance(derived_dim, DerivedDimension):
-            raise ValueError(
-                f"with_dim requires a DerivedDimension, got {type(derived_dim)}"
-            )
+            raise ValueError(f"with_dim requires a DerivedDimension, got {type(derived_dim)}")
         new_derived_dims = list(self.derived_dims) if self.derived_dims else []
         new_derived_dims.append(derived_dim)
         # Only add self to ancestors if it has a class_name.
@@ -273,9 +262,7 @@ class Tensor(GenSpecsWithContext):
         """
         self._ensure_initialized()
         if not isinstance(self.data_type, dtype):
-            raise ValueError(
-                f"with_vector_width requires a dtype, got {self.data_type}"
-            )
+            raise ValueError(f"with_vector_width requires a dtype, got {self.data_type}")
 
         current_veclen = get_dtype_veclen(self.data_type)
         if width <= current_veclen:
@@ -461,9 +448,7 @@ class Tensor(GenSpecsWithContext):
             new_dims_dict = {}
             for dim_key, dim_size in self.dims.items():
                 dim_name = (
-                    dim_key.upper()
-                    if isinstance(dim_key, str)
-                    else normalize_dim_arg(dim_key)
+                    dim_key.upper() if isinstance(dim_key, str) else normalize_dim_arg(dim_key)
                 )
 
                 if dim_name in fragment_dims:
@@ -713,9 +698,7 @@ def _lookup_stride(strides: Dict, key: str) -> int:
             if dim_name is not None and dim_name.upper() == key.upper():
                 return v
 
-    raise KeyError(
-        f"Stride not found for key '{key}'. Available keys: {list(strides.keys())}"
-    )
+    raise KeyError(f"Stride not found for key '{key}'. Available keys: {list(strides.keys())}")
 
 
 def _generate_tensor(
@@ -780,9 +763,7 @@ def _get_data_type_name(
         data_type = data_type.value.name
     elif isinstance(data_type, str):
         if user_data_types is None:
-            raise ValueError(
-                "user_data_types must be provided for user-defined data-types."
-            )
+            raise ValueError("user_data_types must be provided for user-defined data-types.")
         if not data_type in user_data_types:
             raise ValueError(f"Unknown user-defined data-type: {data_type}")
     else:

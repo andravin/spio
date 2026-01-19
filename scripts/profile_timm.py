@@ -60,14 +60,10 @@ def main():
     if args.spio:
         timm.layers.set_use_spio(True)
 
-    memory_format = (
-        torch.channels_last if args.channels_last else torch.contiguous_format
-    )
+    memory_format = torch.channels_last if args.channels_last else torch.contiguous_format
     total_iters = WAIT_ITERS + args.warmup_iters + args.benchmark_iters
 
-    model = timm.create_model(
-        args.model, pretrained=args.pretrained, **args.model_kwargs
-    ).cuda()
+    model = timm.create_model(args.model, pretrained=args.pretrained, **args.model_kwargs).cuda()
 
     if args.img_size is not None:
         img_size = 3, args.img_size, args.img_size
@@ -150,9 +146,7 @@ def main():
 
         data_file_name = get_trace_file_name(args, datestamp, ext=".dat")
         with open(data_file_name, "w", encoding="utf-8") as f:
-            f.write(
-                prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=-1)
-            )
+            f.write(prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=-1))
         print("Wrote data to ", data_file_name)
 
 

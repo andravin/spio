@@ -153,9 +153,7 @@ class MBConv(nn.Module):
         prj = nn.Conv2d(mid_channels, out_channels, kernel_size=1, bias=False)
         prj_bn = nn.BatchNorm2d(out_channels)
 
-        self.layers = nn.Sequential(
-            exp, exp_bn, exp_act, conv, conv_bn, conv_act, prj, prj_bn
-        )
+        self.layers = nn.Sequential(exp, exp_bn, exp_act, conv, conv_bn, conv_act, prj, prj_bn)
         self.has_residual = (in_channels == out_channels) and (stride == 1)
 
     def forward(self, x):
@@ -302,9 +300,7 @@ class StackedBlocks(nn.Module):
 
 
 CONVOLUTIONAL_BLOCK_LIST = [MBConv, ConvFirst, ConvNeXt]
-CONVOLUTIONAL_BLOCKS_DICT = {
-    block.__name__: block for block in CONVOLUTIONAL_BLOCK_LIST
-}
+CONVOLUTIONAL_BLOCKS_DICT = {block.__name__: block for block in CONVOLUTIONAL_BLOCK_LIST}
 
 
 def main():
@@ -352,9 +348,7 @@ def main():
     parser.add_argument("--save-trace", action="store_true")
     parser.add_argument("--benchmark-configs", action="store_true")
     parser.add_argument("--timm-model", type=str, default=None)
-    parser.add_argument(
-        "--timm-model-kwargs", nargs="*", default={}, action=ParseKwargs
-    )
+    parser.add_argument("--timm-model-kwargs", nargs="*", default={}, action=ParseKwargs)
     parser.add_argument(
         "--max-random-samples",
         type=int,
@@ -407,9 +401,9 @@ def run_benchmark(args, batch_size: int = None, quiet: bool = False):
                 file=sys.stderr,
             )
             sys.exit(1)
-        model = timm.create_model(
-            args.timm_model, pretrained=False, **args.timm_model_kwargs
-        ).cuda(args.device)
+        model = timm.create_model(args.timm_model, pretrained=False, **args.timm_model_kwargs).cuda(
+            args.device
+        )
         input_size = model.default_cfg["input_size"]
     else:
         model = StackedBlocks(
@@ -568,9 +562,7 @@ def benchmark_configs(model, inputs, args, data_path: Path):
         unique_kernel_params = set(logged_kernel_params)
 
     # Clear the kernel caches from the configs that were used during logging.
-    unique_kernel_caches = set(
-        kernel_params.kernel_cache for kernel_params in unique_kernel_params
-    )
+    unique_kernel_caches = set(kernel_params.kernel_cache for kernel_params in unique_kernel_params)
     for kernel_cache in unique_kernel_caches:
         kernel_cache.clear_cache()
 
@@ -589,9 +581,7 @@ def benchmark_configs(model, inputs, args, data_path: Path):
             raise ValueError("All kernels must be for the same device.")
         device_attr = get_device_attributes(device_idx)
         kernel_kwargs = dict(kernel_params.kernel_kwargs)
-        configs = kernel_factory.configs(
-            kernel_params.params, device_attr, **kernel_kwargs
-        )
+        configs = kernel_factory.configs(kernel_params.params, device_attr, **kernel_kwargs)
         kernel_table[kernel_params] = [
             kernel_factory.make_kernel(params, config, device_attr, **kernel_kwargs)
             for config in configs
@@ -608,9 +598,7 @@ def benchmark_configs(model, inputs, args, data_path: Path):
 
     all_kernel_choices = {}
     for kernel_params, kernel_lst in kernel_table.items():
-        all_kernel_choices[kernel_params] = random_sample_with_replacement(
-            kernel_lst, num_choices
-        )
+        all_kernel_choices[kernel_params] = random_sample_with_replacement(kernel_lst, num_choices)
 
     kernels_to_compile = []
     for kernel_params, kernel_lst in all_kernel_choices.items():
@@ -662,15 +650,11 @@ def benchmark_configs(model, inputs, args, data_path: Path):
             activities = [
                 torch.profiler.ProfilerActivity.CUDA,
             ]
-            with torch.profiler.profile(
-                activities=activities, schedule=schedule
-            ) as prof:
+            with torch.profiler.profile(activities=activities, schedule=schedule) as prof:
                 if args.inference:
                     with torch.no_grad():
                         for i in range(total_iters):
-                            with torch.autocast(
-                                device_type="cuda", dtype=torch.float16
-                            ):
+                            with torch.autocast(device_type="cuda", dtype=torch.float16):
                                 _out = model(inputs[i % args.corpus_size])
                             if i == args.warmup - 1:
                                 torch.cuda.synchronize()
@@ -710,15 +694,11 @@ def benchmark_configs(model, inputs, args, data_path: Path):
             # Extract the kernel timings from the benchmark results.
             for kernel_params, kernel in kernel_choices.items():
                 kernel_name = kernel.kernel_name
-                avg_time_ms = df.loc[df["Name"] == kernel_name, "CUDA_time_av"].values[
-                    0
-                ]
+                avg_time_ms = df.loc[df["Name"] == kernel_name, "CUDA_time_av"].values[0]
                 params = kernel.params
                 config = kernel.config
                 kernel_kwargs = str(kernel_params.kernel_kwargs)
-                out_str = (
-                    f"{kernel_name};{params};{config};{kernel_kwargs};{avg_time_ms}"
-                )
+                out_str = f"{kernel_name};{params};{config};{kernel_kwargs};{avg_time_ms}"
                 f.write(out_str + "\n")
 
 
@@ -729,12 +709,8 @@ def get_dir_name(args) -> str:
 
     if args.timm_model is not None:
         model_name = args.timm_model
-        kwargs_str = "__".join(
-            [f"{key}__{value}" for key, value in args.timm_model_kwargs.items()]
-        )
-        return (
-            f"modelbench___{device_name}___{model_name}___{kwargs_str}___{commit_hash}"
-        )
+        kwargs_str = "__".join([f"{key}__{value}" for key, value in args.timm_model_kwargs.items()])
+        return f"modelbench___{device_name}___{model_name}___{kwargs_str}___{commit_hash}"
 
     file_name = get_file_name_details(args, no_bs=True)
     date_stamp = get_date_stamp()
@@ -777,11 +753,7 @@ def get_date_stamp() -> str:
 def get_git_commit_hash() -> str:
     """Retrieve the current Git commit hash."""
     try:
-        commit_hash = (
-            subprocess.check_output(["git", "rev-parse", "HEAD"])
-            .strip()
-            .decode("utf-8")
-        )
+        commit_hash = subprocess.check_output(["git", "rev-parse", "HEAD"]).strip().decode("utf-8")
         return commit_hash
     except subprocess.CalledProcessError:
         return "unknown_commit"

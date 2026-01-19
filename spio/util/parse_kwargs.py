@@ -18,7 +18,5 @@ class ParseKwargs(argparse.Action):
             try:
                 kw[key] = ast.literal_eval(value)
             except ValueError:
-                kw[key] = str(
-                    value
-                )  # fallback to string (avoid need to escape on command line)
+                kw[key] = str(value)  # fallback to string (avoid need to escape on command line)
         setattr(namespace, self.dest, kw)

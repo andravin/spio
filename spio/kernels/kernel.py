@@ -167,9 +167,7 @@ def _check_device(args, device):
     """Ensure that all tensor arguments are on the same device."""
     for arg in args:
         if isinstance(arg, torch.Tensor) and arg.numel() > 0:
-            assert (
-                device == arg.device
-            ), f"Not all tensor arguments are on the same device: {args}"
+            assert device == arg.device, f"Not all tensor arguments are on the same device: {args}"
 
 
 def _kernel_args(args):

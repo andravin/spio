@@ -69,9 +69,7 @@ class Reflection:
                 assert arg.grad_of in self.arginfo
             arg.name = name
 
-    def make_args(
-        self, params, training=False, device="cuda"
-    ) -> Dict[str, torch.Tensor]:
+    def make_args(self, params, training=False, device="cuda") -> Dict[str, torch.Tensor]:
         """Create arguments for the kernel or function."""
         args = {}
         for name, info in self.arginfo.items():
@@ -117,9 +115,7 @@ class Reflection:
     def get_differentiable_input_names(self) -> List[str]:
         """Get the names of the differentiable input arguments."""
         return [
-            info.name
-            for info in self.arginfo.values()
-            if info.requires_grad and not info.output
+            info.name for info in self.arginfo.values() if info.requires_grad and not info.output
         ]
 
     def get_arg_name_from_gradient(self, gradient_name: str) -> str:
@@ -160,9 +156,7 @@ class Reflection:
         function. A kernel is backprop kernel if any of its arguments
         start with "grad_".
         """
-        return self.kernel_name is not None and any(
-            arg.startswith("grad_") for arg in self.args
-        )
+        return self.kernel_name is not None and any(arg.startswith("grad_") for arg in self.args)
 
 
 reflection_kernel_registry = {}
@@ -174,9 +168,7 @@ reflection_layer_registry = {}
 
 def register_reflection(reflection: Reflection):
     """Register a reflection for a kernel, function, or layer."""
-    if _more_than_one_not_none(
-        reflection.kernel_name, reflection.function, reflection.layer_cls
-    ):
+    if _more_than_one_not_none(reflection.kernel_name, reflection.function, reflection.layer_cls):
         raise ValueError(
             f"Reflection must have exactly one of kernel_cls, layer_cls, or function: {reflection}"
         )

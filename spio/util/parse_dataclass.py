@@ -30,9 +30,7 @@ def parse_dataclass(expr: str, dataclasses: Dict[str, Type[dataclass]] = None) -
             if dataclasses and dataclass_name in dataclasses:
                 dc = dataclasses[dataclass_name]
                 return dc(**data)
-            raise ValueError(
-                f"No matching dataclass found for the name '{dataclass_name}'"
-            )
+            raise ValueError(f"No matching dataclass found for the name '{dataclass_name}'")
         except (SyntaxError, ValueError) as e:
             raise ValueError(f"Failed to parse line '{expr}'") from e
     return None

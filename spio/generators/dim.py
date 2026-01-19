@@ -158,9 +158,7 @@ class StaticDim:
         if not isinstance(modulo, int):
             return NotImplemented
         if self.size % modulo != 0:
-            raise ValueError(
-                f"Modulo {modulo} does not evenly divide size {self.size}."
-            )
+            raise ValueError(f"Modulo {modulo} does not evenly divide size {self.size}.")
         return StaticDim(dim=self.dim, size=modulo)
 
 
@@ -271,8 +269,10 @@ class Dim(GenSpecs):
     def generate(self):
         """Generate the C++ code for a dimension class using CRTP."""
         class_name = self.class_name
-        return f"struct {class_name} : spio::Dim<{class_name}> " \
-               f"{{ using spio::Dim<{class_name}>::Dim; }};\n"
+        return (
+            f"struct {class_name} : spio::Dim<{class_name}> "
+            f"{{ using spio::Dim<{class_name}>::Dim; }};\n"
+        )
 
     @property
     def dim_names(self) -> Tuple[str,]:

@@ -220,9 +220,7 @@ class {self.class_name} : public {base}
 """
 
     def _gen_strip_loader_params(self) -> str:
-        pars = _make_args_list(
-            self.inner_axis_size, self.outer_axis_size, self.num_warps
-        )
+        pars = _make_args_list(self.inner_axis_size, self.outer_axis_size, self.num_warps)
         return f"spio::StripLoaderParams<{pars}>"
 
 
@@ -256,9 +254,7 @@ def _find_axis(strides: dict, base_name: str) -> str:
         # Prefer the one with largest fold factor (e.g., I16 over I8)
         return max(candidates, key=_extract_fold_factor)
 
-    raise ValueError(
-        f"No dimension matching '{base_name}' found in {list(strides.keys())}"
-    )
+    raise ValueError(f"No dimension matching '{base_name}' found in {list(strides.keys())}")
 
 
 def _extract_fold_factor(axis_name: str) -> int:

@@ -52,9 +52,7 @@ def _get_configs(
     block_w = BLOCK_Q + s_up - 1
 
     # # Try configurations with warp_s = params.S.
-    block_h_values = [
-        block_h for block_h in [2, 4, 8, 16, 32, 64] if block_h <= params.h
-    ]
+    block_h_values = [block_h for block_h in [2, 4, 8, 16, 32, 64] if block_h <= params.h]
     if params.h not in block_h_values:
         block_h_values.append(params.h)
     groups_values = [groups for groups in [2, 4, 8] if groups <= max_groups]
@@ -64,9 +62,7 @@ def _get_configs(
     if params.s not in warp_s_values:
         warp_s_values.append(params.s)
     block_n_iters_values = [
-        block_n_iters
-        for block_n_iters in [1, 2, 4, 8, 16, 32]
-        if block_n_iters <= params.n
+        block_n_iters for block_n_iters in [1, 2, 4, 8, 16, 32] if block_n_iters <= params.n
     ]
     warp_n_values = [warp_n for warp_n in [1, 2, 4] if warp_n <= params.n]
     yield from (
@@ -225,9 +221,7 @@ def _get_kernel_spec(
         #
         # Input loading.
         #
-        CompoundIndex(
-            {"n": config.warp_n, "x": block_w, "c8": block_c8}, class_name="InputIdx"
-        ),
+        CompoundIndex({"n": config.warp_n, "x": block_w, "c8": block_c8}, class_name="InputIdx"),
         Tensor(
             dtype.uint4,
             {"n": n, "y": h, "x": w, "c8": c8},
@@ -248,9 +242,7 @@ def _get_kernel_spec(
         #
         # Delta loading
         #
-        CompoundIndex(
-            {"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}, class_name="DeltaIdx"
-        ),
+        CompoundIndex({"n": config.warp_n, "q": BLOCK_Q, "k8": block_c8}, class_name="DeltaIdx"),
         Tensor(
             dtype.uint4,
             {"n": n, "p": p, "q": q, "k8": c8},

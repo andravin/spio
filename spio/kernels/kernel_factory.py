@@ -141,9 +141,7 @@ class KernelFactory:
         self.per_model_skip_params = perf_model_skip_params
         self._args_checker = args_checker
 
-    def configs(
-        self, params: Params, device_attr: DeviceAttributes, **kwargs
-    ) -> List[Config]:
+    def configs(self, params: Params, device_attr: DeviceAttributes, **kwargs) -> List[Config]:
         """Return all configs of the given layer parameters."""
         if callable(self._configs):
             return self._configs(params, device_attr, **kwargs)

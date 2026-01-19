@@ -42,9 +42,7 @@ def _get_configs(
     # igrad is unused in this function
     max_groups = min(params.groups, 8)
     block_n_values = [block_n for block_n in [1, 2, 4] if block_n <= params.n]
-    block_p_values = [
-        block_p for block_p in [1, 2, 4, 8, 16, 32, 64] if block_p <= params.p
-    ]
+    block_p_values = [block_p for block_p in [1, 2, 4, 8, 16, 32, 64] if block_p <= params.p]
     if params.p not in block_p_values:
         block_p_values.append(params.p)
     groups_values = [groups for groups in [1, 2, 4, 8] if groups <= max_groups]
@@ -52,9 +50,7 @@ def _get_configs(
         groups_values.append(params.groups)
     yield from (
         Conv2dGw8Config(groups=groups, block_p=block_p, block_n=block_n)
-        for groups, block_p, block_n in product(
-            groups_values, block_p_values, block_n_values
-        )
+        for groups, block_p, block_n in product(groups_values, block_p_values, block_n_values)
     )
 
 
@@ -152,9 +148,7 @@ def _get_kernel_spec(
             class_name="BlockIdx",
         ),
         CompoundIndex(Dims(n=block_n, x=block_w, c8=block_c8), class_name="InputIdx"),
-        Tensor(
-            dtype.uint4, Dims(n=n, y=h, x=w, c8=c8), class_name="Input", constant=True
-        ),
+        Tensor(dtype.uint4, Dims(n=n, y=h, x=w, c8=c8), class_name="Input", constant=True),
         Tensor(dtype.float2, Dims(k8=c8, k2=4), class_name="Bias", constant=True),
         CompoundIndex(Dims(k8=block_c8, lane=32), class_name="BiasIdx"),
         Tensor(dtype.uint4, Dims(n=n, p=p, q=q, k8=c8), class_name="Output"),
@@ -199,9 +193,7 @@ def _get_kernel_spec(
             class_name="ConstSmemOutput",
             constant=True,
         ),
-        CompoundIndex(
-            Dims(n=block_n, q=block_q, k8=block_c8), class_name="OutputStoreIdx"
-        ),
+        CompoundIndex(Dims(n=block_n, q=block_q, k8=block_c8), class_name="OutputStoreIdx"),
         CompoundIndex(Dims(q=block_q, n=block_n), class_name="BlockQNIdx"),
         Fragment(FragmentType.M16_N8_F32_C, "qn", "k", class_name="Acc"),
         Fragment(FragmentType.M16_K8_F16_A, "qn", "c", class_name="In"),

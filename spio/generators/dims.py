@@ -199,9 +199,7 @@ class Dims:
         derived_dims_from_kwargs = {
             k: v for k, v in dims.items() if isinstance(v, DerivedDimension)
         }
-        regular_dims = {
-            k: v for k, v in dims.items() if k not in derived_dims_from_kwargs
-        }
+        regular_dims = {k: v for k, v in dims.items() if k not in derived_dims_from_kwargs}
 
         if args and regular_dims:
             raise ValueError(
@@ -395,9 +393,7 @@ class Dims:
                 fold_key = arg._identity_key()  # (id(dim), stride)
                 if fold_key in seen_folds:
                     prev_arg = seen_folds[fold_key]
-                    fold_desc = (
-                        arg.fold.fold_name or f"fold with stride {arg.fold.stride}"
-                    )
+                    fold_desc = arg.fold.fold_name or f"fold with stride {arg.fold.stride}"
                     raise ValueError(
                         f"The same fold '{fold_desc}' appears twice in Dims. "
                         f"Each fold can only appear once (sizes {prev_arg.size} and {arg.size})."

@@ -64,10 +64,7 @@ def test_get_max_shared_memory_per_block_optin():
     """Test the get_max_shared_memory_per_block_optin function."""
     max_shared_memory = driver.get_max_shared_memory_per_block_optin()
     assert max_shared_memory > 0
-    assert (
-        max_shared_memory
-        == driver.get_device_attributes().max_shared_memory_per_block_optin
-    )
+    assert max_shared_memory == driver.get_device_attributes().max_shared_memory_per_block_optin
     attributes = DEVICE_ATTRIBUTES.get(driver.get_device_name())
     if attributes is not None:
         assert max_shared_memory == attributes.max_shared_memory_per_block_optin

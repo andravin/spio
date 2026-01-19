@@ -32,9 +32,7 @@ from spio.util.load_parameter_set import load_parameter_set
 # Set the environment variable SPIO_MAX_TEST_SAMPLES to a positive number
 # to run that many tests or zero to run all.
 DEFAULT_MAX_TEST_PARAMS = 10
-MAX_TEST_PARAMS = int(
-    os.environ.get("SPIO_MAX_TEST_PARAMS", f"{DEFAULT_MAX_TEST_PARAMS}")
-)
+MAX_TEST_PARAMS = int(os.environ.get("SPIO_MAX_TEST_PARAMS", f"{DEFAULT_MAX_TEST_PARAMS}"))
 
 
 def _random_sample_test_params(
@@ -171,18 +169,14 @@ def test_kernel_conv2d_gw8_wgrad_range_base_loop_failure_case():
         group_width=8,
         stride=1,
     )
-    config = Conv2dGw8WgradConfig(
-        groups=4, block_h=8, block_n_iters=1, warp_n=4, warp_s=1
-    )
+    config = Conv2dGw8WgradConfig(groups=4, block_h=8, block_n_iters=1, warp_n=4, warp_s=1)
     run_grad_kernel_test(conv2d_gw8_wgrad_kernel_factory, params, configs=[config])
 
 
 @pytest.mark.smoke
 def test_functional_conv2d_gw8_grad_sanity():
     """Sanity test for the Conv2dGw8 functional gradient."""
-    params = Conv2dGw8Params(
-        n=4, c=128, h=32, w=32, padding=(2, 0), r=4, s=1, has_bias=True
-    )
+    params = Conv2dGw8Params(n=4, c=128, h=32, w=32, padding=(2, 0), r=4, s=1, has_bias=True)
     run_grad_function_test(conv2d_gw8, params)
 
 

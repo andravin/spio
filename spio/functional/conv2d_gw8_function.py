@@ -119,18 +119,14 @@ def conv2d_gw8_backward_op(
 
     grad_output, inputs, weight = to_channels_last(grad_output, inputs, weight)
 
-    params = Conv2dGw8Params.from_tensors(
-        inputs, weight, bias, padding=(padding_y, padding_x)
-    )
+    params = Conv2dGw8Params.from_tensors(inputs, weight, bias, padding=(padding_y, padding_x))
 
     if needs_weight_grad:
         # The grad_weight kernel requires that the grad_weight tensor is initialized to zero.
         # Its data-type is torch.float32.
         grad_weight = torch.zeros_like(weight, dtype=torch.float32)
         args = (grad_weight, inputs, grad_output)
-        grad_weight_kernel = conv2d_gw8_wgrad_kernel_factory.get_kernel(
-            params, inputs.device
-        )
+        grad_weight_kernel = conv2d_gw8_wgrad_kernel_factory.get_kernel(params, inputs.device)
         grad_weight_kernel(*args)
     else:
         grad_weight = None
@@ -144,9 +140,7 @@ def conv2d_gw8_backward_op(
     if needs_input_grad:
         grad_input = torch.empty_like(inputs)
         args = (grad_input, grad_output, weight, None)
-        grad_input_kernel = conv2d_gw8_kernel_factory.get_kernel(
-            params, inputs.device, igrad=True
-        )
+        grad_input_kernel = conv2d_gw8_kernel_factory.get_kernel(params, inputs.device, igrad=True)
         grad_input_kernel(*args)
     else:
         grad_input = None
@@ -167,9 +161,7 @@ def _conv2d_gw8_backward_fake(
 ):
     """FakeTensor implementation of conv2d_gw8_backward."""
     if needs_weight_grad:
-        grad_weight = weight.new_empty(weight.shape).to(
-            memory_format=torch.channels_last
-        )
+        grad_weight = weight.new_empty(weight.shape).to(memory_format=torch.channels_last)
     else:
         grad_weight = None
 
@@ -179,9 +171,7 @@ def _conv2d_gw8_backward_fake(
         grad_bias = None
 
     if needs_input_grad:
-        grad_input = inputs.new_empty(inputs.shape).to(
-            memory_format=torch.channels_last
-        )
+        grad_input = inputs.new_empty(inputs.shape).to(memory_format=torch.channels_last)
     else:
         grad_input = None
     return grad_input, grad_weight, grad_bias
@@ -230,9 +220,7 @@ def conv2d_gw8_setup_context(ctx, inputs, output):
     ctx.padding_x = padding_x
 
 
-conv2d_gw8.register_autograd(
-    conv2d_gw8_backward, setup_context=conv2d_gw8_setup_context
-)
+conv2d_gw8.register_autograd(conv2d_gw8_backward, setup_context=conv2d_gw8_setup_context)
 
 
 def _is_unit(value) -> bool:

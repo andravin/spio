@@ -177,9 +177,7 @@ class TestFragmentLoadIndex:
 
     def test_load_index_class_name(self):
         """FragmentLoadIndex should have correct class name."""
-        frag = Fragment(
-            FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag"
-        )
+        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         load_idx = frag.load_index
 
@@ -187,9 +185,7 @@ class TestFragmentLoadIndex:
 
     def test_load_index_generates_nothing(self):
         """FragmentLoadIndex.generate() should return empty string."""
-        frag = Fragment(
-            FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag"
-        )
+        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         load_idx = frag.load_index
 
@@ -224,9 +220,7 @@ class TestTensorDivideByFragment:
         from spio.generators import Tensor, Dims
 
         tensor = Tensor(dtype.half, Dims(m=64, k=32))
-        frag = Fragment(
-            FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag"
-        )
+        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         result = tensor / frag
 
@@ -244,9 +238,7 @@ class TestTensorDivideByFragment:
         g.K = Dim()
 
         tensor = Tensor(dtype.half, Dims(g.I(64), g.K(32)))
-        frag = Fragment(
-            FragmentType.M16_K16_F16_A, row=g.I, col=g.K, class_name="AFrag"
-        )
+        frag = Fragment(FragmentType.M16_K16_F16_A, row=g.I, col=g.K, class_name="AFrag")
 
         result = tensor / frag
 
@@ -278,9 +270,7 @@ class TestTensorDivideByFragment:
         k_chunk = g.K(32)
         tensor = Tensor((k_chunk, i_warp), data_type=dtype.half)
 
-        frag = Fragment(
-            FragmentType.M16_K16_F16_A, row=g.I, col=g.K, class_name="AFrag"
-        )
+        frag = Fragment(FragmentType.M16_K16_F16_A, row=g.I, col=g.K, class_name="AFrag")
 
         result = tensor / frag
 
@@ -299,9 +289,7 @@ class TestTensorDivideByFragment:
         from spio.generators import Tensor, Dims
 
         tensor = Tensor(dtype.half, Dims(m=32, k=16))
-        frag = Fragment(
-            FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag"
-        )
+        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         result = tensor / frag
 
@@ -312,9 +300,7 @@ class TestTensorDivideByFragment:
         from spio.generators import Tensor, Dims
 
         tensor = Tensor(dtype.half, Dims(m=32, k=16), constant=True)
-        frag = Fragment(
-            FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag"
-        )
+        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         result = tensor / frag
 
@@ -326,9 +312,7 @@ class TestTensorDivideByFragment:
 
         # Tensor has an extra dimension 'n' not in the fragment
         tensor = Tensor(dtype.half, Dims(m=64, k=32, n=4))
-        frag = Fragment(
-            FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag"
-        )
+        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         result = tensor / frag
 
@@ -343,9 +327,7 @@ class TestTensorDivideByFragment:
 
         # Tensor has float dtype, Fragment expects half
         tensor = Tensor(dtype.float, Dims(m=32, k=16))
-        frag = Fragment(
-            FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag"
-        )
+        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         with pytest.raises(ValueError, match="dtype.*doesn't match"):
             tensor / frag
@@ -356,9 +338,7 @@ class TestTensorDivideByFragment:
 
         # Tensor is missing the 'k' dimension
         tensor = Tensor(dtype.half, Dims(m=32, n=16))
-        frag = Fragment(
-            FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag"
-        )
+        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         with pytest.raises(ValueError, match="not found in Tensor"):
             tensor / frag
@@ -369,9 +349,7 @@ class TestTensorDivideByFragment:
 
         # M dimension (30) not divisible by fragment row size (16)
         tensor = Tensor(dtype.half, Dims(m=30, k=32))
-        frag = Fragment(
-            FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag"
-        )
+        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         with pytest.raises(ValueError, match="not.*evenly divisible"):
             tensor / frag

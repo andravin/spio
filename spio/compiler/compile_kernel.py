@@ -35,9 +35,7 @@ def compile_kernel(
     """
     assert arch is not None, "Must specify GPU architecture for kernel compilation."
     if arch[0] < 8:
-        raise ValueError(
-            "Minimum supported GPU compute capability is sm_80 (Ampere or newer)."
-        )
+        raise ValueError("Minimum supported GPU compute capability is sm_80 (Ampere or newer).")
     cuda_source_file = importlib_resources_files(src_module).joinpath(source_file_name)
     includes_dir = str(importlib_resources_files(includes_module))
     return compile_cuda(
