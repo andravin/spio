@@ -659,7 +659,7 @@ class Strides:
         """Check if a stride is present in the Strides object."""
         return key in self._strides
 
-    def get_by_object(self, dim_arg: DimsArg) -> int:
+    def get_by_object(self, dim_arg: DimsArg) -> Optional[int]:
         """Get stride by StaticDim/StaticFold object identity.
 
         This enables matching without relying on string names.

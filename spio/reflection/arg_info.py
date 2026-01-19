@@ -117,7 +117,7 @@ class ArgInfo:
         """
         return _to(tensor, memory_format=self.memory_format)
 
-    def initialize(self, tensor: torch.Tensor) -> torch.Tensor:
+    def initialize(self, tensor: torch.Tensor) -> None:
         """Initialize the given tensor based on the ArgInfo settings."""
         if tensor is None:
             assert self.none

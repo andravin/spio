@@ -1,6 +1,6 @@
 """Code generator for macros in CUDA kernel source code."""
 
-from typing import Dict
+from typing import Dict, Optional
 from dataclasses import dataclass
 
 from .gen_specs import GenSpecs
@@ -25,7 +25,7 @@ class Macro(GenSpecs):
         This method exists for compatibility with the Generators container.
         """
 
-    def get_class_name(self) -> str:
+    def get_class_name(self) -> Optional[str]:
         """Return None - Macro doesn't have a class name."""
         return None
 
