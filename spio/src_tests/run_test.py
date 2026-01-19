@@ -270,6 +270,7 @@ def _precision_guard():
         return
 
     # Prefer PyTorch 2.9+ API; do not mix with old flags
+    # pylint: disable=no-member  # torch.backends has dynamic attrs
     try:
         old_states = {
             "backends.fp32_precision": torch.backends.fp32_precision,
@@ -309,8 +310,8 @@ def _precision_guard():
         torch.backends.cudnn.benchmark = False
         try:
             torch.set_float32_matmul_precision("high")
-        except Exception:
-            pass
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass  # Not available in older PyTorch versions
         yield
     finally:
         torch.backends.cuda.matmul.allow_tf32 = old_mm

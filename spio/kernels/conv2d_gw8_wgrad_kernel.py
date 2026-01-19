@@ -4,7 +4,16 @@ from dataclasses import dataclass
 from itertools import product
 from typing import Generator
 
-from ..generators import *
+from ..generators import (
+    CompoundIndex,
+    dtype,
+    Fold,
+    Fragment,
+    FragmentType,
+    Macro,
+    ParamsSpec,
+    Tensor,
+)
 from ..util import divup, next_relative_prime
 from ..cuda.driver import DeviceAttributes
 

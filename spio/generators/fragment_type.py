@@ -25,7 +25,8 @@ class FragmentType(Enum):
 
     Current support includes fragments types for float16 multiplication with float32 accumulation.
 
-    [1] https://docs.nvidia.com/cuda/parallel-thread-execution/#matrix-multiply-accumulate-operation-using-mma-instruction
+    # pylint: disable=line-too-long
+    [1] https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-instructions-for-mma
     """
 
     M16_N8_F32_C = _FragmentSpecs("MMA_M16_N8_F32_C", 16, 8, dtype.float)

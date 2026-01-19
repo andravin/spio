@@ -1,17 +1,18 @@
 """This file implements the Dims class."""
 
 from itertools import count
-from typing import Dict, Generator, List, Tuple, Union
+from typing import Dict, Generator, List, Optional, Tuple, Union
 
 from .derived_dimension import DerivedDimension, SizedDerivedDimension
-from .dim import StaticDim
+from .dim import StaticDim, Dim
+from .fold import StaticFold, Fold
+from .dim_arg import normalize_dim_arg
 
 # Type alias for dimension values: either an integer size or a derived dimension generator
 DimValue = Union[int, DerivedDimension]
 
-# Import StaticFold at runtime to avoid circular import
 # Type for Dims arguments: StaticDim or StaticFold objects
-DimsArg = Union[StaticDim, "StaticFold"]
+DimsArg = Union[StaticDim, StaticFold]
 
 # Counter for generating unique anonymous fold names
 _anon_fold_counter = count()
@@ -30,9 +31,6 @@ def _counter_to_alpha(n: int) -> str:
 
 def is_dims_arg(arg) -> bool:
     """Check if arg is a StaticDim or StaticFold."""
-    # Import here to avoid circular import
-    from .fold import StaticFold
-
     return isinstance(arg, (StaticDim, StaticFold))
 
 
@@ -211,8 +209,8 @@ class Dims:
                 "Use either Dims(I(16), K(32)) or Dims(i=16, k=32), not both."
             )
 
-        self._dim_args: Tuple[DimsArg, ...] = None
-        self._dims_cache: Dict[str, DimValue] = None
+        self._dim_args: Optional[Tuple[DimsArg, ...]] = None
+        self._dims_cache: Optional[Dict[str, DimValue]] = None
         # Mapping from cached key to Dim/Fold object for name resolution
         self._key_to_dim_or_fold: Dict[str, object] = {}
         # Collect derived dims from both kwargs and positional dict args
@@ -245,8 +243,8 @@ class Dims:
                     static_args.append(arg)
                 else:
                     raise TypeError(
-                        f"Expected StaticDim, StaticFold, SizedDerivedDimension, or dict(name=DerivedDimension), "
-                        f"got {type(arg).__name__}. "
+                        f"Expected StaticDim, StaticFold, SizedDerivedDimension, "
+                        f"or dict(name=DerivedDimension), got {type(arg).__name__}. "
                         f"Use Dim()(size), Fold()(size), or dict(swizzle=Checkerboard(...))."
                     )
             self._dim_args = tuple(static_args) if static_args else None
@@ -301,7 +299,6 @@ class Dims:
         result = dict(self._dims)
 
         if self._derived_dims:
-            from .dim_arg import normalize_dim_arg
 
             for name_or_dim, value in self._derived_dims:
                 # Name can be a string (already resolved) or a Dim/Fold object (needs resolution)
@@ -320,15 +317,13 @@ class Dims:
         Returns:
             List of (name, size, fold_factor, group_key) tuples.
         """
-        from .fold import StaticFold, Fold
-        from .dim import Dim
-
         self._validate_no_duplicates()
 
         entries: List[DimEntry] = []
         seen_names: set = set()
 
-        for arg in self._dim_args:
+        assert self._dim_args is not None  # Caller must check before calling
+        for arg in self._dim_args:  # pylint: disable=not-an-iterable
             dim_name = arg.dim_name
             if isinstance(arg, StaticFold):
                 dim_or_fold = arg.fold
@@ -374,14 +369,13 @@ class Dims:
             ValueError: If the same Dim is used twice as StaticDim, or the same
                 Fold is used twice as StaticFold.
         """
-        from .fold import StaticFold
-
         # Track base dims used as StaticDim (not folds) to detect duplicates
         seen_base_dims: dict = {}  # id(dim) -> arg that used it
         # Track folds used as StaticFold to detect duplicates
         seen_folds: dict = {}  # (id(dim), stride) -> arg that used it
 
-        for arg in self._dim_args:
+        assert self._dim_args is not None  # Caller must check before calling
+        for arg in self._dim_args:  # pylint: disable=not-an-iterable
             # Check for duplicate base dimensions (same Dim used twice as StaticDim)
             if isinstance(arg, StaticDim):
                 base_dim_id = id(arg.dim)
@@ -390,7 +384,8 @@ class Dims:
                     dim_desc = arg.dim.dim_name or "anonymous Dim"
                     raise ValueError(
                         f"The same dimension '{dim_desc}' appears twice in Dims. "
-                        f"Each base dimension can only appear once (sizes {prev_arg.size} and {arg.size}). "
+                        f"Each base dimension can only appear once "
+                        f"(sizes {prev_arg.size} and {arg.size}). "
                         f"Did you mean to use a fold? E.g., dim.fold(stride)(size)"
                     )
                 seen_base_dims[base_dim_id] = arg
@@ -449,8 +444,6 @@ class Dims:
         Includes derived dimensions. For derived dims with Dim object names,
         the name is resolved at this point (code generation time).
         """
-        from .dim_arg import normalize_dim_arg
-
         for key, value in self._dims.items():
             yield key, self._resolve_current_name(key), value
 
@@ -487,8 +480,7 @@ class Dims:
         Derived dimensions with unresolved Dim object names are skipped (they'll be
         resolved at code generation time).
         """
-        for value in self._dims.values():
-            yield value
+        yield from self._dims.values()
 
         # Also include derived dimensions with string names
         for name, value in self._derived_dims:
@@ -551,9 +543,6 @@ class Dims:
         Only returns objects from the new StaticDim/StaticFold path; the legacy
         keyword path doesn't have access to the original Dim/Fold objects.
         """
-        from .fold import StaticFold, Fold
-        from .dim import Dim
-
         result = []
 
         # Include Dim/Fold objects from StaticDim/StaticFold args
@@ -569,7 +558,7 @@ class Dims:
                     result.append(arg.dim)
 
         # Include offset_dim objects from derived dims (e.g., Checkerboard with offset_dim=SWIZZLE)
-        for name_or_dim, value in self._derived_dims:
+        for name_or_dim, _ in self._derived_dims:
             if isinstance(name_or_dim, (Dim, Fold)):
                 result.append(name_or_dim)
 
@@ -626,8 +615,6 @@ class Strides:
             return self._strides_cache
 
         # Resolve from StaticDim/StaticFold args
-        from .fold import StaticFold
-
         self._strides_cache = {}
         for arg in self._stride_args:
             dim_name = arg.dim_name
@@ -637,7 +624,8 @@ class Strides:
                 fold = arg.fold
                 base_name = fold.dim_name  # e.g., "J" from J.fold(8)
                 if base_name is not None:
-                    dim_name = f"{base_name}{fold.stride}"  # e.g., "J8" - just the key, don't set on fold
+                    # e.g., "J8" - just the key, don't set on fold
+                    dim_name = f"{base_name}{fold.stride}"
 
             if dim_name is None:
                 raise ValueError(
@@ -735,8 +723,6 @@ def compute_full_strides(
             dim_name = arg.dim_name
             if dim_name is None:
                 # Anonymous - derive name from object
-                from .fold import StaticFold
-
                 if isinstance(arg, StaticFold):
                     base_name = arg.fold.dim_name
                     if base_name is not None:

@@ -1,8 +1,10 @@
 """spio: A Python package with efficient GPU kernels for training convolutional neural networks."""
 
 __version__ = "0.8.0"
+
 # Import the CUDA and driver modules to ensure they are initialized
 # before accessing their contents.
+# pylint: disable-next=no-name-in-module
 from .cuda.driver import init, PrimaryContextGuard
 
 # Initialize CUDA driver API

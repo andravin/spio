@@ -33,10 +33,9 @@ class _FragmentSize:
 
         if dim_name == row_name:
             return self.fragment.fragment_type.value.num_rows
-        elif dim_name == col_name:
+        if dim_name == col_name:
             return self.fragment.fragment_type.value.num_cols
-        else:
-            raise ValueError(f"Dimension {dim} not part of fragment.")
+        raise ValueError(f"Dimension {dim} not part of fragment.")
 
 
 @dataclass

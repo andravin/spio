@@ -24,7 +24,6 @@ class Macro(GenSpecs):
         Macro doesn't use a class name since it generates #define statements.
         This method exists for compatibility with the Generators container.
         """
-        pass
 
     def get_class_name(self) -> str:
         """Return None - Macro doesn't have a class name."""

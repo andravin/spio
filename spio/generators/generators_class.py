@@ -1,3 +1,5 @@
+"""Container class for CUDA code generator specifications."""
+
 from typing import Iterator, Tuple, Any
 
 from .gen_specs import GenSpecs

@@ -87,7 +87,7 @@ class AsyncLoader(GenSpecs):
         """Resolve inner_axis to a string name."""
         if isinstance(self.inner_axis, StaticDim):
             return normalize_dim_arg(self.inner_axis.dim)
-        elif isinstance(self.inner_axis, StaticFold):
+        if isinstance(self.inner_axis, StaticFold):
             return normalize_dim_arg(self.inner_axis.fold)
         return normalize_dim_arg(self.inner_axis)
 
@@ -96,7 +96,7 @@ class AsyncLoader(GenSpecs):
         """Resolve outer_axis to a string name."""
         if isinstance(self.outer_axis, StaticDim):
             return normalize_dim_arg(self.outer_axis.dim)
-        elif isinstance(self.outer_axis, StaticFold):
+        if isinstance(self.outer_axis, StaticFold):
             return normalize_dim_arg(self.outer_axis.fold)
         return normalize_dim_arg(self.outer_axis)
 
@@ -112,8 +112,7 @@ class AsyncLoader(GenSpecs):
         """Generate the C++ source code for the custom strip loader class."""
         if self.num_warps >= self.inner_axis_size:
             return self._generate_1d()
-        else:
-            return self._generate_2d()
+        return self._generate_2d()
 
     def _generate_1d(self) -> str:
         """Generate 1D loader (iterate over outer axis only)."""

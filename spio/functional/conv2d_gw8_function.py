@@ -46,8 +46,8 @@ def conv2d_gw8(
     assert inputs.dtype == torch.float16
     assert weight.dtype == torch.float16
     assert bias is None or bias.dtype == torch.float32
-    assert stride == 1 or stride == (1, 1)
-    assert dilation == 1 or dilation == (1, 1)
+    assert _is_unit(stride)
+    assert _is_unit(dilation)
     assert groups == inputs.shape[1] // 8
     params = Conv2dGw8Params.from_tensors(inputs, weight, bias, (padding_y, padding_x))
     output = torch.empty(
@@ -81,7 +81,7 @@ def conv2d_gw8_autocast(ks, inputs, weight, bias, *args, **kwargs):
 
 
 @conv2d_gw8.register_fake
-def _(
+def _conv2d_gw8_fake(
     inputs,
     weight,
     bias=None,
@@ -92,8 +92,8 @@ def _(
     groups: int = 1,
 ):
     """FakeTensor implementation of conv2d_gw8."""
-    assert stride == 1 or stride == (1, 1)
-    assert dilation == 1 or dilation == (1, 1)
+    assert _is_unit(stride)
+    assert _is_unit(dilation)
     assert groups == inputs.shape[1] // 8
     params = Conv2dGw8Params.from_tensors(inputs, weight, bias, (padding_y, padding_x))
     return inputs.new_empty(params.output_shape).to(memory_format=torch.channels_last)
@@ -154,7 +154,7 @@ def conv2d_gw8_backward_op(
 
 
 @conv2d_gw8_backward_op.register_fake
-def _(
+def _conv2d_gw8_backward_fake(
     inputs,
     weight,
     bias,
@@ -233,6 +233,12 @@ def conv2d_gw8_setup_context(ctx, inputs, output):
 conv2d_gw8.register_autograd(
     conv2d_gw8_backward, setup_context=conv2d_gw8_setup_context
 )
+
+
+def _is_unit(value) -> bool:
+    """Check if value is 1 or (1, 1) - i.e., unit stride/dilation."""
+    return value in (1, (1, 1))
+
 
 # See discussion at https://github.com/pytorch/pytorch/issues/137033
 m = torch.library.Library("spio", "FRAGMENT")
