@@ -51,9 +51,7 @@ CPP_TESTS_FILTER = os.environ.get("SPIO_CPP_TESTS_FILTER", None)
 
 
 @pytest.mark.smoke
-@pytest.mark.skipif(
-    not ENABLE_CPP_TESTS, reason="NVCC support not required by default."
-)
+@pytest.mark.skipif(not ENABLE_CPP_TESTS, reason="NVCC support not required by default.")
 def test_cpp_tests():
     """Compile and run all C++ unit tests.
 
@@ -313,9 +311,7 @@ def _test_wave_based_block_idx():
         block_i_local,
         block_j,
         gen.CompoundIndex(
-            gen.Dims(
-                block_i_wave=block_waves, block_j=blocks_n, block_i_local=block_local
-            ),
+            gen.Dims(block_i_wave=block_waves, block_j=blocks_n, block_i_local=block_local),
             class_name="BlockIdx",
             init=gen.BuiltIn.BLOCK_IDX_X,
         ),
@@ -457,9 +453,7 @@ UTEST(IndexInit, size)
 
 @_cpp_test
 def _test_generate_checkerboard_index():
-    specs = [
-        gen.Checkerboard("r", "c8", class_name="Checkers", offset_dim="offset", ranks=8)
-    ]
+    specs = [gen.Checkerboard("r", "c8", class_name="Checkers", offset_dim="offset", ranks=8)]
     generated_code = gen.generate(specs, namespace="IndexSpec_GenCode")
     code = f"""
 {generated_code}
@@ -584,9 +578,7 @@ def _test_genrate_1d_contiguous_tensor():
     """Return the C++ source code that tests a custom 1D tensor class"""
     n = 7
     specs = [
-        gen.Tensor(
-            gen.dtype.float, gen.Dims(n=n), class_name="ContiguousTensor", constant=True
-        ),
+        gen.Tensor(gen.dtype.float, gen.Dims(n=n), class_name="ContiguousTensor", constant=True),
     ]
     generated_code = gen.generate(specs, namespace="ContiguousTensor_1D_GenCode")
     test_code = f"""
@@ -695,9 +687,7 @@ def _test_generate_fold_auto_size():
     """Return the C++ source code that tests automatic fold size inference."""
     # Test case 1: k8=16, k4=-1, k=-1
     # k4 = 8/4 = 2, k = 4/1 = 4
-    specs1 = [
-        gen.Tensor(gen.dtype.float, gen.Dims(k8=16, i=32, k4=-1, k=-1), class_name="A")
-    ]
+    specs1 = [gen.Tensor(gen.dtype.float, gen.Dims(k8=16, i=32, k4=-1, k=-1), class_name="A")]
     generated_code1 = gen.generate(specs1, namespace="AutoFold_GenCode1")
 
     # Test case 2: k8=4, k=-1 (skip k4)
@@ -707,11 +697,7 @@ def _test_generate_fold_auto_size():
 
     # Test case 3: Multiple base dimensions with auto-inference
     # k8=8, k4=-1, k=-1, i16=4, i=-1
-    specs3 = [
-        gen.Tensor(
-            gen.dtype.float, gen.Dims(k8=8, k4=-1, k=-1, i16=4, i=-1), class_name="C"
-        )
-    ]
+    specs3 = [gen.Tensor(gen.dtype.float, gen.Dims(k8=8, k4=-1, k=-1, i16=4, i=-1), class_name="C")]
     generated_code3 = gen.generate(specs3, namespace="AutoFold_GenCode3")
 
     return f"""
@@ -1429,12 +1415,8 @@ UTEST(FragmentIndex, MMA_M16_N16_F32_C)
 def _test_fragment_load_index():
     specs = [
         gen.Dim("lane"),
-        gen.FragmentLoadIndex(
-            gen.FragmentType.M16_K16_F16_A, "x", "c", class_name="Input"
-        ),
-        gen.FragmentLoadIndex(
-            gen.FragmentType.N8_K16_F16_B, "c", "k", class_name="Weights"
-        ),
+        gen.FragmentLoadIndex(gen.FragmentType.M16_K16_F16_A, "x", "c", class_name="Input"),
+        gen.FragmentLoadIndex(gen.FragmentType.N8_K16_F16_B, "c", "k", class_name="Weights"),
     ]
     generated_code = gen.generate(specs, namespace="FragmentLoadIndex_GenCode")
     test_code = f"""

@@ -80,9 +80,7 @@ class CompoundIndex(GenSpecsWithContext, DerivedDimension):
                 elif is_dims_arg(arg) or isinstance(arg, dict):
                     collected_args.append(arg)
                 else:
-                    raise ValueError(
-                        f"Unexpected positional argument type: {type(arg)}"
-                    )
+                    raise ValueError(f"Unexpected positional argument type: {type(arg)}")
             if collected_args:
                 # Handle legacy dict syntax: CompoundIndex({"dim": size, ...})
                 if len(collected_args) == 1 and isinstance(collected_args[0], dict):
@@ -126,13 +124,9 @@ class CompoundIndex(GenSpecsWithContext, DerivedDimension):
         """Return the class name, or None if not set."""
         return self.class_name
 
-    def generate_with_context(
-        self, user_data_types: List[str] = None
-    ) -> str:  # noqa: ARG002
+    def generate_with_context(self, user_data_types: List[str] = None) -> str:  # noqa: ARG002
         """Generate the C++ source code for the custom index class."""
-        return _generate_index(
-            self.class_name, self.dims, self.strides, self.dummies, self.init
-        )
+        return _generate_index(self.class_name, self.dims, self.strides, self.dummies, self.init)
 
     def partition(
         self,
@@ -303,9 +297,7 @@ class CompoundIndexPartition(GenSpecs):
 
         index_class_name = self.base_index.get_class_name()
         if index_class_name is None:
-            raise ValueError(
-                "CompoundIndexPartition requires a base_index with a function_name"
-            )
+            raise ValueError("CompoundIndexPartition requires a base_index with a function_name")
 
         partition_index_class_name = self.partition_index.get_class_name()
         if partition_index_class_name is None:

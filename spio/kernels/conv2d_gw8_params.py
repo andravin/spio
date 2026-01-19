@@ -77,14 +77,10 @@ class Conv2dGw8Params:
             bias (torch.Tensor or None): The bias tensor or None.
             padding (int or tuple): Padding for height and width.
         """
-        assert bias is None or (
-            len(bias.shape) == 1 and bias.shape[0] == weight.shape[0]
-        )
+        assert bias is None or (len(bias.shape) == 1 and bias.shape[0] == weight.shape[0])
         n, c, h, w = inputs.shape
         k, group_width, r, s = weight.shape
-        assert (
-            group_width == Conv2dGw8Params.group_width
-        ), "Only group width of 8 is supported."
+        assert group_width == Conv2dGw8Params.group_width, "Only group width of 8 is supported."
         assert k == c, "Number of output channels must match number of input channels."
         has_bias = bias is not None
         params = Conv2dGw8Params(
@@ -105,9 +101,7 @@ class Conv2dGw8Params:
         """Derive a Conv2dGw8Params instance from a torch.nn.Module."""
         n, c, h, w = inputs.shape
         k, _group_width, r, s = module.weight.shape
-        assert (
-            k == c
-        ), f"Number of output channels must match number of input channels. {k} != {c}"
+        assert k == c, f"Number of output channels must match number of input channels. {k} != {c}"
         has_bias = module.bias is not None
         padding = module.padding
         return Conv2dGw8Params(

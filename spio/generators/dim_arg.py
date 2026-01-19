@@ -37,9 +37,7 @@ def extract_dim_from_arg(arg: DimArg) -> Union[Dim, Fold]:
             f"Cannot extract Dim/Fold from string '{arg}'. "
             f"Pass a Dim, Fold, StaticDim, or StaticFold object."
         )
-    raise TypeError(
-        f"Expected Dim, Fold, StaticDim, or StaticFold, got {type(arg).__name__}"
-    )
+    raise TypeError(f"Expected Dim, Fold, StaticDim, or StaticFold, got {type(arg).__name__}")
 
 
 def normalize_dim_arg(arg: DimArg) -> str:
@@ -80,6 +78,4 @@ def normalize_dim_arg(arg: DimArg) -> str:
             )
         return arg.fold_name
 
-    raise TypeError(
-        f"Expected str, Dim, Fold, StaticDim, or StaticFold, got {type(arg).__name__}"
-    )
+    raise TypeError(f"Expected str, Dim, Fold, StaticDim, or StaticFold, got {type(arg).__name__}")

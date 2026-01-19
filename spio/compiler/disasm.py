@@ -56,9 +56,7 @@ def disasm(
                     predicate = instr.get("predicate", "")
                     opcode = instr["opcode"]
                     operands = instr.get("operands", "")
-                    print(
-                        f"{i:4d}  0x{addr:04x}:  {predicate:>4s}  {opcode} {operands}"
-                    )
+                    print(f"{i:4d}  0x{addr:04x}:  {predicate:>4s}  {opcode} {operands}")
             return num_instructions
 
     raise ValueError(f"Kernel '{kernel_name}' not found in cubin")

@@ -21,23 +21,15 @@ MAX_BANDWIDTH_GB_S = 3000
 def main():
     """Main function to plot the benchmark results."""
     parser = ArgumentParser()
-    parser.add_argument(
-        "spio_data_dir", type=str, help="Path to the Spio benchmark data directory"
-    )
+    parser.add_argument("spio_data_dir", type=str, help="Path to the Spio benchmark data directory")
     parser.add_argument(
         "--torch-data-dir",
         type=str,
         help="Path to the PyTorch benchmark data directory",
     )
-    parser.add_argument(
-        "--fprop-kernel-name", type=str, default="spio_conv2d_gw8_fprop"
-    )
-    parser.add_argument(
-        "--dgrad-kernel-name", type=str, default="spio_conv2d_gw8_dgrad"
-    )
-    parser.add_argument(
-        "--wgrad-kernel-name", type=str, default="spio_conv2d_gw8_wgrad"
-    )
+    parser.add_argument("--fprop-kernel-name", type=str, default="spio_conv2d_gw8_fprop")
+    parser.add_argument("--dgrad-kernel-name", type=str, default="spio_conv2d_gw8_dgrad")
+    parser.add_argument("--wgrad-kernel-name", type=str, default="spio_conv2d_gw8_wgrad")
     parser.add_argument("--fprop-only", action="store_true")
     parser.add_argument("--max-bandwidth-gb-s", type=float, default=MAX_BANDWIDTH_GB_S)
     args = parser.parse_args()
@@ -71,8 +63,7 @@ def main():
 
     # Create a dictionary to store each group as a separate DataFrame
     dataframes = {
-        root_name: group.drop(columns=["Name", "RootName"])
-        for root_name, group in grouped
+        root_name: group.drop(columns=["Name", "RootName"]) for root_name, group in grouped
     }
 
     df_fprop = dataframes[fprop_kernel_name]
@@ -117,9 +108,7 @@ def main():
 
     if args.torch_data_dir is not None:
         torch_dirname_params = extract_parameters_from_dirname(args.torch_data_dir)
-        torch_params = conv2d_gw8_kernel_params_from_dirname_params(
-            torch_dirname_params
-        )
+        torch_params = conv2d_gw8_kernel_params_from_dirname_params(torch_dirname_params)
         torch_params_are_depthwise = torch_params.group_width == 1
 
         assert (
@@ -136,21 +125,14 @@ def main():
             df, kernel_iters, depthwise=torch_params_are_depthwise
         )
         torch_kernel_labels = [
-            "PyTorch" + kernel_name.removeprefix("Spio")
-            for kernel_name in spio_kernel_labels
+            "PyTorch" + kernel_name.removeprefix("Spio") for kernel_name in spio_kernel_labels
         ]
         if torch_params_are_depthwise:
-            torch_kernel_labels = [
-                label + " (Depthwise)" for label in torch_kernel_labels
-            ]
+            torch_kernel_labels = [label + " (Depthwise)" for label in torch_kernel_labels]
 
         add_eff_bandwidth_gb_s(fprop_df, torch_params, fprop_reflection.stats, "output")
-        add_eff_bandwidth_gb_s(
-            dgrad_df, torch_params, dgrad_reflection.stats, "grad_input"
-        )
-        add_eff_bandwidth_gb_s(
-            wgrad_df, torch_params, wgrad_reflection.stats, "grad_weight"
-        )
+        add_eff_bandwidth_gb_s(dgrad_df, torch_params, dgrad_reflection.stats, "grad_input")
+        add_eff_bandwidth_gb_s(wgrad_df, torch_params, wgrad_reflection.stats, "grad_weight")
 
         plot_eff_bw(
             fprop_df,
@@ -205,13 +187,9 @@ def main():
     print(f"Saved figure to {fig_file_name}")
 
     plt.clf()
-    plot_latency_microseconds(
-        df_fprop, df_dgrad, df_wgrad, spio_kernel_labels, linestyle="-"
-    )
+    plot_latency_microseconds(df_fprop, df_dgrad, df_wgrad, spio_kernel_labels, linestyle="-")
     if args.torch_data_dir is not None:
-        plot_latency_microseconds(
-            fprop_df, dgrad_df, wgrad_df, torch_kernel_labels, linestyle="--"
-        )
+        plot_latency_microseconds(fprop_df, dgrad_df, wgrad_df, torch_kernel_labels, linestyle="--")
 
     plt.xlabel("Batch Size")
     plt.ylabel("Latency (microseconds)")
@@ -344,15 +322,9 @@ def find_torch_grouped_conv_kernels(df, kernel_iters, depthwise=False):
         batch_sizes == wgrad_batch_sizes
     ), f"Batch sizes mismatch: {batch_sizes} != {wgrad_batch_sizes}"
 
-    fprop_df = fprop_df.groupby("batch_size").agg(
-        {"CUDA_time_av": "sum", "batch_size": "first"}
-    )
-    dgrad_df = dgrad_df.groupby("batch_size").agg(
-        {"CUDA_time_av": "sum", "batch_size": "first"}
-    )
-    wgrad_df = wgrad_df.groupby("batch_size").agg(
-        {"CUDA_time_av": "sum", "batch_size": "first"}
-    )
+    fprop_df = fprop_df.groupby("batch_size").agg({"CUDA_time_av": "sum", "batch_size": "first"})
+    dgrad_df = dgrad_df.groupby("batch_size").agg({"CUDA_time_av": "sum", "batch_size": "first"})
+    wgrad_df = wgrad_df.groupby("batch_size").agg({"CUDA_time_av": "sum", "batch_size": "first"})
 
     return (fprop_df, dgrad_df, wgrad_df)
 

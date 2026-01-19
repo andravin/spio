@@ -148,9 +148,7 @@ class PerformanceModelCache:
         arch = get_formatted_arch(device)
 
         if arch not in supported_arch:
-            raise NotImplementedError(
-                f"NVIDIA GPU architecture {arch} is not supported."
-            )
+            raise NotImplementedError(f"NVIDIA GPU architecture {arch} is not supported.")
 
         device_model_cache_key = _PerformanceModelKey(kernel_name, device_name)
 
@@ -158,9 +156,7 @@ class PerformanceModelCache:
         if model is None:
             archive_name = self._archive_cache.get(device_name)
             if archive_name is None:
-                archive_name = _get_archive_name_for_device_from_release_info(
-                    device_name, arch
-                )
+                archive_name = _get_archive_name_for_device_from_release_info(device_name, arch)
                 self._archive_cache[device_name] = archive_name
             model_file_name = _get_model_name_from_archive(
                 kernel_name, device_name, arch, archive_name
@@ -318,9 +314,9 @@ def _get_release_info():
     if _release_info is None:
         _release_info = _load_release_info()
         # If the release info is not up-to-date, download it.
-        if _release_info is not None and version.parse(
-            _release_info["tag_name"]
-        ) != version.parse(_get_release_series_tag()):
+        if _release_info is not None and version.parse(_release_info["tag_name"]) != version.parse(
+            _get_release_series_tag()
+        ):
             _clear_cache()
             _release_info = None
         if _release_info is None:
@@ -362,9 +358,7 @@ def _download_release_info():
 
     # We are only interested in the release for the current software version.
     for release in releases:
-        if version.parse(release["tag_name"]) == version.parse(
-            _get_release_series_tag()
-        ):
+        if version.parse(release["tag_name"]) == version.parse(_get_release_series_tag()):
             return release
 
     raise ValueError(f"No GitHub release found for software version {__version__}.")
@@ -391,9 +385,7 @@ def _clear_cache() -> None:
     """Clear all cached files in the cache directory."""
     if PERF_CACHE_DIR.exists():
         for f in PERF_CACHE_DIR.iterdir():
-            if f.is_file() and (
-                f.name.endswith(".tgz") or f.name == "release_info.json"
-            ):
+            if f.is_file() and (f.name.endswith(".tgz") or f.name == "release_info.json"):
                 f.unlink()
     else:
         PERF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -449,9 +441,7 @@ def _params_and_configs_to_dmatrix(params, configs, skip_params=None):
 
     array = np.array(rows)
 
-    feature_names = _get_dataclass_feature_names(
-        params, prefix="Params", skip_fields=skip_params
-    )
+    feature_names = _get_dataclass_feature_names(params, prefix="Params", skip_fields=skip_params)
     feature_names += _get_dataclass_feature_names(configs[0], prefix="Config")
 
     dm = xgb.DMatrix(array, feature_names=feature_names)

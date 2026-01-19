@@ -62,8 +62,7 @@ def train_performance_models(data_dir: str):
 
     # Create a dictionary to store each group as a separate DataFrame
     dataframes = {
-        root_name: group.drop(columns=["Kernel", "RootName"])
-        for root_name, group in grouped
+        root_name: group.drop(columns=["Kernel", "RootName"]) for root_name, group in grouped
     }
 
     kernels = dataframes.keys()
@@ -90,9 +89,7 @@ def train_performance_models(data_dir: str):
 
         X = import_dataclass_column(X, "Config", CONFIG_CLASSES)
 
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
         # Convert data to DMatrix format (optimized for XGBoost)
         dtrain = xgb.DMatrix(X_train, label=y_train)
@@ -158,9 +155,7 @@ def regression_analysis(old_data_dir: str, new_data_dir: str):
         raise ValueError(f"New data directory does not exist: {new_data_dir}")
     old_device = get_device_name_from_bench_dir(old_data_dir)
     new_device = get_device_name_from_bench_dir(new_data_dir)
-    assert (
-        old_device == new_device
-    ), f"Devices do not match: {old_device} != {new_device}"
+    assert old_device == new_device, f"Devices do not match: {old_device} != {new_device}"
     device = new_device
     assert device in device_arch_table, f"Unknown device: {device}"
 
@@ -170,12 +165,8 @@ def regression_analysis(old_data_dir: str, new_data_dir: str):
     numeric_columns = ["CUDA_time_avg_ms"]
 
     # Group by Kernel, Params, and Config and compute the mean of numeric columns
-    old_df = old_df.groupby(["Kernel", "Params", "Config"], as_index=False)[
-        numeric_columns
-    ].mean()
-    new_df = new_df.groupby(["Kernel", "Params", "Config"], as_index=False)[
-        numeric_columns
-    ].mean()
+    old_df = old_df.groupby(["Kernel", "Params", "Config"], as_index=False)[numeric_columns].mean()
+    new_df = new_df.groupby(["Kernel", "Params", "Config"], as_index=False)[numeric_columns].mean()
 
     # Merge old and new dataframes on Kernel, Params, and Config
     merged_df = pd.merge(
@@ -183,9 +174,7 @@ def regression_analysis(old_data_dir: str, new_data_dir: str):
     )
 
     # Compute speedup
-    merged_df["speedup"] = (
-        merged_df["CUDA_time_avg_ms_old"] / merged_df["CUDA_time_avg_ms_new"]
-    )
+    merged_df["speedup"] = merged_df["CUDA_time_avg_ms_old"] / merged_df["CUDA_time_avg_ms_new"]
 
     # Sort the DataFrame by Kernel, Params, and CUDA_time_avg_ms_new
     merged_df = merged_df.sort_values(by=["Kernel", "Params", "CUDA_time_avg_ms_new"])
@@ -276,9 +265,7 @@ def read_ssv_files_to_dataframe(directory: str, device: str) -> pd.DataFrame:
     ssv_files = glob.glob(os.path.join(directory, "**", "*.ssv"), recursive=True)
     for ssv_file in ssv_files:
         ssv_file_device = get_device_name_from_ssv_file_name(ssv_file)
-        assert (
-            ssv_file_device == device
-        ), f"Device mismatch: {ssv_file_device} != {device}"
+        assert ssv_file_device == device, f"Device mismatch: {ssv_file_device} != {device}"
     dataframes = [pd.read_csv(file, delimiter=";") for file in ssv_files]
     combined_df = pd.concat(dataframes, ignore_index=True)
     return combined_df

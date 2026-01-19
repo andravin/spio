@@ -64,9 +64,7 @@ def run_kernel_test(
         output.fill_(DEAD_VALUE)
         reflection.init_zeros(args)
         kernel(*kernel_args)
-        assert_all_close_with_acc_depth(
-            output, torch_output, msg=str(kernel), acc_depth=acc_depth
-        )
+        assert_all_close_with_acc_depth(output, torch_output, msg=str(kernel), acc_depth=acc_depth)
 
 
 def run_grad_kernel_test(
@@ -105,8 +103,7 @@ def run_grad_kernel_test(
 
     grad_input_names = [grad_name.name for grad_name in reflection.grad_input_names]
     grad_input_stats = [
-        reflection.stats(params, output_names=[output_name])
-        for output_name in grad_input_names
+        reflection.stats(params, output_names=[output_name]) for output_name in grad_input_names
     ]
     acc_depths = [stats.accumulation_depths[0] for stats in grad_input_stats]
 
@@ -125,9 +122,7 @@ def run_grad_kernel_test(
         for grad_name, acc_depth in zip(reflection.grad_input_names, acc_depths):
             grad = args[grad_name.name]
             ref_grad = ref_grads[grad_name.name]
-            assert_all_close_with_acc_depth(
-                grad, ref_grad, msg=str(kernel), acc_depth=acc_depth
-            )
+            assert_all_close_with_acc_depth(grad, ref_grad, msg=str(kernel), acc_depth=acc_depth)
 
 
 def run_opcheck_test(function, params, device="cuda"):
@@ -136,9 +131,7 @@ def run_opcheck_test(function, params, device="cuda"):
     args = reflection.make_args(params, device=device)
     function_args = reflection.arrange_args(args)
     function_kwargs = reflection.get_function_kwargs(params)
-    torch.library.opcheck(
-        function, function_args, function_kwargs, raise_exception=True
-    )
+    torch.library.opcheck(function, function_args, function_kwargs, raise_exception=True)
 
 
 def run_function_test(function, params, device="cuda"):
@@ -165,9 +158,7 @@ def run_function_test(function, params, device="cuda"):
     with torch.autocast(device_type=device, dtype=torch.float16):
         output = function(*function_args, **function_kwargs)
 
-    assert_all_close_with_acc_depth(
-        output, reference_output, msg=str(params), acc_depth=acc_depth
-    )
+    assert_all_close_with_acc_depth(output, reference_output, msg=str(params), acc_depth=acc_depth)
 
 
 def run_grad_function_test(function: Callable, params: Params, device: str = "cuda"):
@@ -192,19 +183,19 @@ def run_grad_function_test(function: Callable, params: Params, device: str = "cu
     float_grad_outputs = _all_to_float(grad_outputs)
     grad_input_names = [f"grad_{name}" for name in reflection.args]
     grad_input_stats = [
-        reflection.stats(params, output_names=[output_name])
-        for output_name in grad_input_names
+        reflection.stats(params, output_names=[output_name]) for output_name in grad_input_names
     ]
     acc_depths = [stats.accumulation_depths[0] for stats in grad_input_stats]
     for idx, (arg, float_arg) in enumerate(zip(function_args, float_args)):
         if arg is not None:
             not_last = idx < len(args) - 1
-            grad = torch.autograd.grad(
-                output, arg, *grad_outputs, retain_graph=not_last
-            )
+            grad = torch.autograd.grad(output, arg, *grad_outputs, retain_graph=not_last)
             with _precision_guard():
                 reference_grad = torch.autograd.grad(
-                    reference_outputs, float_arg, *float_grad_outputs, retain_graph=not_last
+                    reference_outputs,
+                    float_arg,
+                    *float_grad_outputs,
+                    retain_graph=not_last,
                 )
             assert_all_close_with_acc_depth(
                 grad[0], reference_grad[0], msg=str(params), acc_depth=acc_depths[idx]
@@ -234,9 +225,7 @@ def run_layer_test(
         reference_layer.weight.copy_(args["weight"].float().clone().detach())
         if params.has_bias:
             reference_layer.bias.copy_(args["bias"].float().clone().detach())
-    reference_layer = reference_layer.to(
-        memory_format=reference_reflection.memory_format
-    )
+    reference_layer = reference_layer.to(memory_format=reference_reflection.memory_format)
 
     reference_model = torch.nn.Sequential(reference_layer)
     with _precision_guard():
@@ -254,13 +243,12 @@ def run_layer_test(
     stats = reflection.stats(params, output_names=reflection.output_names)
     acc_depth = stats.accumulation_depths[0]
 
-    assert_all_close_with_acc_depth(
-        output, reference_output, msg=str(params), acc_depth=acc_depth
-    )
+    assert_all_close_with_acc_depth(output, reference_output, msg=str(params), acc_depth=acc_depth)
 
 
 def _all_to_float(args: List[torch.Tensor]) -> List[torch.Tensor]:
     return [t.float() if t is not None else None for t in args]
+
 
 @contextlib.contextmanager
 def _precision_guard():

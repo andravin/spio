@@ -88,15 +88,11 @@ class KernelCache:
                 )
                 self._cache[key] = best_kernel
                 if logger_enabled:
-                    print(
-                        f"spio: compiled kernel {best_kernel.kernel_name} for device {device}."
-                    )
+                    print(f"spio: compiled kernel {best_kernel.kernel_name} for device {device}.")
         return best_kernel
 
 
-def _compile_and_load_kernel(
-    kernel_factory, params, config, device, **kernel_kwargs
-) -> Kernel:
+def _compile_and_load_kernel(kernel_factory, params, config, device, **kernel_kwargs) -> Kernel:
     with torch.device(device) as device_obj:
         device_ordinal = device_obj.index if device_obj.index is not None else 0
         device_attr = get_device_attributes(device_ordinal)

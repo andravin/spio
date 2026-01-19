@@ -51,9 +51,7 @@ def nvcc_full_path() -> str:
     if cuda_path is not None:
         nvcc_path = cuda_path / "bin" / "nvcc"
         if not nvcc_path.is_file():
-            raise FileNotFoundError(
-                f"Could not find nvcc at expected location: {nvcc_path}"
-            )
+            raise FileNotFoundError(f"Could not find nvcc at expected location: {nvcc_path}")
         return str(nvcc_path)
 
     path = shutil.which("nvcc")
@@ -72,7 +70,5 @@ def nvdisasm_full_path() -> str:
         )
     nvdisasm_path = cuda_path / "bin" / "nvdisasm"
     if not nvdisasm_path.is_file():
-        raise FileNotFoundError(
-            f"Could not find nvdisasm at expected location: {nvdisasm_path}"
-        )
+        raise FileNotFoundError(f"Could not find nvdisasm at expected location: {nvdisasm_path}")
     return str(nvdisasm_path)

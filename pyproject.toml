@@ -37,3 +37,6 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/andravin/spio"
 Issues = "https://github.com/andravin/spio/issues"
+
+[tool.black]
+line-length = 100

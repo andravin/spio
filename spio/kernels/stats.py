@@ -18,9 +18,7 @@ class Stats:
         output_names: Names of the output tensors.
     """
 
-    def __init__(
-        self, params: Params = None, unit: int = 2, output_names: List[str] = None
-    ):
+    def __init__(self, params: Params = None, unit: int = 2, output_names: List[str] = None):
         self.params = params
         self.unit = unit
         if isinstance(output_names, str):
@@ -34,25 +32,20 @@ class Stats:
         Returns the total number of multiply-accumulates performed by
         all of the output tensor calculations.
         """
-        return sum(
-            getattr(self, f"{output_tensor}_macs")
-            for output_tensor in self.output_names
-        )
+        return sum(getattr(self, f"{output_tensor}_macs") for output_tensor in self.output_names)
 
     @property
     def bytes_read(self) -> int:
         """The number of bytes read in the calculations."""
         return sum(
-            getattr(self, f"{output_tensor}_bytes_read")
-            for output_tensor in self.output_names
+            getattr(self, f"{output_tensor}_bytes_read") for output_tensor in self.output_names
         )
 
     @property
     def bytes_written(self) -> int:
         """The number of bytes written in the calculations."""
         return sum(
-            getattr(self, f"{output_tensor}_bytes_written")
-            for output_tensor in self.output_names
+            getattr(self, f"{output_tensor}_bytes_written") for output_tensor in self.output_names
         )
 
     @property

@@ -51,9 +51,7 @@ def compile_kernel_configs(
     if configs is None:
         configs = list(kernel_factory.configs(params, device_attr, **kernel_kwargs))
     kernels = [
-        kernel_factory.make_kernel(
-            params, config=config, device_attr=device_attr, **kernel_kwargs
-        )
+        kernel_factory.make_kernel(params, config=config, device_attr=device_attr, **kernel_kwargs)
         for config in configs
     ]
     compile_kernels(kernels, arch=device_attr.compute_capability)
@@ -75,9 +73,7 @@ def compile_kernels(kernels: List["Kernel"], arch: Tuple[int, int] = None) -> No
 
 def _compile_kernels(compiler_args, arch: Tuple[int, int] = None) -> List[bytes]:
     """Compile multiple kernels in parallel."""
-    ck_with_args = partial(
-        compile_kernel, arch=arch, lineinfo=lineinfo.get(), debug=debug.get()
-    )
+    ck_with_args = partial(compile_kernel, arch=arch, lineinfo=lineinfo.get(), debug=debug.get())
     try:
         async_result = pool.starmap_async(ck_with_args, compiler_args)
         res = async_result.get(LONG_TIMEOUT)

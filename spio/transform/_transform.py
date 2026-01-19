@@ -37,9 +37,7 @@ def _transform(model: torch.nn.Module):
             module = modules_dict[n.target]
             for spio_module_class in spio_modules_classes:
                 if spio_module_class.match(module):
-                    nodes_to_replace.append(
-                        (n, spio_module_class.from_torch_module(module))
-                    )
+                    nodes_to_replace.append((n, spio_module_class.from_torch_module(module)))
                     break
 
     # Replace collected nodes

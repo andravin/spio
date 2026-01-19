@@ -66,9 +66,7 @@ class Matmul(GenSpecs):
 
         # Generate function signature
         lines.append("/**")
-        lines.append(
-            " * Optimized matrix multiplication function for specific tensor formats."
-        )
+        lines.append(" * Optimized matrix multiplication function for specific tensor formats.")
         lines.append(f" * - Tensor A dimensions: {', '.join(a_dims)}")
         lines.append(f" * - Tensor B dimensions: {', '.join(b_dims)}")
         lines.append(f" * - Output dimensions: {', '.join(a_only_dims + b_only_dims)}")
@@ -76,9 +74,7 @@ class Matmul(GenSpecs):
         lines.append(" * Using reduction-first traversal order.")
         if self.use_zigzag:
             lines.append(" * Using zigzag traversal for all dimensions.")
-        lines.append(
-            " * Note: Tensors must be initialized before calling this function."
-        )
+        lines.append(" * Note: Tensors must be initialized before calling this function.")
         lines.append(" */")
 
         # Function declaration with concrete types
@@ -167,17 +163,13 @@ class Matmul(GenSpecs):
                 first_b_dim = b_only_dims[0]
                 first_b_dim_pos = traversal_order.index(first_b_dim)
                 indices_before_b = [
-                    idx.get(dim, 0)
-                    for dim in traversal_order[:first_b_dim_pos]
-                    if dim in idx
+                    idx.get(dim, 0) for dim in traversal_order[:first_b_dim_pos] if dim in idx
                 ]
                 is_zag = sum(indices_before_b) % 2 == 1
 
             # Use reverse version on "zag" iterations for all fragment types
             if is_zag:
-                lines.append(
-                    f"{indent}mma_trans_reverse({d_ref}, {a_ref}, {b_ref}, {c_ref});"
-                )
+                lines.append(f"{indent}mma_trans_reverse({d_ref}, {a_ref}, {b_ref}, {c_ref});")
             else:
                 lines.append(f"{indent}mma_trans({d_ref}, {a_ref}, {b_ref}, {c_ref});")
 
@@ -189,9 +181,7 @@ class Matmul(GenSpecs):
 
     def _build_subscript_chain(self, dims: Set[str], available_dims: Set[str]) -> str:
         """Build a chain of subscript operators for the given dimensions."""
-        return "".join(
-            f"[{dim}_idx]" for dim in sorted(dims.intersection(available_dims))
-        )
+        return "".join(f"[{dim}_idx]" for dim in sorted(dims.intersection(available_dims)))
 
     def _get_dim_class_name(self, dim_name: str) -> str:
         """Get the C++ class name for a dimension."""

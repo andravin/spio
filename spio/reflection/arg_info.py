@@ -76,10 +76,7 @@ class ArgInfo:
         return torch.zeros(self._shape(params), dtype=self.dtype, device=device)
 
     def _ones(self, params: Any, device: str) -> torch.Tensor:
-        return (
-            torch.ones(self._shape(params), dtype=self.dtype, device=device)
-            * self.scale
-        )
+        return torch.ones(self._shape(params), dtype=self.dtype, device=device) * self.scale
 
     def _randn_clip_3(self, params: Any, device: str) -> torch.Tensor:
         shape = self._shape(params)
@@ -101,9 +98,7 @@ class ArgInfo:
         elif self.random:
             tensor = self._randn_clip_3(params, device)
         else:
-            raise ValueError(
-                f"Invalid init value for argument {self.name}: {self.init}"
-            )
+            raise ValueError(f"Invalid init value for argument {self.name}: {self.init}")
         tensor = _to(tensor, memory_format=self.memory_format)
 
         if self.requires_grad and training and has_arg:
@@ -112,7 +107,7 @@ class ArgInfo:
 
     def format(self, tensor: torch.Tensor) -> torch.Tensor:
         """Format the given tensor based on the ArgInfo settings.
-        
+
         Assume the given tensor is in channels last format.
         """
         return _to(tensor, memory_format=self.memory_format)

@@ -15,7 +15,5 @@ default_disasm = env_var_is_true("SPIO_DISASM")
 
 lineinfo = ContextVar("lineinfo", default=default_lineinfo)
 debug = ContextVar("debug", default=default_debug)
-count_instructions = ContextVar(
-    "count_instructions", default=default_count_instructions
-)
+count_instructions = ContextVar("count_instructions", default=default_count_instructions)
 print_disasm = ContextVar("disasm", default=default_disasm)
