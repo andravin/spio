@@ -23,7 +23,6 @@ from spio.kernels import (
 from spio.util.parse_dataclass import parse_dataclass
 from spio.reflection import get_kernel_reflection
 
-
 PARAMS_CLASSES = {
     "Conv2dGw8Params": Conv2dGw8Params,
 }
