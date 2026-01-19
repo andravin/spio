@@ -1,8 +1,7 @@
 #include "utest.h"
 #include "spio/strip_loader_params.h"
 
-UTEST(StripLoaderParams, two_loads)
-{
+UTEST(StripLoaderParams, two_loads) {
     constexpr int X16_tile = 8;
     constexpr int C16_tile = 2;
     constexpr int num_warps = 8;
@@ -13,8 +12,7 @@ UTEST(StripLoaderParams, two_loads)
     EXPECT_EQ(Params::num_loads, 2);
 }
 
-UTEST(StripLoaderParams, one_load)
-{
+UTEST(StripLoaderParams, one_load) {
     constexpr int X16_tile = 8;
     constexpr int C16_tile = 1;
     constexpr int num_warps = 8;
@@ -25,9 +23,7 @@ UTEST(StripLoaderParams, one_load)
     EXPECT_EQ(Params::num_loads, 1);
 }
 
-
-UTEST(StripLoaderParams, one_load_cross_minor_axis)
-{
+UTEST(StripLoaderParams, one_load_cross_minor_axis) {
     constexpr int X16_tile = 4;
     constexpr int C16_tile = 2;
     constexpr int num_warps = 8;
@@ -38,8 +34,7 @@ UTEST(StripLoaderParams, one_load_cross_minor_axis)
     EXPECT_EQ(Params::num_loads, 1);
 }
 
-UTEST(StripLoaderParams, two_loads_idle_warps)
-{
+UTEST(StripLoaderParams, two_loads_idle_warps) {
     constexpr int X16_tile = 5;
     constexpr int C16_tile = 2;
     constexpr int num_warps = 8;
@@ -49,4 +44,3 @@ UTEST(StripLoaderParams, two_loads_idle_warps)
     EXPECT_EQ(Params::active_warps, 5);
     EXPECT_EQ(Params::num_loads, 2);
 }
-

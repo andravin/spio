@@ -7,8 +7,7 @@
 
 #include "spio/allocator.h"
 
-namespace spio
-{
+namespace spio {
     /// A warp-safe circular FIFO.
     ///
     /// The user must ensure the size of the FIFO never exceeds its capacity.
@@ -18,9 +17,7 @@ namespace spio
     ///
     /// Template parameters:
     ///   Capacity   Maximum number of elements the FIFO can hold (must be <= 32).
-    template <unsigned Capacity>
-    class WarpFifo
-    {
+    template <unsigned Capacity> class WarpFifo {
         static_assert(Capacity <= 32, "Capacity must be less than or equal to 32.");
         static constexpr unsigned all_lanes_mask = 0xFFFFFFFF;
         static constexpr unsigned patience_ns = 20;
@@ -44,10 +41,11 @@ namespace spio
         ///   head   Pointer to the index of the next element to read.
         ///   tail   Pointer to the index of the next element to write.
         ///   tid    Thread's unique identifier among participating threads.
-        __device__ WarpFifo(data_type *fifo, unsigned *head, unsigned *tail, int tid)
-            : _fifo(fifo), _head(head), _tail(tail), _is_first_lane(tid % 32 == 0)
-        {
-        }
+        __device__ WarpFifo(data_type* fifo, unsigned* head, unsigned* tail, int tid)
+            : _fifo(fifo),
+              _head(head),
+              _tail(tail),
+              _is_first_lane(tid % 32 == 0) {}
 
         /// Creates a resource queue initialized with resource identifiers.
         ///
@@ -63,14 +61,10 @@ namespace spio
         ///
         /// Returns:
         ///   WarpFifo initialized with resource ids [0, num_resources).
-        __device__ static WarpFifo make_resource_queue(data_type *fifo, unsigned *head, unsigned *tail, int tid, int num_resources)
-        {
-            if (tid < capacity)
-            {
-                fifo[tid] = (tid < num_resources) ? tid : sentinel_value;
-            }
-            if (tid == 0)
-            {
+        __device__ static WarpFifo make_resource_queue(data_type* fifo, unsigned* head,
+                                                       unsigned* tail, int tid, int num_resources) {
+            if (tid < capacity) { fifo[tid] = (tid < num_resources) ? tid : sentinel_value; }
+            if (tid == 0) {
                 *head = 0;
                 *tail = num_resources;
             }
@@ -88,14 +82,10 @@ namespace spio
         ///
         /// Returns:
         ///   WarpFifo initialized with resource ids [0, num_resources).
-        __device__ static WarpFifo make_resource_queue(data_type *smem_buffer, int tid, int num_resources)
-        {
-            return make_resource_queue(
-                smem_buffer,
-                smem_buffer + capacity,
-                smem_buffer + capacity + 1,
-                tid,
-                num_resources);
+        __device__ static WarpFifo make_resource_queue(data_type* smem_buffer, int tid,
+                                                       int num_resources) {
+            return make_resource_queue(smem_buffer, smem_buffer + capacity,
+                                       smem_buffer + capacity + 1, tid, num_resources);
         }
 
         /// Allocates and creates a resource queue using a StackAllocator.
@@ -107,8 +97,8 @@ namespace spio
         ///
         /// Returns:
         ///   WarpFifo initialized with resource ids [0, num_resources).
-        __device__ static WarpFifo allocate_resource_queue(StackAllocator &allocator, int tid, int num_resources)
-        {
+        __device__ static WarpFifo allocate_resource_queue(StackAllocator& allocator, int tid,
+                                                           int num_resources) {
             auto smem_buffer = allocator.allocate<data_type>(smem_size);
             return make_resource_queue(smem_buffer, tid, num_resources);
         }
@@ -117,8 +107,7 @@ namespace spio
         ///
         /// Parameters:
         ///   allocator   The allocator that was used to allocate the buffer.
-        __device__ void deallocate(StackAllocator &allocator)
-        {
+        __device__ void deallocate(StackAllocator& allocator) {
             allocator.deallocate(_fifo, smem_size);
         }
 
@@ -126,10 +115,8 @@ namespace spio
         ///
         /// Only the first thread in each warp performs the push. All threads synchronize after.
         /// The user must ensure the FIFO does not overflow.
-        __device__ void push(data_type value)
-        {
-            if (_is_first_lane)
-            {
+        __device__ void push(data_type value) {
+            if (_is_first_lane) {
                 auto idx = atomicAdd(_tail, 1);
                 _fifo[idx % capacity] = value;
                 __threadfence_block();
@@ -143,31 +130,26 @@ namespace spio
         ///
         /// Returns:
         ///   The next element in the FIFO.
-        __device__ data_type pop()
-        {
+        __device__ data_type pop() {
             data_type value;
-            if (_is_first_lane)
-            {
+            if (_is_first_lane) {
                 auto idx = atomicAdd(_head, 1);
                 auto slot = &_fifo[idx % capacity];
-                for (
-                    value = atomicExch(slot, sentinel_value);
-                    value == sentinel_value;
-                    value = atomicExch(slot, sentinel_value))
-                {
+                for (value = atomicExch(slot, sentinel_value); value == sentinel_value;
+                     value = atomicExch(slot, sentinel_value)) {
                     __nanosleep(patience_ns);
                 }
             }
             return __shfl_sync(all_lanes_mask, value, 0);
         }
 
-        __device__ WarpFifo(const WarpFifo &) = delete;
-        __device__ WarpFifo &operator=(const WarpFifo &) = delete;
+        __device__ WarpFifo(const WarpFifo&) = delete;
+        __device__ WarpFifo& operator=(const WarpFifo&) = delete;
 
     private:
-        data_type *_fifo;
-        unsigned *_head;
-        unsigned *_tail;
+        data_type* _fifo;
+        unsigned* _head;
+        unsigned* _tail;
         bool _is_first_lane;
     };
 
@@ -177,9 +159,7 @@ namespace spio
     ///
     /// Template parameters:
     ///   Capacity   Capacity of the underlying WarpFifo.
-    template <unsigned Capacity>
-    class WarpFifoGuard
-    {
+    template <unsigned Capacity> class WarpFifoGuard {
     public:
         using Fifo = WarpFifo<Capacity>;
 
@@ -189,28 +169,25 @@ namespace spio
         ///
         /// Parameters:
         ///   fifo   The WarpFifo to pop the value from.
-        __device__ WarpFifoGuard(Fifo &fifo) : _fifo(fifo)
-        {
+        __device__ WarpFifoGuard(Fifo& fifo) : _fifo(fifo) {
             _value = _fifo.pop();
         }
 
         /// Destructor that pushes the value back into the WarpFifo.
-        __device__ ~WarpFifoGuard()
-        {
+        __device__ ~WarpFifoGuard() {
             _fifo.push(_value);
         }
 
         /// Returns the value that was popped from the WarpFifo.
-        __device__ data_type value() const
-        {
+        __device__ data_type value() const {
             return _value;
         }
 
-        __device__ WarpFifoGuard &operator=(const WarpFifoGuard &) = delete;
-        __device__ WarpFifoGuard(const WarpFifoGuard &) = delete;
+        __device__ WarpFifoGuard& operator=(const WarpFifoGuard&) = delete;
+        __device__ WarpFifoGuard(const WarpFifoGuard&) = delete;
 
     private:
-        Fifo &_fifo;
+        Fifo& _fifo;
         data_type _value;
     };
 }
