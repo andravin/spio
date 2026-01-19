@@ -3,14 +3,12 @@
 
 #include "spio/macros.h"
 
-namespace spio
-{
+namespace spio {
     /// Manages the state of a pipeline with multiple stages.
     ///
     /// Each stage is represented by a bit in an unsigned integer. The pipeline
     /// can be stepped forward, and active stages can be checked.
-    class Pipeline
-    {
+    class Pipeline {
     public:
         /// Constructs a pipeline with an initial state.
         ///
@@ -25,7 +23,9 @@ namespace spio
         ///
         /// Returns:
         ///   True if the stage is active.
-        DEVICE bool active(unsigned stage) const { return (stage & _state) != 0; }
+        DEVICE bool active(unsigned stage) const {
+            return (stage & _state) != 0;
+        }
 
         /// Checks if two stages are both active.
         ///
@@ -35,8 +35,7 @@ namespace spio
         ///
         /// Returns:
         ///   True if both stages are active.
-        DEVICE bool active(unsigned stage_1, unsigned stage_2) const
-        {
+        DEVICE bool active(unsigned stage_1, unsigned stage_2) const {
             return ((stage_1 | stage_2) & _state) == (stage_1 | stage_2);
         }
 
@@ -46,8 +45,7 @@ namespace spio
         ///
         /// Parameters:
         ///   active   If true, activates the first pipeline stage.
-        DEVICE void step(bool active)
-        {
+        DEVICE void step(bool active) {
             _state <<= 1;
             _state |= (active ? 1 : 0);
         }

@@ -3,8 +3,7 @@
 
 /// Define functions for tensor core matrix multiply-accumulate.
 
-namespace spio
-{
+namespace spio {
     /// Performs D = A x B + C matrix-multiplication with tensor cores.
     ///
     /// Parameters:
@@ -12,23 +11,16 @@ namespace spio
     ///   a   Input matrix A, 16 x 16 fragment in float16.
     ///   b   Input matrix B, 16 x 8 fragment in float16.
     ///   c   Accumulate matrix C, 16 x 8 fragment in float32.
-    __device__ void mma_m16_n8_k16(
-        float4 &d,
-        uint4 a,
-        uint2 b,
-        float4 c)
-    {
+    __device__ void mma_m16_n8_k16(float4& d, uint4 a, uint2 b, float4 c) {
         // mma.sync.aligned.m16n8k16.row.col.dtype.f16.f16.ctype d, a, b, c;
-        asm volatile(
-            "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32"
-            " {%0, %1, %2, %3},"
-            " {%4, %5, %6, %7},"
-            " {%8, %9}, "
-            " {%10, %11, %12, %13};"
-            : "=f"(d.x), "=f"(d.y), "=f"(d.z), "=f"(d.w)
-            : "r"(a.x), "r"(a.y), "r"(a.z), "r"(a.w),
-              "r"(b.x), "r"(b.y),
-              "f"(c.x), "f"(c.y), "f"(c.z), "f"(c.w));
+        asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32"
+                     " {%0, %1, %2, %3},"
+                     " {%4, %5, %6, %7},"
+                     " {%8, %9}, "
+                     " {%10, %11, %12, %13};"
+                     : "=f"(d.x), "=f"(d.y), "=f"(d.z), "=f"(d.w)
+                     : "r"(a.x), "r"(a.y), "r"(a.z), "r"(a.w), "r"(b.x), "r"(b.y), "f"(c.x),
+                       "f"(c.y), "f"(c.z), "f"(c.w));
     }
 
     /// Performs D = A x B + C matrix-multiplication with tensor cores.
@@ -38,23 +30,15 @@ namespace spio
     ///   a   Input matrix A, 16 x 8 fragment in float16.
     ///   b   Input matrix B, 8 x 8 fragment in float16.
     ///   c   Accumulate matrix C, 16 x 8 fragment in float32.
-    __device__ void mma_m16_n8_k8(
-        float4 &d,
-        uint2 a,
-        unsigned b,
-        float4 c)
-    {
+    __device__ void mma_m16_n8_k8(float4& d, uint2 a, unsigned b, float4 c) {
         // mma.sync.aligned.m16n8k8.row.col.dtype.f16.f16.ctype d, a, b, c;
-        asm volatile(
-            "mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32"
-            " {%0, %1, %2, %3},"
-            " {%4, %5},"
-            " {%6}, "
-            " {%7, %8, %9, %10};"
-            : "=f"(d.x), "=f"(d.y), "=f"(d.z), "=f"(d.w)
-            : "r"(a.x), "r"(a.y),
-              "r"(b),
-              "f"(c.x), "f"(c.y), "f"(c.z), "f"(c.w));
+        asm volatile("mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32"
+                     " {%0, %1, %2, %3},"
+                     " {%4, %5},"
+                     " {%6}, "
+                     " {%7, %8, %9, %10};"
+                     : "=f"(d.x), "=f"(d.y), "=f"(d.z), "=f"(d.w)
+                     : "r"(a.x), "r"(a.y), "r"(b), "f"(c.x), "f"(c.y), "f"(c.z), "f"(c.w));
     }
 }
 

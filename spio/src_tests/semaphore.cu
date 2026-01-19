@@ -1,9 +1,8 @@
 #include "spio/semaphore.cuh"
 
-extern "C"
-{
-    __global__ void warp_semaphore(long long *__restrict__ event_types, long long *__restrict__ event_times)
-    {
+extern "C" {
+    __global__ void warp_semaphore(long long* __restrict__ event_types,
+                                   long long* __restrict__ event_times) {
         constexpr unsigned warps = 16;
         constexpr unsigned max_count = 8;
         constexpr unsigned iters_per_warp = 64;
@@ -13,8 +12,7 @@ extern "C"
         __shared__ unsigned next_reservation;
         __shared__ unsigned next_execution;
 
-        spio::WarpSemaphore sem(
-            &next_reservation, &next_execution, max_count, threadIdx.x);
+        spio::WarpSemaphore sem(&next_reservation, &next_execution, max_count, threadIdx.x);
 
         __syncthreads();
 
@@ -24,12 +22,10 @@ extern "C"
         event_types += warp_idx * events_per_warp;
         event_times += warp_idx * events_per_warp;
 
-        for (int i = 0; i < iters_per_warp; ++i)
-        {
+        for (int i = 0; i < iters_per_warp; ++i) {
             sem.acquire();
 
-            if (lane_idx == 0)
-            {
+            if (lane_idx == 0) {
                 event_types[i * 2 + 0] = 1;
                 event_times[i * 2 + 0] = clock64();
 
