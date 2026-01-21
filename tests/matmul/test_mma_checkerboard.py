@@ -8,7 +8,22 @@ import argparse
 import pytest
 import torch
 
-from spio.generators import *
+from spio.generators import (
+    AsyncLoader,
+    BuiltIn,
+    Checkerboard,
+    CompoundIndex,
+    Dim,
+    dtype,
+    Fragment,
+    FragmentType,
+    generate,
+    Generators,
+    LANE,
+    Macro,
+    Matmul,
+    Tensor,
+)
 from spio.compiler import (
     compile_and_load_kernel,
     lineinfo,
@@ -17,7 +32,6 @@ from spio.compiler import (
 )
 from spio.util import divup, assert_all_close_with_acc_depth, TwoFold
 from spio.cuda import driver
-
 
 # -----------------------------------------------------------------------------
 # Configuration
@@ -463,8 +477,8 @@ def _benchmark_single(
 
     # Benchmark spio kernel
     try:
-        _, kernel, grid, block, smem_size = _compile_kernel(m, n, k, cfg=cfg)
-        fn = partial(kernel.launch, grid, block, shared_mem_bytes=smem_size)
+        _, kernel, grid, smem_size = _compile_kernel(m, n, k, cfg=cfg)
+        fn = partial(kernel.launch, grid, cfg.block, shared_mem_bytes=smem_size)
         args_lists = _make_matrix_lists(m, n, k)
         print()
         _print_header()
@@ -567,7 +581,8 @@ def _parse_args():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for benchmarking."""
     args = _parse_args()
 
     if args.all:
@@ -591,3 +606,7 @@ if __name__ == "__main__":
             iters=args.iters,
             pytorch=args.pytorch,
         )
+
+
+if __name__ == "__main__":
+    main()

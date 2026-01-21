@@ -1,7 +1,5 @@
 """Unit tests for Tensor construction patterns."""
 
-import pytest
-
 from spio.generators import (
     Generators,
     Tensor,

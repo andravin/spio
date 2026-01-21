@@ -3,13 +3,16 @@
 import pytest
 
 from spio.generators import (
+    Dims,
     Fragment,
     FragmentType,
     Dim,
     Generators,
     generate,
     dtype,
+    Tensor,
 )
+from spio.generators.fold import StaticFold
 
 
 class TestFragmentSpecs:
@@ -217,7 +220,6 @@ class TestTensorDivideByFragment:
 
     def test_basic_division_with_string_dims(self):
         """Tensor / Fragment should divide matching dimensions."""
-        from spio.generators import Tensor, Dims
 
         tensor = Tensor(dtype.half, Dims(m=64, k=32))
         frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
@@ -230,8 +232,6 @@ class TestTensorDivideByFragment:
 
     def test_division_with_dim_objects(self):
         """Tensor / Fragment should work with Dim objects and produce folds."""
-        from spio.generators import Tensor, Dims
-        from spio.generators.fold import StaticFold
 
         g = Generators()
         g.I = Dim()
@@ -257,9 +257,6 @@ class TestTensorDivideByFragment:
 
     def test_division_produces_static_folds(self):
         """Tensor / Fragment should produce StaticFolds from StaticDims."""
-        from spio.generators import Tensor, Dims
-        from spio.generators.fold import StaticFold
-        from spio.generators.dim import StaticDim
 
         g = Generators()
         g.I = Dim()
@@ -286,7 +283,6 @@ class TestTensorDivideByFragment:
 
     def test_division_sets_data_type_to_fragment(self):
         """Tensor / Fragment should set data_type to the Fragment."""
-        from spio.generators import Tensor, Dims
 
         tensor = Tensor(dtype.half, Dims(m=32, k=16))
         frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
@@ -297,7 +293,6 @@ class TestTensorDivideByFragment:
 
     def test_division_preserves_constant(self):
         """Tensor / Fragment should preserve the constant attribute."""
-        from spio.generators import Tensor, Dims
 
         tensor = Tensor(dtype.half, Dims(m=32, k=16), constant=True)
         frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
@@ -308,7 +303,6 @@ class TestTensorDivideByFragment:
 
     def test_division_with_extra_tensor_dims(self):
         """Tensor / Fragment should preserve non-matching dimensions."""
-        from spio.generators import Tensor, Dims
 
         # Tensor has an extra dimension 'n' not in the fragment
         tensor = Tensor(dtype.half, Dims(m=64, k=32, n=4))
@@ -323,49 +317,44 @@ class TestTensorDivideByFragment:
 
     def test_division_dtype_mismatch_raises(self):
         """Tensor / Fragment should raise if dtypes don't match."""
-        from spio.generators import Tensor, Dims
 
         # Tensor has float dtype, Fragment expects half
         tensor = Tensor(dtype.float, Dims(m=32, k=16))
         frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         with pytest.raises(ValueError, match="dtype.*doesn't match"):
-            tensor / frag
+            _ = tensor / frag
 
     def test_division_missing_dim_raises(self):
         """Tensor / Fragment should raise if fragment dim not in tensor."""
-        from spio.generators import Tensor, Dims
 
         # Tensor is missing the 'k' dimension
         tensor = Tensor(dtype.half, Dims(m=32, n=16))
         frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         with pytest.raises(ValueError, match="not found in Tensor"):
-            tensor / frag
+            _ = tensor / frag
 
     def test_division_not_divisible_raises(self):
         """Tensor / Fragment should raise if dimension not evenly divisible."""
-        from spio.generators import Tensor, Dims
 
         # M dimension (30) not divisible by fragment row size (16)
         tensor = Tensor(dtype.half, Dims(m=30, k=32))
         frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         with pytest.raises(ValueError, match="not.*evenly divisible"):
-            tensor / frag
+            _ = tensor / frag
 
     def test_division_with_non_fragment_raises(self):
         """Tensor / non-Fragment should raise TypeError."""
-        from spio.generators import Tensor, Dims
 
         tensor = Tensor(dtype.half, Dims(m=32, k=16))
 
         with pytest.raises(TypeError, match="requires a Fragment"):
-            tensor / 16
+            _ = tensor / 16
 
     def test_division_case_insensitive(self):
         """Tensor / Fragment dimension matching should be case-insensitive."""
-        from spio.generators import Tensor, Dims
 
         # Tensor uses lowercase, Fragment uses uppercase (or vice versa)
         tensor = Tensor(dtype.half, Dims(M=64, K=32))  # uppercase
@@ -381,7 +370,6 @@ class TestTensorDivideByFragment:
 
     def test_division_different_fragment_sizes(self):
         """Tensor / Fragment should handle fragments with different row/col sizes."""
-        from spio.generators import Tensor, Dims
 
         # M16_N8_F32_C has 16 rows, 8 cols
         tensor = Tensor(dtype.float, Dims(m=32, n=16))

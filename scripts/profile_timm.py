@@ -58,7 +58,12 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     if args.spio:
-        timm.layers.set_use_spio(True)
+        if not hasattr(timm.layers, "set_use_spio"):
+            sys.exit(
+                "Error: This version of timm does not support spio. "
+                "Please install the custom timm fork with spio support."
+            )
+        timm.layers.set_use_spio(True)  # pylint: disable=no-member
 
     memory_format = torch.channels_last if args.channels_last else torch.contiguous_format
     total_iters = WAIT_ITERS + args.warmup_iters + args.benchmark_iters

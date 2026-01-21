@@ -1,6 +1,6 @@
 """Test the dtype enumeration"""
 
-from spio.generators import dtype, get_dtype_veclen
+from spio.generators import dtype
 
 
 def test_dtype_sizes():

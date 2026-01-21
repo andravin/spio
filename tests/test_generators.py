@@ -605,8 +605,6 @@ class TestDimArgSupport:
 
     def test_checkerboard_with_static_dim_mismatched_size_raises(self):
         """Checkerboard raises error if explicit size doesn't match computed."""
-        import pytest
-
         I = Dim()
         K = Dim()
         K8 = K.fold(8)
@@ -626,8 +624,6 @@ class TestDimArgSupport:
         cb = Checkerboard(pairs_dim=i_block / 16, colors_dim=K8(4))
 
         # The pairs_dim should be a Fold (from i_block / 16), not StaticFold
-        from spio.generators.fold import Fold
-
         assert isinstance(cb.pairs_dim, Fold)
         assert isinstance(cb.colors_dim, Fold)
 

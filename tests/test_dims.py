@@ -1,8 +1,21 @@
 """Unit tests for the Dims class and automatic fold size inference."""
 
 import pytest
-from spio.generators import Dims, Dim, Fold, Strides, LANE, OFFSET
+from spio.generators import (
+    Checkerboard,
+    Dim,
+    Dims,
+    dtype,
+    Fold,
+    generate,
+    Generators,
+    LANE,
+    OFFSET,
+    Strides,
+    Tensor,
+)
 from spio.generators.dim import StaticDim, BUILTIN_DIM_NAMES
+from spio.generators.dims import compute_full_strides
 from spio.generators.fold import StaticFold
 
 
@@ -134,7 +147,7 @@ class TestStaticDim:
         i4 = I(4)
         j4 = J(4)
         with pytest.raises(TypeError, match="different base Dims"):
-            i4 * j4
+            _ = i4 * j4
 
     def test_static_dim_multiply_by_int(self):
         """Test that StaticDim * int multiplies the size."""
@@ -191,7 +204,7 @@ class TestStaticDim:
         I = Dim("I")
         i = I(128)
         with pytest.raises(ValueError, match="does not evenly divide"):
-            i % 17
+            _ = i % 17
 
     def test_static_dim_division_and_modulo_decompose(self):
         """Test that / and % together decompose a dimension."""
@@ -324,7 +337,7 @@ class TestStaticFold:
         a = K8(4)
         b = J8(4)
         with pytest.raises(TypeError, match="different base Dim or stride"):
-            a * b
+            _ = a * b
 
     def test_static_fold_multiply_different_stride_raises(self):
         """Test that multiplying StaticFolds with different strides raises TypeError."""
@@ -334,7 +347,7 @@ class TestStaticFold:
         a = K8(4)
         b = K4(4)
         with pytest.raises(TypeError, match="different base Dim or stride"):
-            a * b
+            _ = a * b
 
     def test_static_fold_multiply_by_int(self):
         """Test that StaticFold * int multiplies the size."""
@@ -392,7 +405,7 @@ class TestStaticFold:
         K8 = K.fold(8)
         k8 = K8(15)
         with pytest.raises(ValueError, match="not divisible"):
-            k8 / 2
+            _ = k8 / 2
 
     def test_static_fold_modulo_basic(self):
         """Test that StaticFold % int creates a new StaticFold with size=modulus."""
@@ -601,7 +614,6 @@ class TestDerivedDimensionInDims:
 
     def test_derived_dim_via_dict_positional(self):
         """Test that derived dims can be passed via dict as positional arg."""
-        from spio.generators import Checkerboard
 
         I = Dim("I")
         K = Dim("K")
@@ -621,7 +633,6 @@ class TestDerivedDimensionInDims:
 
     def test_derived_dim_preserves_order(self):
         """Test that derived dims via dict preserve position in order."""
-        from spio.generators import Checkerboard
 
         I = Dim("I")
         K = Dim("K")
@@ -642,7 +653,6 @@ class TestDerivedDimensionInDims:
 
     def test_derived_dim_via_kwarg_with_static_dims(self):
         """Test that derived dims via kwarg work with static dims."""
-        from spio.generators import Checkerboard
 
         I = Dim("I")
         K = Dim("K")
@@ -665,7 +675,6 @@ class TestComputeFullStridesWithAnonymousFolds:
 
     def test_anonymous_fold_in_dims_and_strides(self):
         """Test object-based matching when both Dims and Strides use anonymous folds."""
-        from spio.generators.dims import compute_full_strides
 
         J = Dim("J")
         J8 = J.fold(8)  # Anonymous fold - no name set
@@ -685,7 +694,6 @@ class TestComputeFullStridesWithAnonymousFolds:
 
     def test_anonymous_fold_auto_size_with_strides(self):
         """Test auto-computed sizes (-1) work with object-based stride matching."""
-        from spio.generators.dims import compute_full_strides
 
         J = Dim("J")
         J8 = J.fold(8)
@@ -711,7 +719,6 @@ class TestComputeFullStridesWithAnonymousFolds:
 
     def test_multiple_anonymous_folds_same_base_dim(self):
         """Test multiple anonymous folds of the same base dimension."""
-        from spio.generators.dims import compute_full_strides
 
         I = Dim("I")
         warp_i = I.fold(64)  # Anonymous
@@ -746,7 +753,6 @@ class TestTensorWithAnonymousFoldsAndStrides:
 
     def test_tensor_with_anonymous_fold_strides(self):
         """Test Tensor with Strides using anonymous folds."""
-        from spio.generators import Tensor, dtype, generate, Generators
 
         g = Generators()
         J = g.J = Dim()
@@ -765,7 +771,6 @@ class TestTensorWithAnonymousFoldsAndStrides:
 
     def test_tensor_with_derived_dims_and_strides(self):
         """Test Tensor with derived dimensions (Checkerboard) and strides."""
-        from spio.generators import Tensor, dtype, Checkerboard, generate, Generators
 
         g = Generators()
         I = g.I = Dim()

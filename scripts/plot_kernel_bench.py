@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 from spio.src_tests import preprocess_data_file
 from spio.reflection import get_kernel_reflection
 
-
 MAX_BANDWIDTH_GB_S = 3000
 
 

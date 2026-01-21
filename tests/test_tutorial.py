@@ -9,10 +9,34 @@ from importlib_resources import files as importlib_resources_files
 import pytest
 
 import spio.compiler
-from spio.generators import *
-from spio.generators import GENERATORS
-from spio.util import env_var_is_true
+from spio.generators import (
+    GENERATORS,
+    Generators,
+    generate,
+    dtype,
+    Dims,
+    Strides,
+)
 
+# These imports are accessed dynamically via globals()[name] to build EVAL_NAMESPACE
+# pylint: disable=unused-import
+from spio.generators import (
+    Tensor,
+    CompoundIndex,
+    Fragment,
+    Macro,
+    Dim,
+    Fold,
+    FragmentIndex,
+    FragmentLoadIndex,
+    ParamsSpec,
+    Matmul,
+    Coordinates,
+    CompoundIndexPartition,
+)
+
+# pylint: enable=unused-import
+from spio.util import env_var_is_true
 
 ENABLE_CPP_TESTS = env_var_is_true("SPIO_ENABLE_CPP_TESTS")
 
@@ -24,8 +48,8 @@ SPIO_PATTERN = re.compile(r"/\*@spio\s*(.*?)\s*@spio\*/", re.DOTALL)
 
 # Build EVAL_NAMESPACE dynamically from GENERATORS
 EVAL_NAMESPACE = {"__builtins__": {}, "dtype": dtype, "Dims": Dims, "Strides": Strides}
-for name in GENERATORS:
-    EVAL_NAMESPACE[name] = globals()[name]
+for _gen_name in GENERATORS:
+    EVAL_NAMESPACE[_gen_name] = globals()[_gen_name]
 
 PRE_INCLUDES = ["dim_test_common.h"]
 
@@ -126,7 +150,7 @@ def _extract_specs(source: str) -> Generators:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            exec(line, namespace)
+            exec(line, namespace)  # pylint: disable=exec-used
     # After all lines are executed, add capitalized specs to Generators.
     # This ensures Folds are named (via I16 = I / 16) before CompoundIndex/Tensor
     # specs that reference them are added.

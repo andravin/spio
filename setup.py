@@ -28,7 +28,7 @@ class build_ext(_build_ext):
     """Custom build_ext to define extensions lazily."""
 
     def run(self):
-        from Cython.Build import cythonize
+        from Cython.Build import cythonize  # pylint: disable=import-error,import-outside-toplevel
 
         inc_path = _cuda_rt_include()
 
@@ -47,7 +47,7 @@ class build_ext(_build_ext):
             if not hasattr(ext, "_needs_stub"):
                 ext._needs_stub = False
 
-        self.extensions = exts
+        self.extensions = exts  # pylint: disable=attribute-defined-outside-init
         super().run()
 
 

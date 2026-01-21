@@ -46,9 +46,6 @@ CHANNELS = 64
 
 RESULTS_TABLE_MAX_COL_WIDTH = 400
 
-# pylint: disable=invalid-name
-use_spio = False
-
 
 class LayerNorm2d(nn.Module):
     """Reference implementation of LayerNorm2d."""
@@ -305,8 +302,6 @@ CONVOLUTIONAL_BLOCKS_DICT = {block.__name__: block for block in CONVOLUTIONAL_BL
 
 def main():
     """Main function to parse arguments and run the benchmark."""
-    global use_spio
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--group-width", type=int, default=GROUP_WIDTH)
     parser.add_argument("--channels", type=int, default=CHANNELS)
@@ -364,8 +359,12 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     if args.spio and args.timm_model is not None:
-        timm.layers.set_use_spio(True)
-        use_spio = True
+        if not hasattr(timm.layers, "set_use_spio"):
+            sys.exit(
+                "Error: This version of timm does not support spio. "
+                "Please install the custom timm fork with spio support."
+            )
+        timm.layers.set_use_spio(True)  # pylint: disable=no-member
 
     if args.output_dir is None:
         args.output_dir = "."
