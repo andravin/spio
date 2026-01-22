@@ -16,13 +16,13 @@ from spio.generators import (
     Dim,
     dtype,
     Fragment,
-    FragmentType,
     generate,
     Generators,
     LANE,
     Macro,
     Matmul,
     Tensor,
+    Operand,
 )
 from spio.compiler import (
     compile_and_load_kernel,
@@ -259,14 +259,7 @@ def _get_specs(m: int, n: int, k: int, cfg: MmaConfig):
             f"Required shared memory size {smem_size} exceeds device capacity {smem_capacity}"
         )
 
-    # MMA fragments
-    g.AFragment = Fragment(FragmentType.M16_K16_F16_A, I, K)
-    g.BFragment = Fragment(FragmentType.N16_K16_F16_B, K, J)
-    g.CFragment = Fragment(FragmentType.M16_N16_F32_C, I, J)
-
-    # Load and store views for the shared memory tensors.
-    g.ALoadSmem = g.ASmem.with_dim(g.AFragment.load_index)[LocalIndex]
-    g.BLoadSmem = g.BSmem.with_dim(g.BFragment.load_index)[LocalIndex]
+    # Shared memory stores.
     g.AStoreSmem = g.ASmem[ALoadGlobalIndex]
     g.BStoreSmem = g.BSmem[BLoadGlobalIndex]
 
@@ -289,6 +282,15 @@ def _get_specs(m: int, n: int, k: int, cfg: MmaConfig):
         num_warps=cfg.warps,
         num_buffers=2,
     )
+
+    # MMA fragments
+    g.AFragment = Fragment(Operand.A, dtype.half, I(16), K(16))
+    g.BFragment = Fragment(Operand.B, dtype.half, K(16), J(16))
+    g.CFragment = Fragment(Operand.C, dtype.float, I(16), J(16))
+
+    # Load and store views for the shared memory tensors.
+    g.ALoadSmem = g.ASmem.with_dim(g.AFragment.load_index)[LocalIndex]
+    g.BLoadSmem = g.BSmem.with_dim(g.BFragment.load_index)[LocalIndex]
 
     # Local memory tensors (i.e. registers)
     # - Each tensor "element" is itself a matrix fragment.

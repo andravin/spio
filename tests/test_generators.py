@@ -8,7 +8,7 @@ from spio.generators import (
     CompoundIndex,
     Dim,
     Fold,
-    Fragment,
+    FragmentBase,
     FragmentType,
     Macro,
     Matmul,
@@ -65,7 +65,7 @@ class TestGeneratorsBasic:
     def test_assign_fragment(self):
         """Assigning a Fragment should set its class_name."""
         g = Generators()
-        g.AFragment = Fragment(FragmentType.M16_K16_F16_A, "i", "k")
+        g.AFragment = FragmentBase(FragmentType.M16_K16_F16_A, "i", "k")
 
         assert g.AFragment.class_name == "AFragment"
 
@@ -552,7 +552,7 @@ class TestDimArgSupport:
         g = Generators()
         g.I = I
         g.K = K
-        g.frag = Fragment(FragmentType.M16_K16_F16_A, row=I, col=K)
+        g.frag = FragmentBase(FragmentType.M16_K16_F16_A, row=I, col=K)
 
         code = generate(g)
 
@@ -567,7 +567,7 @@ class TestDimArgSupport:
         I16 = I.fold(16)
 
         g = Generators()
-        g.frag = Fragment(FragmentType.M16_N16_F32_C, row=I16, col=I)
+        g.frag = FragmentBase(FragmentType.M16_N16_F32_C, row=I16, col=I)
         g.I = I
         g.I16 = I16
 

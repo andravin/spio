@@ -5,9 +5,9 @@ from .generators_class import Generators
 from .gen_specs import GenSpecs
 from .compound_index import CompoundIndex, CompoundIndexPartition
 from .tensor import Tensor, CursorInitializer
-from .fragment_type import FragmentType
+from .fragment_type import FragmentType, Operand
 from .data_type import dtype, get_dtype_veclen
-from .fragment import Fragment
+from .fragment import Fragment, FragmentBase
 from .fragment_index import FragmentIndex, FragmentLoadIndex
 from .macros import Macro
 from .params import ParamsSpec
@@ -49,6 +49,7 @@ __all__ = GENERATORS + [
     "Generators",
     "GenSpecs",
     "FragmentType",
+    "FragmentBase",
     "dtype",
     "Checkerboard",
     "AsyncLoader",

@@ -7,7 +7,7 @@ from .dim import Dim, _get_dim_name_and_stride, BUILTIN_DIM_NAMES
 from .fold import Fold
 from .tensor import Tensor
 from .compound_index import CompoundIndex
-from .fragment import Fragment
+from .fragment import FragmentBase
 from .gen_specs import GenSpecs
 
 # Counter for anonymous class names.
@@ -146,7 +146,7 @@ def generate(
     for spec in gen_specs:
         if isinstance(spec, (Dim, Fold)):
             continue
-        if isinstance(spec, Fragment):
+        if isinstance(spec, FragmentBase):
             fragments.append(spec)
         elif isinstance(spec, Tensor):
             tensors.append(spec)
@@ -230,7 +230,7 @@ def _get_user_defined_data_types(gen_specs: List[GenSpecs]) -> List[str]:
     """
     type_names = []
     for spec in gen_specs:
-        if isinstance(spec, Fragment):
+        if isinstance(spec, FragmentBase):
             type_names.append(spec.class_name)
     return type_names
 

@@ -8,7 +8,7 @@ from ..generators import (
     CompoundIndex,
     dtype,
     Fold,
-    Fragment,
+    FragmentBase,
     FragmentType,
     Macro,
     ParamsSpec,
@@ -261,9 +261,9 @@ def _get_kernel_spec(
         #
         # MMA fragments
         #
-        Fragment(FragmentType.M16_N8_F32_C, "c", "k", class_name="Acc"),
-        Fragment(FragmentType.M16_K8_F16_A, "c", "x", class_name="InputFragment"),
-        Fragment(FragmentType.N8_K8_F16_B, "x", "k", class_name="DeltaFragment"),
+        FragmentBase(FragmentType.M16_N8_F32_C, "c", "k", class_name="Acc"),
+        FragmentBase(FragmentType.M16_K8_F16_A, "c", "x", class_name="InputFragment"),
+        FragmentBase(FragmentType.N8_K8_F16_B, "x", "k", class_name="DeltaFragment"),
         #
         # MMA tensors
         #

@@ -5,7 +5,7 @@ from spio.generators import (
     Tensor,
     CompoundIndex,
     Dim,
-    Fragment,
+    FragmentBase,
     FragmentType,
     dtype,
     Dims,
@@ -237,15 +237,15 @@ class TestTensorWithStrides:
 
 
 class TestTensorWithFragmentType:
-    """Test Tensor construction with Fragment data types."""
+    """Test Tensor construction with FragmentBase data types."""
 
     def test_fragment_as_dtype(self):
-        """Tensor with Fragment as data type."""
+        """Tensor with FragmentBase as data type."""
         g = Generators()
         g.I = Dim()
         g.K = Dim()
-        g.AFragment = Fragment(FragmentType.M16_K16_F16_A, g.I, g.K)
-        # Fragment tensor dimensions are typically the number of fragments
+        g.AFragment = FragmentBase(FragmentType.M16_K16_F16_A, g.I, g.K)
+        # FragmentBase tensor dimensions are typically the number of fragments
         g.AReg = Tensor(g.AFragment, Dims(g.K(32) / 16, g.I(64) / 16))
 
         code = generate(g)
@@ -276,7 +276,7 @@ class TestTensorDerivedMethods:
         g.I = Dim()
         g.K = Dim()
         g.K8 = g.K.fold(8)
-        g.AFragment = Fragment(FragmentType.M16_K16_F16_A, g.I, g.K)
+        g.AFragment = FragmentBase(FragmentType.M16_K16_F16_A, g.I, g.K)
         g.ASmem = Tensor(dtype.half8, Dims(g.K8(4), g.I(16)))
         g.ALoadSmem = g.ASmem.with_dim(g.AFragment.load_index)
 
@@ -556,11 +556,11 @@ class TestTensorPositionalDimArgs:
         assert "spio::Fold<K, 8>" in code
 
     def test_positional_with_fragment_dtype(self):
-        """Tensor with positional dims and Fragment as data type."""
+        """Tensor with positional dims and FragmentBase as data type."""
         g = Generators()
         g.I = Dim()
         g.K = Dim()
-        g.AFragment = Fragment(FragmentType.M16_K16_F16_A, g.I, g.K)
+        g.AFragment = FragmentBase(FragmentType.M16_K16_F16_A, g.I, g.K)
         g.AReg = Tensor(g.K(32) / 16, g.I(64) / 16, data_type=g.AFragment)
 
         code = generate(g)
@@ -829,11 +829,11 @@ class TestTensorMmaCheckerboardPatterns:
         assert "using CSmem" in code
 
     def test_register_tensor_with_fragment_dtype(self):
-        """Register tensor with Fragment as data type."""
+        """Register tensor with FragmentBase as data type."""
         g = Generators()
         g.I = Dim()
         g.K = Dim()
-        g.AFragment = Fragment(FragmentType.M16_K16_F16_A, g.I, g.K)
+        g.AFragment = FragmentBase(FragmentType.M16_K16_F16_A, g.I, g.K)
 
         k16_chunk = 2
         m_warp = 64
