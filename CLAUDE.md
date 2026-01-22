@@ -41,6 +41,20 @@ SPIO_ENABLE_CPP_TESTS=1 pytest -m "smoke"
 pytest -m "not slow"
 ```
 
+### Just Commands
+
+The project includes a `justfile` for common tasks. Run `just` to list available commands:
+
+| Command | Description |
+|---------|-------------|
+| `just test` | Run all tests with parallel compilation |
+| `just test-quick` | Fast iteration (limited params) |
+| `just test-fast` | Skip slow tests |
+| `just smoke` | Quick regression (smoke, not slow) |
+| `just smoke-all` | All smoke tests including slow |
+| `just test-cpp` | Run C++ tests |
+| `just test-file FILE` | Run a specific test file |
+
 ### Pytest Markers
 
 | Marker | Purpose |
