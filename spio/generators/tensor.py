@@ -8,7 +8,7 @@ from .fold import Fold
 from .dims import Dims, Strides, compute_full_strides, is_dims_arg
 from .dim_arg import normalize_dim_arg
 from .fragment_type import FragmentType
-from .fragment import Fragment
+from .fragment import FragmentBase
 from .data_type import dtype, get_dtype_veclen, get_dtype_with_veclen
 from .gen_specs import GenSpecs, GenSpecsWithContext
 from .derived_dimension import DerivedDimension, SizedDerivedDimension
@@ -67,7 +67,7 @@ class Tensor(GenSpecsWithContext):
                     dim_args.extend(arg)
                 elif is_dims_arg(arg) or isinstance(arg, (dict, SizedDerivedDimension)):
                     dim_args.append(arg)
-                elif isinstance(arg, (dtype, FragmentType, Fragment)) or (
+                elif isinstance(arg, (dtype, FragmentType, FragmentBase)) or (
                     isinstance(arg, str) and data_type is None
                 ):
                     if data_type is not None:
@@ -391,7 +391,7 @@ class Tensor(GenSpecsWithContext):
             return self.vector_length(veclen)
 
         # Handle Fragment division
-        if not isinstance(other, Fragment):
+        if not isinstance(other, FragmentBase):
             raise TypeError(
                 f"Tensor division requires a Fragment or dtype, got {type(other).__name__}"
             )
@@ -757,7 +757,7 @@ def _get_data_type_name(
 ) -> str:
     if isinstance(data_type, FragmentType):
         data_type = f"spio::{data_type.value}"
-    elif isinstance(data_type, Fragment):
+    elif isinstance(data_type, FragmentBase):
         data_type = data_type.class_name
     elif isinstance(data_type, dtype):
         data_type = data_type.value.name

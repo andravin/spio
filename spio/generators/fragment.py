@@ -1,18 +1,19 @@
 """Code generator for matrix fragment with named dimensions."""
 
-from typing import Tuple
-from dataclasses import dataclass
+from typing import Tuple, Union
 
+from .dim import StaticDim
 from .dim_arg import DimArg, normalize_dim_arg
-from .fragment_type import FragmentType
+from .fold import StaticFold
+from .fragment_type import FragmentType, Operand, lookup_fragment_type
 from .gen_specs import GenSpecs
 from .derived_dimension import DerivedDimension
 
 
 class _FragmentSize:
-    def __init__(self, fragment: "Fragment"):
+    def __init__(self, frag: "Fragment"):
         """Initialize the fragment attributes with the given fragment."""
-        self.fragment = fragment
+        self.fragment = frag
 
     def __call__(self, dim):
         """Return the size of the given dimension in this fragment.
@@ -38,14 +39,15 @@ class _FragmentSize:
         raise ValueError(f"Dimension {dim} not part of fragment.")
 
 
-@dataclass
-class Fragment(GenSpecs):
-    """Fragment code generator.
+class FragmentBase(GenSpecs):
+    """Legacy fragment code generator.
+
+    For new code, use Fragment() with the new interface instead.
 
     Example:
 
         Define a Fragment spec in your kernel factory's specs like this:
-            Fragment(FragmentType.M16_N8_F32_C, "qn", "k2")
+            FragmentBase(FragmentType.M16_N8_F32_C, "qn", "k2")
 
         Use the generated class in your CUDA kernel like this:
             # Get element coordinates for this thread.
@@ -68,12 +70,17 @@ class Fragment(GenSpecs):
         class_name: Name of the fragment class (optional with Generators).
     """
 
-    fragment_type: FragmentType
-    row: DimArg
-    col: DimArg
-    class_name: str = None
-
-    # No __post_init__ - dimension names are resolved lazily in generate() and dim_names
+    def __init__(
+        self,
+        fragment_type: FragmentType,
+        row: DimArg,
+        col: DimArg,
+        class_name: str = None,
+    ):
+        self.fragment_type = fragment_type
+        self.row = row
+        self.col = col
+        self.class_name = class_name
 
     def _set_class_name(self, name: str) -> None:
         """Set the class name for this fragment.
@@ -118,9 +125,9 @@ class Fragment(GenSpecs):
 class FragmentLoadIndex(GenSpecs, DerivedDimension):
     """Wrapper for a fragment load index type."""
 
-    def __init__(self, fragment: Fragment):
+    def __init__(self, frag: FragmentBase):
         """Initialize the load index with the given fragment."""
-        self.fragment = fragment
+        self.fragment = frag
 
     def get_class_name(self) -> str:
         """Return the class name of the load index."""
@@ -138,9 +145,9 @@ class FragmentLoadIndex(GenSpecs, DerivedDimension):
 class FragmentCompoundIndex(GenSpecs, DerivedDimension):
     """Wrapper for a fragment compound index type."""
 
-    def __init__(self, fragment: Fragment):
+    def __init__(self, frag: FragmentBase):
         """Initialize the compound index with the given fragment."""
-        self.fragment = fragment
+        self.fragment = frag
 
     def get_class_name(self) -> str:
         """Return the class name of the compound index."""
@@ -160,3 +167,80 @@ def header() -> str:
     return """
 #include "spio/fragment.cuh"
 """
+
+
+# Type alias for arguments that provide a static size
+StaticDimArg = Union[StaticDim, StaticFold]
+
+
+class Fragment(FragmentBase):
+    """Matrix fragment code generator.
+
+    Creates a fragment for matrix multiplication with validated dimensions.
+
+    Parameters:
+        operand     Operand type: Operand.A, Operand.B, Operand.C (or "A", "B", "C").
+        data_type   Data type (e.g., dtype.half for A/B, dtype.float for C).
+        row         Row dimension with size (e.g., I(16) or I16(1)).
+        col         Column dimension with size (e.g., K(16) or K8(2)).
+        class_name  Optional name for the generated C++ class.
+
+    When used with the Generators container, class_name can be omitted and will
+    be set from the attribute name.
+
+    Example:
+        I = Dim()
+        J = Dim()
+        K = Dim()
+        g.AFrag = Fragment(Operand.A, dtype.half, I(16), K(16))
+        g.BFrag = Fragment(Operand.B, dtype.half, K(16), J(16))
+        g.CFrag = Fragment(Operand.C, dtype.float, I(16), J(16))
+    """
+
+    def __init__(
+        self,
+        operand,
+        data_type,
+        row: StaticDimArg,
+        col: StaticDimArg,
+        class_name: str = None,
+    ):
+        # Convert string operand to Operand enum
+        if isinstance(operand, str):
+            try:
+                operand = Operand(operand.upper())
+            except ValueError as exc:
+                raise ValueError(f"Invalid operand '{operand}'. Must be 'A', 'B', or 'C'.") from exc
+
+        row_dim, num_rows = _get_dim_and_size(row, "row")
+        col_dim, num_cols = _get_dim_and_size(col, "col")
+        fragment_type = lookup_fragment_type(operand, data_type, num_rows, num_cols)
+
+        super().__init__(fragment_type, row_dim, col_dim, class_name)
+
+
+def _get_dim_and_size(arg: StaticDimArg, arg_name: str) -> tuple:
+    """Extract the dimension/fold and size from a StaticDim or StaticFold.
+
+    Parameters:
+        arg       The StaticDim or StaticFold argument.
+        arg_name  Name of the argument for error messages.
+
+    Returns:
+        Tuple of (dim_or_fold, total_size).
+        For StaticDim, total_size is arg.size.
+        For StaticFold, total_size is arg.fold.stride * arg.size.
+
+    Raises:
+        TypeError: If arg is not a StaticDim or StaticFold.
+    """
+    if isinstance(arg, StaticDim):
+        return (arg.dim, arg.size)
+    if isinstance(arg, StaticFold):
+        # For StaticFold, the total dimension size is stride * size
+        total_size = arg.fold.stride * arg.size
+        return (arg.fold, total_size)
+    raise TypeError(
+        f"{arg_name} must be a StaticDim or StaticFold (e.g., I(16) or K8(4)), "
+        f"got {type(arg).__name__}"
+    )

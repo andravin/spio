@@ -5,6 +5,7 @@ import pytest
 from spio.generators import (
     Dims,
     Fragment,
+    FragmentBase,
     FragmentType,
     Dim,
     Generators,
@@ -54,7 +55,7 @@ class TestFragmentSize:
         """Fragment.size(row_dim) should return num_rows."""
         I = Dim("I")
         K = Dim("K")
-        frag = Fragment(FragmentType.M16_K16_F16_A, row=I, col=K)
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row=I, col=K)
 
         assert frag.size(I) == 16
 
@@ -62,13 +63,13 @@ class TestFragmentSize:
         """Fragment.size(col_dim) should return num_cols."""
         I = Dim("I")
         K = Dim("K")
-        frag = Fragment(FragmentType.M16_K16_F16_A, row=I, col=K)
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row=I, col=K)
 
         assert frag.size(K) == 16
 
     def test_size_with_string_dims(self):
         """Fragment.size should work when fragment uses string dims."""
-        frag = Fragment(FragmentType.M16_N8_F32_C, row="m", col="n")
+        frag = FragmentBase(FragmentType.M16_N8_F32_C, row="m", col="n")
 
         assert frag.size("m") == 16
         assert frag.size("M") == 16  # Case-insensitive
@@ -78,7 +79,7 @@ class TestFragmentSize:
     def test_size_with_mixed_dim_types(self):
         """Fragment.size should work with Dim objects when fragment uses strings."""
         I = Dim("I")
-        frag = Fragment(FragmentType.M16_N8_F32_C, row="i", col="n")
+        frag = FragmentBase(FragmentType.M16_N8_F32_C, row="i", col="n")
 
         # Should be able to query with Dim object that has matching name
         assert frag.size(I) == 16
@@ -90,7 +91,7 @@ class TestFragmentSize:
         g.I16 = g.I.fold(16)
         g.K = Dim()
 
-        frag = Fragment(FragmentType.M16_K8_F16_A, row=g.I16, col=g.K)
+        frag = FragmentBase(FragmentType.M16_K8_F16_A, row=g.I16, col=g.K)
 
         assert frag.size(g.I16) == 16
         assert frag.size(g.K) == 8
@@ -100,14 +101,14 @@ class TestFragmentSize:
         I = Dim("I")
         K = Dim("K")
         J = Dim("J")
-        frag = Fragment(FragmentType.M16_K16_F16_A, row=I, col=K)
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row=I, col=K)
 
         with pytest.raises(ValueError, match="not part of fragment"):
             frag.size(J)
 
     def test_size_raises_for_unknown_string_dim(self):
         """Fragment.size should raise ValueError for unknown string dimension."""
-        frag = Fragment(FragmentType.M16_N8_F32_C, row="m", col="n")
+        frag = FragmentBase(FragmentType.M16_N8_F32_C, row="m", col="n")
 
         with pytest.raises(ValueError, match="not part of fragment"):
             frag.size("k")
@@ -119,17 +120,17 @@ class TestFragmentSize:
         K = Dim("K")
 
         # Test accumulator fragment
-        c_frag = Fragment(FragmentType.M16_N16_F32_C, row=I, col=J)
+        c_frag = FragmentBase(FragmentType.M16_N16_F32_C, row=I, col=J)
         assert c_frag.size(I) == 16
         assert c_frag.size(J) == 16
 
         # Test A fragment
-        a_frag = Fragment(FragmentType.M16_K8_F16_A, row=I, col=K)
+        a_frag = FragmentBase(FragmentType.M16_K8_F16_A, row=I, col=K)
         assert a_frag.size(I) == 16
         assert a_frag.size(K) == 8
 
         # Test B fragment
-        b_frag = Fragment(FragmentType.N8_K16_F16_B, row=J, col=K)
+        b_frag = FragmentBase(FragmentType.N8_K16_F16_B, row=J, col=K)
         assert b_frag.size(J) == 8
         assert b_frag.size(K) == 16
 
@@ -139,7 +140,7 @@ class TestFragmentBasic:
 
     def test_fragment_with_string_dims(self):
         """Fragment should accept string dimension names."""
-        frag = Fragment(FragmentType.M16_N8_F32_C, row="m", col="n", class_name="Acc")
+        frag = FragmentBase(FragmentType.M16_N8_F32_C, row="m", col="n", class_name="Acc")
 
         assert frag.class_name == "Acc"
         assert frag.dim_names == ("M", "N")
@@ -148,13 +149,13 @@ class TestFragmentBasic:
         """Fragment should accept Dim objects."""
         I = Dim("I")
         J = Dim("J")
-        frag = Fragment(FragmentType.M16_N8_F32_C, row=I, col=J, class_name="Acc")
+        frag = FragmentBase(FragmentType.M16_N8_F32_C, row=I, col=J, class_name="Acc")
 
         assert frag.dim_names == ("I", "J")
 
     def test_fragment_generates_type_alias(self):
         """Fragment.generate() should create a type alias."""
-        frag = Fragment(FragmentType.M16_N8_F32_C, row="m", col="n", class_name="Acc")
+        frag = FragmentBase(FragmentType.M16_N8_F32_C, row="m", col="n", class_name="Acc")
 
         code = frag.generate()
 
@@ -165,7 +166,7 @@ class TestFragmentBasic:
         g = Generators()
         g.I = Dim()
         g.J = Dim()
-        g.CFragment = Fragment(FragmentType.M16_N16_F32_C, row=g.I, col=g.J)
+        g.CFragment = FragmentBase(FragmentType.M16_N16_F32_C, row=g.I, col=g.J)
 
         assert g.CFragment.class_name == "CFragment"
 
@@ -180,7 +181,7 @@ class TestFragmentLoadIndex:
 
     def test_load_index_class_name(self):
         """FragmentLoadIndex should have correct class name."""
-        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         load_idx = frag.load_index
 
@@ -188,7 +189,7 @@ class TestFragmentLoadIndex:
 
     def test_load_index_generates_nothing(self):
         """FragmentLoadIndex.generate() should return empty string."""
-        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         load_idx = frag.load_index
 
@@ -200,7 +201,7 @@ class TestFragmentCompoundIndex:
 
     def test_compound_index_class_name(self):
         """FragmentCompoundIndex should have correct class name."""
-        frag = Fragment(FragmentType.M16_N8_F32_C, row="m", col="n", class_name="Acc")
+        frag = FragmentBase(FragmentType.M16_N8_F32_C, row="m", col="n", class_name="Acc")
 
         compound_idx = frag.compound_index
 
@@ -208,7 +209,7 @@ class TestFragmentCompoundIndex:
 
     def test_compound_index_generates_nothing(self):
         """FragmentCompoundIndex.generate() should return empty string."""
-        frag = Fragment(FragmentType.M16_N8_F32_C, row="m", col="n", class_name="Acc")
+        frag = FragmentBase(FragmentType.M16_N8_F32_C, row="m", col="n", class_name="Acc")
 
         compound_idx = frag.compound_index
 
@@ -222,7 +223,7 @@ class TestTensorDivideByFragment:
         """Tensor / Fragment should divide matching dimensions."""
 
         tensor = Tensor(dtype.half, Dims(m=64, k=32))
-        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         result = tensor / frag
 
@@ -238,7 +239,7 @@ class TestTensorDivideByFragment:
         g.K = Dim()
 
         tensor = Tensor(dtype.half, Dims(g.I(64), g.K(32)))
-        frag = Fragment(FragmentType.M16_K16_F16_A, row=g.I, col=g.K, class_name="AFrag")
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row=g.I, col=g.K, class_name="AFrag")
 
         result = tensor / frag
 
@@ -267,7 +268,7 @@ class TestTensorDivideByFragment:
         k_chunk = g.K(32)
         tensor = Tensor((k_chunk, i_warp), data_type=dtype.half)
 
-        frag = Fragment(FragmentType.M16_K16_F16_A, row=g.I, col=g.K, class_name="AFrag")
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row=g.I, col=g.K, class_name="AFrag")
 
         result = tensor / frag
 
@@ -281,11 +282,11 @@ class TestTensorDivideByFragment:
         for arg in dim_args:
             assert arg.fold.stride == 16
 
-    def test_division_sets_data_type_to_fragment(self):
+    def test_division_sets_data_type_to_Fragment(self):
         """Tensor / Fragment should set data_type to the Fragment."""
 
         tensor = Tensor(dtype.half, Dims(m=32, k=16))
-        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         result = tensor / frag
 
@@ -295,7 +296,7 @@ class TestTensorDivideByFragment:
         """Tensor / Fragment should preserve the constant attribute."""
 
         tensor = Tensor(dtype.half, Dims(m=32, k=16), constant=True)
-        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         result = tensor / frag
 
@@ -306,7 +307,7 @@ class TestTensorDivideByFragment:
 
         # Tensor has an extra dimension 'n' not in the fragment
         tensor = Tensor(dtype.half, Dims(m=64, k=32, n=4))
-        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         result = tensor / frag
 
@@ -320,7 +321,7 @@ class TestTensorDivideByFragment:
 
         # Tensor has float dtype, Fragment expects half
         tensor = Tensor(dtype.float, Dims(m=32, k=16))
-        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         with pytest.raises(ValueError, match="dtype.*doesn't match"):
             _ = tensor / frag
@@ -330,7 +331,7 @@ class TestTensorDivideByFragment:
 
         # Tensor is missing the 'k' dimension
         tensor = Tensor(dtype.half, Dims(m=32, n=16))
-        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         with pytest.raises(ValueError, match="not found in Tensor"):
             _ = tensor / frag
@@ -340,7 +341,7 @@ class TestTensorDivideByFragment:
 
         # M dimension (30) not divisible by fragment row size (16)
         tensor = Tensor(dtype.half, Dims(m=30, k=32))
-        frag = Fragment(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
+        frag = FragmentBase(FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag")
 
         with pytest.raises(ValueError, match="not.*evenly divisible"):
             _ = tensor / frag
@@ -358,7 +359,7 @@ class TestTensorDivideByFragment:
 
         # Tensor uses lowercase, Fragment uses uppercase (or vice versa)
         tensor = Tensor(dtype.half, Dims(M=64, K=32))  # uppercase
-        frag = Fragment(
+        frag = FragmentBase(
             FragmentType.M16_K16_F16_A, row="m", col="k", class_name="AFrag"
         )  # lowercase
 
@@ -373,10 +374,179 @@ class TestTensorDivideByFragment:
 
         # M16_N8_F32_C has 16 rows, 8 cols
         tensor = Tensor(dtype.float, Dims(m=32, n=16))
-        frag = Fragment(FragmentType.M16_N8_F32_C, row="m", col="n", class_name="CFrag")
+        frag = FragmentBase(FragmentType.M16_N8_F32_C, row="m", col="n", class_name="CFrag")
 
         result = tensor / frag
 
         result_dims = dict(result.dims.items())
         assert result_dims["M"] == 2  # 32 / 16
         assert result_dims["N"] == 2  # 16 / 8
+
+
+class TestFragmentFactory:
+    """Tests for Fragment() factory function."""
+
+    def test_creates_a_fragment_m16_k16(self):
+        """Fragment("A", ...) should create M16_K16_F16_A fragment."""
+        I = Dim("I")
+        K = Dim("K")
+
+        frag = Fragment("A", dtype.half, I(16), K(16), class_name="AFrag")
+
+        assert frag.fragment_type == FragmentType.M16_K16_F16_A
+        assert frag.class_name == "AFrag"
+        assert frag.dim_names == ("I", "K")
+
+    def test_creates_a_fragment_m16_k8(self):
+        """Fragment("A", ...) should create M16_K8_F16_A fragment."""
+        I = Dim("I")
+        K = Dim("K")
+
+        frag = Fragment("A", dtype.half, I(16), K(8))
+
+        assert frag.fragment_type == FragmentType.M16_K8_F16_A
+
+    def test_creates_b_fragment_n8_k16(self):
+        """Fragment("B", ...) should create N8_K16_F16_B fragment."""
+        J = Dim("J")
+        K = Dim("K")
+
+        frag = Fragment("B", dtype.half, J(8), K(16), class_name="BFrag")
+
+        assert frag.fragment_type == FragmentType.N8_K16_F16_B
+        assert frag.class_name == "BFrag"
+        assert frag.dim_names == ("J", "K")
+
+    def test_creates_b_fragment_n8_k8(self):
+        """Fragment("B", ...) should create N8_K8_F16_B fragment."""
+        J = Dim("J")
+        K = Dim("K")
+
+        frag = Fragment("B", dtype.half, J(8), K(8))
+
+        assert frag.fragment_type == FragmentType.N8_K8_F16_B
+
+    def test_creates_b_fragment_n16_k16(self):
+        """Fragment("B", ...) should create N16_K16_F16_B fragment."""
+        J = Dim("J")
+        K = Dim("K")
+
+        frag = Fragment("B", dtype.half, J(16), K(16))
+
+        assert frag.fragment_type == FragmentType.N16_K16_F16_B
+
+    def test_creates_c_fragment_m16_n16(self):
+        """Fragment("C", ...) should create M16_N16_F32_C fragment."""
+        I = Dim("I")
+        J = Dim("J")
+
+        frag = Fragment("C", dtype.float, I(16), J(16), class_name="CFrag")
+
+        assert frag.fragment_type == FragmentType.M16_N16_F32_C
+        assert frag.class_name == "CFrag"
+        assert frag.dim_names == ("I", "J")
+
+    def test_creates_c_fragment_m16_n8(self):
+        """Fragment("C", ...) should create M16_N8_F32_C fragment."""
+        I = Dim("I")
+        J = Dim("J")
+
+        frag = Fragment("C", dtype.float, I(16), J(8))
+
+        assert frag.fragment_type == FragmentType.M16_N8_F32_C
+
+    def test_works_with_static_fold(self):
+        """Fragment() should work with StaticFold arguments."""
+        g = Generators()
+        g.I = Dim()
+        g.I16 = g.I.fold(16)
+        g.K = Dim()
+
+        frag = Fragment("A", dtype.half, g.I16(1), g.K(16), class_name="AFrag")
+
+        assert frag.fragment_type == FragmentType.M16_K16_F16_A
+        # The row should be the Fold, not the StaticFold
+        assert frag.row is g.I16
+
+    def test_works_with_generators(self):
+        """Fragment() should integrate with Generators container."""
+        g = Generators()
+        g.I = Dim()
+        g.J = Dim()
+        g.K = Dim()
+        g.AFrag = Fragment("A", dtype.half, g.I(16), g.K(16))
+        g.BFrag = Fragment("B", dtype.half, g.K(16), g.J(16))
+        g.CFrag = Fragment("C", dtype.float, g.I(16), g.J(16))
+
+        assert g.AFrag.class_name == "AFrag"
+        assert g.BFrag.class_name == "BFrag"
+        assert g.CFrag.class_name == "CFrag"
+
+        code = generate(g)
+        assert "using AFrag = spio::MMA_M16_K16_F16_A<I, K>" in code
+        assert "using BFrag = spio::MMA_N16_K16_F16_B<K, J>" in code
+        assert "using CFrag = spio::MMA_M16_N16_F32_C<I, J>" in code
+
+    def test_rejects_invalid_operand(self):
+        """Fragment() should reject invalid operand string."""
+        I = Dim("I")
+        K = Dim("K")
+
+        with pytest.raises(ValueError, match="Invalid operand"):
+            Fragment("D", dtype.half, I(16), K(16))
+
+    def test_rejects_invalid_dtype_for_a(self):
+        """Fragment("A", ...) should reject non-half dtype."""
+        I = Dim("I")
+        K = Dim("K")
+
+        with pytest.raises(ValueError, match="No fragment type found for operand=A"):
+            Fragment("A", dtype.float, I(16), K(16))
+
+    def test_rejects_invalid_dtype_for_c(self):
+        """Fragment("C", ...) should reject non-float dtype."""
+        I = Dim("I")
+        J = Dim("J")
+
+        with pytest.raises(ValueError, match="No fragment type found for operand=C"):
+            Fragment("C", dtype.half, I(16), J(16))
+
+    def test_rejects_invalid_dimensions_for_a(self):
+        """Fragment("A", ...) should reject unsupported dimension combinations."""
+        I = Dim("I")
+        K = Dim("K")
+
+        with pytest.raises(ValueError, match="No fragment type found for operand=A"):
+            Fragment("A", dtype.half, I(8), K(16))  # rows=8 not supported for A
+
+    def test_rejects_invalid_dimensions_for_b(self):
+        """Fragment("B", ...) should reject unsupported dimension combinations."""
+        J = Dim("J")
+        K = Dim("K")
+
+        with pytest.raises(ValueError, match="No fragment type found for operand=B"):
+            Fragment("B", dtype.half, J(16), K(8))  # (16, 8) not supported for B
+
+    def test_rejects_invalid_dimensions_for_c(self):
+        """Fragment("C", ...) should reject unsupported dimension combinations."""
+        I = Dim("I")
+        J = Dim("J")
+
+        with pytest.raises(ValueError, match="No fragment type found for operand=C"):
+            Fragment("C", dtype.float, I(8), J(16))  # rows=8 not supported for C
+
+    def test_rejects_non_static_dim(self):
+        """Fragment() should reject plain Dim without size."""
+        I = Dim("I")
+        K = Dim("K")
+
+        with pytest.raises(TypeError, match="must be a StaticDim or StaticFold"):
+            Fragment("A", dtype.half, I, K(16))
+
+    def test_rejects_invalid_data_type_argument(self):
+        """Fragment() should reject non-dtype data_type argument."""
+        I = Dim("I")
+        K = Dim("K")
+
+        with pytest.raises(TypeError, match="must be a dtype enum value"):
+            Fragment("A", "half", I(16), K(16))
