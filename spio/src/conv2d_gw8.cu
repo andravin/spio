@@ -21,53 +21,44 @@ extern "C" {
         //
         // Define the block tile.
         //
-        BlockIdx block_idx(blockIdx.x);
+        BlockIdx block_idx;
 
         // Fetch the bias
         auto bias_f32 = [&]() {
             if constexpr (Mode::has_bias) {
-                BiasIdx idx(threadIdx.x);
-                Acc::compound_index_type acc_idx(idx.get<LANE>().get());
-                auto k8 = idx.get<K8>() + block_idx.get<BLOCK_C>().fold<8>().cast<K>();
-                if (k8 < Bias::size<K8>()) { return *Bias(bias_ptr)[k8][acc_idx.get<K2>()]; }
+                auto bias_global = Bias(bias_ptr);
+                if (bias_global.inbounds()) { return *bias_global; }
             }
             return make_float2(0, 0);
         }();
+
+        //
+        // Allocate shared memory for inputs and weights.
+        //
+        auto smem_input = SmemInput::allocate(smem_alloc);
+        auto smem_weights = ConstSmemWeights::allocate(smem_alloc);
 
         //
         // Define tile mappings
         //
 
         // Map input to smem.
-        auto smem_input = SmemInput::allocate(smem_alloc);
-        Input::base_cursor_type input;
-        SmemInput::base_cursor_type smem_input_store;
-        bool thread_loads_input;
         bool z_inbounds;
-        {
-            InputIdx idx(threadIdx.x);
-            smem_input_store = smem_input[idx].rebase();
-            auto n = block_idx.get<BLOCK_N>().unfold() + idx.get<N>();
-            auto x = block_idx.get<BLOCK_Q>().unfold().cast<X>() + idx.get<X>() - Padding::w;
-            auto c8 = block_idx.get<BLOCK_C>().fold<8>() + idx.get<C8>();
-            input = Input(input_ptr)[n][x][c8].rebase();
-            z_inbounds = ((n < Input::size<N>()) && (x >= 0 && x < Input::size<X>()) &&
-                          (c8 < Input::size<C8>()));
-            thread_loads_input = threadIdx.x < idx.size();
-        }
+        auto input = Input(input_ptr).in_range(z_inbounds).rebase();
+        bool thread_loads_input = threadIdx.x < InputIdx::size();
+        auto smem_input_store = SmemInputStore(smem_input.get()).rebase();
 
         // Map weights-smem to registers.
-        auto smem_weights = ConstSmemWeights::allocate(smem_alloc);
-        auto smem_weights_load = smem_weights[SmemWeightsLoadIdx(threadIdx.x)];
+        auto smem_weights_load = SmemWeightsLoad(smem_weights.get());
 
         // Map input-smem to register.
-        auto smem_input_load = smem_input[SmemInputLoadIdx(threadIdx.x)].rebase();
+        auto smem_input_load = SmemInputLoad(smem_input.get()).rebase();
 
         // Copy weights from global memory to smem asynchronously.
-        auto weight = Weights(weights_ptr)[block_idx.get<BLOCK_C>().unfold().cast<K>()];
+        auto weight = Weights(weights_ptr)[block_idx.get<BLOCK_C>().cast<K>()];
         for (int idx = threadIdx.x; idx < SmemWeights::size(); idx += Block::threads) {
             Weights::index_type weight_idx(idx);
-            auto k = block_idx.get<BLOCK_C>().unfold().cast<K>() + weight_idx.get<K>();
+            auto k = block_idx.get<BLOCK_C>().cast<K>() + weight_idx.get<K>();
             memcpy_async(const_cast<uint4*>(smem_weights.get()) + idx, weight.get() + idx,
                          k < Weights::size<K>());
         }
@@ -77,20 +68,19 @@ extern "C" {
         constexpr unsigned LOAD_INPUT_STAGE = 1 << 0;
         constexpr unsigned COMPUTE_STAGE = 1 << 1;
         constexpr unsigned NUM_STAGES = 2;
-        auto num_p =
-            spio::min(P(BLOCK_P::stride), Output::size<P>() - block_idx.get<BLOCK_P>().unfold());
-        int num_y = num_p.get() + Weights::size<R>().get() - 1;
+        auto num_p = spio::min(H(BLOCK_H::stride), Output::size<H>() - block_idx.get<BLOCK_H>());
+        int num_y = num_p.get() + Weights::size<H>().get() - 1;
         int num_iters = num_y + NUM_STAGES - 1;
         bool ping_pong = false;
         Pipeline pipeline;
 
         // Prefetch the first input row.
-        int y = block_idx.get<BLOCK_P>().unfold().get() - Padding::h;
+        int y = block_idx.get<BLOCK_H>().unfold().get() - Padding::h;
         pipeline.step(0 < num_y);
         if (pipeline.active(LOAD_INPUT_STAGE)) {
             if (thread_loads_input) {
-                memcpy_async(smem_input_store[PING_PONG(ping_pong)].get(), input[Y(y)].get(),
-                             (y >= 0 && y < Input::size<Y>().get()) && z_inbounds);
+                memcpy_async(smem_input_store[PING_PONG(ping_pong)].get(), input[H(y)].get(),
+                             (y >= 0 && y < Input::size<H>().get()) && z_inbounds);
             }
             __pipeline_commit();
             ++y;
@@ -103,12 +93,12 @@ extern "C" {
         // Load weights to registers.
         WeightsReg::data_type wgts_data[WeightsReg::storage_size()];
         WeightsReg wgts(wgts_data);
-        for (auto r : range(Weights::size<R>())) {
-            for (auto s : range(Weights::size<S>())) {
+        for (auto r : range(Weights::size<H>())) {
+            for (auto s : range(Weights::size<W>())) {
                 // The input-gradient operation uses the transpose of the weights.
                 if constexpr (Mode::igrad) {
                     wgts[r][s]->load_trans(
-                        smem_weights_load[Weights::size<R>() - 1 - r][Weights::size<S>() - 1 - s]
+                        smem_weights_load[Weights::size<H>() - 1 - r][Weights::size<W>() - 1 - s]
                             .get());
                 } else {
                     wgts[r][s]->load(smem_weights_load[r][s].get());
@@ -132,21 +122,15 @@ extern "C" {
         }
 
         // Map output-smem to global output.
-        ConstSmemOutput::base_cursor_type smem_output_load;
+        auto smem_output_load =
+            SmemOutputLoad(reinterpret_cast<SmemOutputLoad::data_type*>(smem_output.get()))
+                .rebase();
         Output::base_cursor_type output;
         bool thread_stores_output;
         {
-            OutputStoreIdx idx(threadIdx.x);
-            smem_output_load = ConstSmemOutput(reinterpret_cast<ConstSmemOutput::data_type*>(
-                smem_output.get()))[idx]
-                                   .rebase();
-            auto q = block_idx.get<BLOCK_Q>().unfold() + idx.get<Q>();
-            auto n = block_idx.get<BLOCK_N>().unfold() + idx.get<N>();
-            auto k8 = block_idx.get<BLOCK_C>().fold<8>().cast<K>() + idx.get<K8>();
-            output = Output(dst)[n][block_idx.get<BLOCK_P>().unfold()][q][k8].rebase();
-            thread_stores_output =
-                ((n < Output::size<N>()) && (q < Output::size<Q>()) && (k8 < Output::size<K8>()) &&
-                 (threadIdx.x < OutputStoreIdx::size()));
+            bool inbounds;
+            output = Output(dst).inbounds(inbounds).rebase();
+            thread_stores_output = inbounds && threadIdx.x < OutputStoreIdx::size();
         }
 
         // Initialize the accumulators with the bias vector.
@@ -154,15 +138,15 @@ extern "C" {
         AccReg acc(acc_data);
         acc.fill(bias_f32);
 
-        // Run the first Weights::R pipeline steps.
+        // Run the first Weights::H pipeline steps.
         int iter = 1;
-        for (auto phase : range(acc.size<P>())) {
+        for (auto phase : range(acc.size<H>())) {
             pipeline.step(iter + phase.get() < num_y);
             if (pipeline.active(LOAD_INPUT_STAGE)) {
                 if (thread_loads_input) {
                     memcpy_async(smem_input_store[PING_PONG(ping_pong ? 1 : 0)].get(),
-                                 input[Y(y)].get(),
-                                 (y >= 0 && y < Input::size<Y>().get()) && z_inbounds);
+                                 input[H(y)].get(),
+                                 (y >= 0 && y < Input::size<H>().get()) && z_inbounds);
                 }
                 __pipeline_commit();
                 ++y;
@@ -173,11 +157,11 @@ extern "C" {
                 __syncthreads();
 
                 auto smem_input_load_iter = smem_input_load[PING_PONG(ping_pong ? 1 : 0)].rebase();
-                for (auto s : range(Weights::size<S>())) {
-                    auto in = In::load_new(smem_input_load_iter[s.cast<X>()].get());
-                    // Skip r > phase because these contribute to out-of-bounds outputs p < 0.
-                    for (auto r : range(phase.cast<R>() + 1)) {
-                        auto p = (acc.size<P>() - 1 - r.cast<P>() + phase) % acc.size<P>();
+                for (auto s : range(Weights::size<W>())) {
+                    auto in = In::load_new(smem_input_load_iter[s].get());
+                    // Skip r > phase because these contribute to out-of-bounds outputs h < 0.
+                    for (auto r : range(phase + 1)) {
+                        auto p = (acc.size<H>() - 1 - r + phase) % acc.size<H>();
                         mma_trans(*acc[p], in, *wgts[r][s], *acc[p]);
                     }
                 }
@@ -186,29 +170,29 @@ extern "C" {
         }
 
         // Store the first output row to shared memory.
-        *smem_output_store_qn0 = acc[acc.size<P>() - 1]->to_half2(0);
-        *smem_output_store_qn8 = acc[acc.size<P>() - 1]->to_half2(1);
-        acc[acc.size<P>() - 1]->fill(bias_f32);
+        *smem_output_store_qn0 = acc[acc.size<H>() - 1]->to_half2(0);
+        *smem_output_store_qn8 = acc[acc.size<H>() - 1]->to_half2(1);
+        acc[acc.size<H>() - 1]->fill(bias_f32);
         __syncthreads();
 
         // Store the first output row to global memory.
         if (num_p > 0) {
             if (thread_stores_output) { *output = *smem_output_load; }
-            output.step<P>();
+            output.step<H>();
         }
 
-        iter += acc.size<P>().get();
+        iter += acc.size<H>().get();
 
         // Run the main loop over the remaining input rows.
-        for (; iter < num_iters; iter += Weights::size<R>().get()) {
-            // Unroll the main loop by acc.P steps.
-            for (auto phase : range(acc.size<P>())) {
+        for (; iter < num_iters; iter += Weights::size<H>().get()) {
+            // Unroll the main loop by acc.H steps.
+            for (auto phase : range(acc.size<H>())) {
                 pipeline.step(iter + phase.get() < num_y);
                 if (pipeline.active(LOAD_INPUT_STAGE)) {
                     if (thread_loads_input) {
                         memcpy_async(smem_input_store[PING_PONG(ping_pong ? 1 : 0)].get(),
-                                     input[Y(y)].get(),
-                                     (y >= 0 && y < Input::size<Y>().get()) && z_inbounds);
+                                     input[H(y)].get(),
+                                     (y >= 0 && y < Input::size<H>().get()) && z_inbounds);
                     }
                     __pipeline_commit();
                     ++y;
@@ -219,10 +203,10 @@ extern "C" {
                     __syncthreads();
                     auto smem_input_load_iter =
                         smem_input_load[PING_PONG(ping_pong ? 1 : 0)].rebase();
-                    for (auto s : range(Weights::size<S>())) {
-                        auto in = In::load_new(smem_input_load_iter[s.cast<X>()].get());
-                        for (auto r : range(wgts.size<R>())) {
-                            auto p = (acc.size<P>() - 1 - r.cast<P>() + phase) % acc.size<P>();
+                    for (auto s : range(Weights::size<W>())) {
+                        auto in = In::load_new(smem_input_load_iter[s].get());
+                        for (auto r : range(wgts.size<H>())) {
+                            auto p = (acc.size<H>() - 1 - r + phase) % acc.size<H>();
                             mma_trans(*acc[p], in, *wgts[r][s], *acc[p]);
                         }
                     }
@@ -231,9 +215,9 @@ extern "C" {
                     acc[phase]->fill(bias_f32);
                     __syncthreads();
 
-                    auto store_p = P(iter) + phase - acc.size<P>();
+                    auto store_p = H(iter) + phase - acc.size<H>();
                     if (store_p < num_p && thread_stores_output) { *output = *smem_output_load; }
-                    output.step<P>();
+                    output.step<H>();
                 }
             }
         }

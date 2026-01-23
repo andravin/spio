@@ -63,6 +63,25 @@ class StaticDim:
             return StaticDim(dim=self.dim, size=self.size * other)
         return self.__mul__(other)
 
+    def __add__(self, other: "StaticDim") -> "StaticDim":
+        """Add two StaticDims with the same base Dim."""
+        if isinstance(other, int):
+            return StaticDim(dim=self.dim, size=self.size + other)
+        if not isinstance(other, StaticDim):
+            return NotImplemented
+        if self.dim is not other.dim:
+            raise TypeError(
+                f"Cannot add StaticDims with different base Dims: "
+                f"{self.dim.dim_name} vs {other.dim.dim_name}"
+            )
+        return StaticDim(dim=self.dim, size=self.size + other.size)
+
+    def __radd__(self, other: int) -> "StaticDim":
+        """Right add - handles int + StaticDim."""
+        if isinstance(other, int):
+            return StaticDim(dim=self.dim, size=self.size + other)
+        return NotImplemented
+
     def fold(self, stride: int) -> "StaticFold":
         """Create a StaticFold of this dimension with the given stride.
 

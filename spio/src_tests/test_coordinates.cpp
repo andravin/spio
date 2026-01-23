@@ -543,6 +543,217 @@ UTEST(Coordinates, apply_to_three_dimensions) {
     EXPECT_EQ(cursor.get(), data + 57);
 }
 
+UTEST(Coordinates, fold_projects_onto_base_dim_in_tensor) {
+    using FoldI8 = spio::Fold<I, 8>;
+    // Tensor has BASE dimension I (size 32 to accommodate FoldI8 values)
+    // J is outer (stride 32), I is inner (stride 1)
+    using TestTensor = spio::Tensor<float, spio::DimInfo<J, 4, 32>, spio::DimInfo<I, 32, 1>>;
+
+    float data[TestTensor::storage_size()];
+    TestTensor tensor(data);
+
+    // Coordinates has FoldI8 (a fold of I) but no plain I
+    auto coords = spio::make_coordinates(FoldI8(2), J(1)); // FoldI8(2) unfolds to I(16)
+    auto cursor = tensor[coords];
+
+    // FoldI8(2) should unfold to I(16) when projecting onto tensor's I dimension
+    // Expected offset: J(1) * 32 + I(16) * 1 = 32 + 16 = 48
+    EXPECT_EQ(cursor.get(), data + 48);
+}
+
+// ============================================================================
+// Drop dimension tests
+// ============================================================================
+
+UTEST(Coordinates, drop_single_dim) {
+    auto coords = spio::make_coordinates(I(5), J(10), K(15));
+    auto dropped = coords.drop<J>();
+
+    EXPECT_EQ(dropped.num_dims(), 2);
+    EXPECT_EQ(dropped.get<I>(), I(5));
+    EXPECT_EQ(dropped.get<K>(), K(15));
+}
+
+UTEST(Coordinates, drop_first_dim) {
+    auto coords = spio::make_coordinates(I(5), J(10), K(15));
+    auto dropped = coords.drop<I>();
+
+    EXPECT_EQ(dropped.num_dims(), 2);
+    EXPECT_EQ(dropped.get<J>(), J(10));
+    EXPECT_EQ(dropped.get<K>(), K(15));
+}
+
+UTEST(Coordinates, drop_last_dim) {
+    auto coords = spio::make_coordinates(I(5), J(10), K(15));
+    auto dropped = coords.drop<K>();
+
+    EXPECT_EQ(dropped.num_dims(), 2);
+    EXPECT_EQ(dropped.get<I>(), I(5));
+    EXPECT_EQ(dropped.get<J>(), J(10));
+}
+
+UTEST(Coordinates, drop_fold_by_base_dim) {
+    using FoldI8 = spio::Fold<I, 8>;
+    // Coordinates contains FoldI8, drop by base dim I
+    auto coords = spio::make_coordinates(FoldI8(2), J(10));
+    auto dropped = coords.drop<I>();
+
+    EXPECT_EQ(dropped.num_dims(), 1);
+    EXPECT_EQ(dropped.get<J>(), J(10));
+}
+
+UTEST(Coordinates, drop_multiple_folds_same_base) {
+    using FoldI4 = spio::Fold<I, 4>;
+    using FoldI8 = spio::Fold<I, 8>;
+    // Coordinates contains both FoldI4 and FoldI8, drop by base dim I removes both
+    auto coords = spio::make_coordinates(FoldI4(1), FoldI8(2), J(10));
+    auto dropped = coords.drop<I>();
+
+    EXPECT_EQ(dropped.num_dims(), 1);
+    EXPECT_EQ(dropped.get<J>(), J(10));
+}
+
+UTEST(Coordinates, drop_base_and_fold_same_dim) {
+    using FoldI8 = spio::Fold<I, 8>;
+    // Coordinates contains both I and FoldI8, drop removes both
+    auto coords = spio::make_coordinates(I(3), FoldI8(2), J(10));
+    auto dropped = coords.drop<I>();
+
+    EXPECT_EQ(dropped.num_dims(), 1);
+    EXPECT_EQ(dropped.get<J>(), J(10));
+}
+
+UTEST(Coordinates, drop_to_single_dim) {
+    auto coords = spio::make_coordinates(I(5), J(10));
+    auto dropped = coords.drop<I>();
+
+    EXPECT_EQ(dropped.num_dims(), 1);
+    EXPECT_EQ(dropped.get<J>(), J(10));
+}
+
+UTEST(Coordinates, drop_to_empty) {
+    auto coords = spio::make_coordinates(I(5));
+    auto dropped = coords.drop<I>();
+
+    EXPECT_EQ(dropped.num_dims(), 0);
+}
+
+UTEST(Coordinates, drop_preserves_values) {
+    using FoldJ4 = spio::Fold<J, 4>;
+    auto coords = spio::make_coordinates(I(42), FoldJ4(7), K(99));
+    auto dropped = coords.drop<J>();
+
+    // Values of remaining dimensions should be unchanged
+    EXPECT_EQ(dropped.get<I>(), I(42));
+    EXPECT_EQ(dropped.get<K>(), K(99));
+}
+
+// This test should fail to compile because K is not in the Coordinates:
+//
+// static assertion failed: drop<BaseDim>(): no dimensions match the given base dimension
+//
+// UTEST(Coordinates, drop_nonexistent_dim) {
+//     auto coords = spio::make_coordinates(I(5), J(10));
+//     auto dropped = coords.drop<K>();  // K not present - compile error
+// }
+
+// ============================================================================
+// Cast dimension tests
+// ============================================================================
+
+UTEST(Coordinates, cast_single_dim) {
+    auto coords = spio::make_coordinates(I(5), J(10));
+    auto casted = coords.cast<I, K>();
+
+    EXPECT_EQ(casted.num_dims(), 2);
+    EXPECT_EQ(casted.get<K>(), K(5));  // I was cast to K
+    EXPECT_EQ(casted.get<J>(), J(10)); // J unchanged
+}
+
+UTEST(Coordinates, cast_no_match) {
+    auto coords = spio::make_coordinates(I(5), J(10));
+    auto casted = coords.cast<K, I>(); // K not present, nothing to cast
+
+    // All dims unchanged
+    EXPECT_EQ(casted.num_dims(), 2);
+    EXPECT_EQ(casted.get<I>(), I(5));
+    EXPECT_EQ(casted.get<J>(), J(10));
+}
+
+UTEST(Coordinates, cast_fold_to_different_base) {
+    using FoldI8 = spio::Fold<I, 8>;
+    using FoldK8 = spio::Fold<K, 8>;
+    auto coords = spio::make_coordinates(FoldI8(2), J(10));
+    auto casted = coords.cast<I, K>();
+
+    // FoldI8 should become FoldK8
+    EXPECT_EQ(casted.num_dims(), 2);
+    EXPECT_EQ(casted.get<FoldK8>(), FoldK8(2));
+    EXPECT_EQ(casted.get<J>(), J(10));
+}
+
+UTEST(Coordinates, cast_multiple_same_base) {
+    using FoldI4 = spio::Fold<I, 4>;
+    using FoldI8 = spio::Fold<I, 8>;
+    using FoldK4 = spio::Fold<K, 4>;
+    using FoldK8 = spio::Fold<K, 8>;
+    // Both FoldI4 and FoldI8 should be cast to K-based folds
+    auto coords = spio::make_coordinates(FoldI4(1), FoldI8(2), J(10));
+    auto casted = coords.cast<I, K>();
+
+    EXPECT_EQ(casted.num_dims(), 3);
+    EXPECT_EQ(casted.get<FoldK4>(), FoldK4(1));
+    EXPECT_EQ(casted.get<FoldK8>(), FoldK8(2));
+    EXPECT_EQ(casted.get<J>(), J(10));
+}
+
+UTEST(Coordinates, cast_base_and_fold_same_dim) {
+    using FoldI8 = spio::Fold<I, 8>;
+    using FoldK8 = spio::Fold<K, 8>;
+    auto coords = spio::make_coordinates(I(3), FoldI8(2), J(10));
+    auto casted = coords.cast<I, K>();
+
+    // Both I and FoldI8 cast to K variants
+    EXPECT_EQ(casted.num_dims(), 3);
+    EXPECT_EQ(casted.get<K>(), K(3));
+    EXPECT_EQ(casted.get<FoldK8>(), FoldK8(2));
+    EXPECT_EQ(casted.get<J>(), J(10));
+}
+
+UTEST(Coordinates, cast_preserves_values) {
+    auto coords = spio::make_coordinates(I(42), J(7));
+    auto casted = coords.cast<I, K>();
+
+    EXPECT_EQ(casted.get<K>(), K(42)); // Same value, different type
+    EXPECT_EQ(casted.get<J>(), J(7));
+}
+
+UTEST(Coordinates, cast_empty_coordinates) {
+    auto coords = spio::Coordinates<>();
+    auto casted = coords.cast<I, K>();
+
+    EXPECT_EQ(casted.num_dims(), 0);
+}
+
+UTEST(Coordinates, cast_all_dims) {
+    auto coords = spio::make_coordinates(I(5));
+    auto casted = coords.cast<I, K>();
+
+    EXPECT_EQ(casted.num_dims(), 1);
+    EXPECT_EQ(casted.get<K>(), K(5));
+}
+
+UTEST(Coordinates, cast_module_to_different_base) {
+    using ModI = spio::Module<I, 4, 1>;
+    using ModK = spio::Module<K, 4, 1>;
+    auto coords = spio::make_coordinates(ModI(3), J(10));
+    auto casted = coords.cast<I, K>();
+
+    EXPECT_EQ(casted.num_dims(), 2);
+    EXPECT_EQ(casted.get<ModK>(), ModK(3));
+    EXPECT_EQ(casted.get<J>(), J(10));
+}
+
 // Comparison with CompoundIndex tests
 UTEST(Coordinates, less_than_index) {
     using TestIndex = spio::CompoundIndex<spio::DimInfo<I, 4, 1>, spio::DimInfo<J, 8, 4>>;
@@ -1042,6 +1253,38 @@ UTEST(Coordinates, dim_plus_coordinates_existing_dim) {
     EXPECT_EQ(result.get<J>(), J(3));
 }
 
+UTEST(Coordinates, subtract_single_dim_existing) {
+    auto coords = spio::make_coordinates(I(10), J(5));
+    auto result = coords - I(3);
+    EXPECT_EQ(result.get<I>(), I(7)); // 10 - 3
+    EXPECT_EQ(result.get<J>(), J(5));
+}
+
+UTEST(Coordinates, subtract_single_dim_new) {
+    auto coords = spio::make_coordinates(I(10), J(5));
+    auto result = coords - K(3);
+    EXPECT_EQ(result.get<I>(), I(10));
+    EXPECT_EQ(result.get<J>(), J(5));
+    EXPECT_EQ(result.get<K>(), K(-3)); // K is new, so -3
+}
+
+UTEST(Coordinates, subtract_fold_from_coords) {
+    using FoldI8 = spio::Fold<I, 8>;
+    auto coords = spio::make_coordinates(I(20), J(5));
+    auto result = coords - FoldI8(1); // FoldI8(1) = 8
+    // I(20) - I(8) = I(12) after normalization
+    EXPECT_EQ(result.get<I>(), I(12));
+    EXPECT_EQ(result.get<J>(), J(5));
+}
+
+UTEST(Coordinates, subtract_module_from_coords) {
+    using ModI = spio::Module<I, 4, 1>;
+    auto coords = spio::make_coordinates(I(10), J(3));
+    auto result = coords - ModI(2);
+    EXPECT_EQ(result.get<I>(), I(8)); // 10 - 2
+    EXPECT_EQ(result.get<J>(), J(3));
+}
+
 UTEST(Coordinates, compare_dim_with_coordinates) {
     auto coords = spio::make_coordinates(I(5), J(3));
 
@@ -1123,3 +1366,83 @@ UTEST(Coordinates, compare_coordinates_with_dim) {
 //     EXPECT_TRUE(coords < K(0));
 //     EXPECT_TRUE(coords < K(100));
 // }
+
+// ============================================================================
+// all_non_negative tests
+// ============================================================================
+
+UTEST(Coordinates, all_non_negative_empty) {
+    auto coords = spio::Coordinates<>();
+    EXPECT_TRUE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_single_positive) {
+    auto coords = spio::make_coordinates(I(5));
+    EXPECT_TRUE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_single_zero) {
+    auto coords = spio::make_coordinates(I(0));
+    EXPECT_TRUE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_single_negative) {
+    auto coords = spio::make_coordinates(I(-1));
+    EXPECT_FALSE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_multiple_all_positive) {
+    auto coords = spio::make_coordinates(I(5), J(10), K(15));
+    EXPECT_TRUE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_multiple_with_zeros) {
+    auto coords = spio::make_coordinates(I(0), J(0), K(0));
+    EXPECT_TRUE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_multiple_first_negative) {
+    auto coords = spio::make_coordinates(I(-1), J(10), K(15));
+    EXPECT_FALSE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_multiple_middle_negative) {
+    auto coords = spio::make_coordinates(I(5), J(-3), K(15));
+    EXPECT_FALSE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_multiple_last_negative) {
+    auto coords = spio::make_coordinates(I(5), J(10), K(-2));
+    EXPECT_FALSE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_multiple_all_negative) {
+    auto coords = spio::make_coordinates(I(-5), J(-10), K(-15));
+    EXPECT_FALSE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_fold_positive) {
+    using FoldI8 = spio::Fold<I, 8>;
+    auto coords = spio::make_coordinates(FoldI8(2), J(5));
+    EXPECT_TRUE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_fold_negative) {
+    using FoldI8 = spio::Fold<I, 8>;
+    auto coords = spio::make_coordinates(FoldI8(-1), J(5));
+    EXPECT_FALSE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_mixed_dims_and_folds) {
+    using FoldI8 = spio::Fold<I, 8>;
+    using FoldJ4 = spio::Fold<J, 4>;
+    auto coords = spio::make_coordinates(I(3), FoldI8(1), J(2), FoldJ4(1));
+    EXPECT_TRUE(coords.all_non_negative());
+}
+
+UTEST(Coordinates, all_non_negative_mixed_with_negative_fold) {
+    using FoldI8 = spio::Fold<I, 8>;
+    using FoldJ4 = spio::Fold<J, 4>;
+    auto coords = spio::make_coordinates(I(3), FoldI8(-1), J(2), FoldJ4(1));
+    EXPECT_FALSE(coords.all_non_negative());
+}

@@ -899,3 +899,229 @@ UTEST(Tensor, double_subscript_order_independence) {
     int expected_offset = 2 * i16_stride + 5 * i_stride + 2 * k8_stride;
     EXPECT_EQ(static_cast<int>(cursor1.get() - data), expected_offset);
 }
+
+// ============================================================================
+// in_range tests
+// ============================================================================
+
+UTEST(Cursor, in_range_within_bounds) {
+    // Simple 2D tensor
+    constexpr int Height = 16;
+    constexpr int Width = 32;
+
+    using T = Tensor<float, DimInfo<H, Height, Width>, DimInfo<W, Width, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Cursor at (5, 10) - well within bounds
+    auto cursor = tensor[H(5)][W(10)];
+    EXPECT_TRUE(cursor.in_range());
+}
+
+UTEST(Cursor, in_range_at_origin) {
+    constexpr int Height = 16;
+    constexpr int Width = 32;
+
+    using T = Tensor<float, DimInfo<H, Height, Width>, DimInfo<W, Width, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Cursor at (0, 0) - at lower bound, should be in bounds
+    auto cursor = tensor[H(0)][W(0)];
+    EXPECT_TRUE(cursor.in_range());
+}
+
+UTEST(Cursor, in_range_at_max_minus_one) {
+    constexpr int Height = 16;
+    constexpr int Width = 32;
+
+    using T = Tensor<float, DimInfo<H, Height, Width>, DimInfo<W, Width, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Cursor at (Height-1, Width-1) - at upper bound minus one, should be in bounds
+    auto cursor = tensor[H(Height - 1)][W(Width - 1)];
+    EXPECT_TRUE(cursor.in_range());
+}
+
+UTEST(Cursor, in_range_negative_first_dim) {
+    constexpr int Height = 16;
+    constexpr int Width = 32;
+
+    using T = Tensor<float, DimInfo<H, Height, Width>, DimInfo<W, Width, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Cursor with negative H coordinate - out of bounds
+    auto cursor = tensor[H(-1)][W(10)];
+    EXPECT_FALSE(cursor.in_range());
+}
+
+UTEST(Cursor, in_range_negative_second_dim) {
+    constexpr int Height = 16;
+    constexpr int Width = 32;
+
+    using T = Tensor<float, DimInfo<H, Height, Width>, DimInfo<W, Width, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Cursor with negative W coordinate - out of bounds
+    auto cursor = tensor[H(5)][W(-3)];
+    EXPECT_FALSE(cursor.in_range());
+}
+
+UTEST(Cursor, in_range_negative_both_dims) {
+    constexpr int Height = 16;
+    constexpr int Width = 32;
+
+    using T = Tensor<float, DimInfo<H, Height, Width>, DimInfo<W, Width, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Cursor with both coordinates negative - out of bounds
+    auto cursor = tensor[H(-2)][W(-5)];
+    EXPECT_FALSE(cursor.in_range());
+}
+
+UTEST(Cursor, in_range_exceeds_upper_bound_first_dim) {
+    constexpr int Height = 16;
+    constexpr int Width = 32;
+
+    using T = Tensor<float, DimInfo<H, Height, Width>, DimInfo<W, Width, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Cursor with H at upper bound (equal to size) - out of bounds
+    auto cursor = tensor[H(Height)][W(10)];
+    EXPECT_FALSE(cursor.in_range());
+}
+
+UTEST(Cursor, in_range_exceeds_upper_bound_second_dim) {
+    constexpr int Height = 16;
+    constexpr int Width = 32;
+
+    using T = Tensor<float, DimInfo<H, Height, Width>, DimInfo<W, Width, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Cursor with W exceeding upper bound - out of bounds
+    auto cursor = tensor[H(5)][W(Width + 5)];
+    EXPECT_FALSE(cursor.in_range());
+}
+
+UTEST(Cursor, in_range_vs_inbounds_negative) {
+    // Test that in_range correctly catches negative coordinates
+    // while inbounds() alone would not
+    constexpr int Height = 16;
+    constexpr int Width = 32;
+
+    using T = Tensor<float, DimInfo<H, Height, Width>, DimInfo<W, Width, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Cursor with negative coordinate that would pass simple < upper bound check
+    auto cursor = tensor[H(-1)][W(10)];
+
+    // in_range should return false because H is negative
+    EXPECT_FALSE(cursor.in_range());
+
+    // Note: inbounds() only checks upper bound, so -1 < 16 would be true
+    // This is the key difference that in_range() addresses
+}
+
+UTEST(Cursor, in_range_with_single_fold) {
+    // Test with a single fold dimension (no overlapping folds of same base)
+    using K8 = Fold<K, 8>;
+
+    constexpr int k8_size = 8;
+    constexpr int m_size = 4;
+
+    // Tensor has K8 and M dimensions (no K dimension, avoiding fold overlap)
+    using T = Tensor<float, DimInfo<K8, k8_size, m_size>, DimInfo<M, m_size, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Within bounds
+    auto cursor1 = tensor[K8(2)][M(1)];
+    EXPECT_TRUE(cursor1.in_range());
+
+    // Negative K8
+    auto cursor2 = tensor[K8(-1)][M(1)];
+    EXPECT_FALSE(cursor2.in_range());
+
+    // Negative M
+    auto cursor3 = tensor[K8(2)][M(-1)];
+    EXPECT_FALSE(cursor3.in_range());
+
+    // K8 exceeds upper bound
+    auto cursor4 = tensor[K8(k8_size)][M(1)];
+    EXPECT_FALSE(cursor4.in_range());
+}
+
+UTEST(Cursor, in_range_3d_tensor) {
+    // 3D tensor
+    constexpr int Size_I = 4;
+    constexpr int Size_J = 8;
+    constexpr int Size_K = 16;
+
+    using T = Tensor<float, DimInfo<I, Size_I, Size_J * Size_K>, DimInfo<J, Size_J, Size_K>,
+                     DimInfo<K, Size_K, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // All within bounds
+    auto cursor1 = tensor[I(2)][J(5)][K(10)];
+    EXPECT_TRUE(cursor1.in_range());
+
+    // One dimension negative
+    auto cursor2 = tensor[I(2)][J(-1)][K(10)];
+    EXPECT_FALSE(cursor2.in_range());
+
+    // One dimension exceeds upper bound
+    auto cursor3 = tensor[I(2)][J(Size_J)][K(10)];
+    EXPECT_FALSE(cursor3.in_range());
+}
+
+// ============================================================================
+// in_range(bool&) overload tests - fluent API for in_range()
+// ============================================================================
+
+UTEST(Cursor, in_range_overload_stores_result_and_returns_this) {
+    constexpr int Size_I = 8;
+    constexpr int Size_J = 16;
+
+    using T = Tensor<float, DimInfo<I, Size_I, Size_J>, DimInfo<J, Size_J, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Test with in-range coordinates
+    bool result1 = false;
+    auto cursor1 = tensor[I(2)][J(5)];
+    auto& returned1 = cursor1.in_range(result1);
+    EXPECT_TRUE(result1);
+    EXPECT_EQ(&returned1, &cursor1); // Returns *this
+
+    // Test with out-of-range (negative) coordinates
+    bool result2 = true;
+    auto cursor2 = tensor[I(-1)][J(5)];
+    auto& returned2 = cursor2.in_range(result2);
+    EXPECT_FALSE(result2);
+    EXPECT_EQ(&returned2, &cursor2);
+}
+
+UTEST(Cursor, in_range_overload_enables_method_chaining) {
+    constexpr int Size_I = 8;
+    constexpr int Size_J = 16;
+
+    using T = Tensor<float, DimInfo<I, Size_I, Size_J>, DimInfo<J, Size_J, 1>>;
+    float data[T::storage_size()];
+    auto tensor = T(data);
+
+    // Test the fluent pattern: tensor[...].in_range(result).rebase()
+    bool in_range_result = false;
+    auto base_cursor = tensor[I(2)][J(5)].in_range(in_range_result).rebase();
+
+    EXPECT_TRUE(in_range_result);
+    // Verify rebase worked - base_cursor should point to correct location
+    EXPECT_EQ(base_cursor.get(), &data[2 * Size_J + 5]);
+}

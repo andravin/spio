@@ -492,6 +492,27 @@ namespace spio {
         template <typename FromBaseDim, typename ToBaseDim, typename DimType>
         using replace_base_dim_t = typename replace_base_dim<FromBaseDim, ToBaseDim, DimType>::type;
 
+        // Transform all dimensions in a tuple, replacing FromBaseDim with ToBaseDim
+        template <typename FromBaseDim, typename ToBaseDim, typename Tuple>
+        struct tuple_replace_base_dim;
+
+        template <typename FromBaseDim, typename ToBaseDim>
+        struct tuple_replace_base_dim<FromBaseDim, ToBaseDim, tuple<>> {
+            using type = tuple<>;
+        };
+
+        template <typename FromBaseDim, typename ToBaseDim, typename First, typename... Rest>
+        struct tuple_replace_base_dim<FromBaseDim, ToBaseDim, tuple<First, Rest...>> {
+            using first_replaced = replace_base_dim_t<FromBaseDim, ToBaseDim, First>;
+            using rest_replaced =
+                typename tuple_replace_base_dim<FromBaseDim, ToBaseDim, tuple<Rest...>>::type;
+            using type = tuple_prepend_t<first_replaced, rest_replaced>;
+        };
+
+        template <typename FromBaseDim, typename ToBaseDim, typename Tuple>
+        using tuple_replace_base_dim_t =
+            typename tuple_replace_base_dim<FromBaseDim, ToBaseDim, Tuple>::type;
+
         // ========================================================================
         // Dim-like detection
         // ========================================================================

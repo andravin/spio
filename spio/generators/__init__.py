@@ -3,7 +3,7 @@
 from .generators import generate
 from .generators_class import Generators
 from .gen_specs import GenSpecs
-from .compound_index import CompoundIndex, CompoundIndexPartition
+from .compound_index import CompoundIndex, CompoundIndexPartition, CoordinatesExpr
 from .tensor import Tensor, CursorInitializer
 from .fragment_type import FragmentType, Operand
 from .data_type import dtype, get_dtype_veclen
@@ -59,4 +59,5 @@ __all__ = GENERATORS + [
     "BuiltIn",
     "LANE",
     "OFFSET",
+    "CoordinatesExpr",
 ]

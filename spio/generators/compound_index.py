@@ -1,14 +1,96 @@
 """Code generator for custom index classes in CUDA / C++."""
 
-from typing import List, Generator
-from dataclasses import dataclass
+from typing import List, Generator, Union
+from dataclasses import dataclass, field
 
 from .dims import Dims, Strides, compute_full_strides, is_dims_arg
-from .dim import dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
+from .dim import Dim, StaticDim, dim_name_to_dim_or_fold_class_name, BUILTIN_DIM_NAMES
 from .dim_arg import DimArg, normalize_dim_arg
 from .built_in import BuiltIn
 from .gen_specs import GenSpecsWithContext, GenSpecs
 from .derived_dimension import DerivedDimension
+
+
+@dataclass
+class CoordinatesExpr:
+    """Represents a coordinate expression with transformations.
+
+    This class tracks a source CompoundIndex and a sequence of operations
+    (subtraction, drop) that will be applied to generate C++ code.
+
+    Used to express coordinate transformations in Python generators so that
+    kernels can be purely algorithmic without manual address calculations.
+
+    Example:
+        # In Python generator:
+        (g.BlockIdx - W(padding_w)).drop(H)
+
+        # Generates C++ code:
+        (BlockIdx().coordinates() - W(padding_w)).drop<H>()
+    """
+
+    source: "CompoundIndex"
+    operations: List[tuple] = field(default_factory=list)
+
+    def __sub__(self, dim: StaticDim) -> "CoordinatesExpr":
+        """Subtract a dimension offset from the coordinates.
+
+        Args:
+            dim: A StaticDim representing the offset to subtract.
+
+        Returns:
+            A new CoordinatesExpr with the subtraction recorded.
+        """
+        new_ops = list(self.operations)
+        new_ops.append(("sub", dim))
+        return CoordinatesExpr(source=self.source, operations=new_ops)
+
+    def drop(self, dim: Union[Dim, str]) -> "CoordinatesExpr":
+        """Drop a base dimension from the coordinates.
+
+        Args:
+            dim: The base dimension to drop (Dim object or string name).
+
+        Returns:
+            A new CoordinatesExpr with the drop recorded.
+        """
+        new_ops = list(self.operations)
+        new_ops.append(("drop", dim))
+        return CoordinatesExpr(source=self.source, operations=new_ops)
+
+    def generate_subscript_expr(self) -> str:
+        """Generate the C++ subscript expression.
+
+        Returns:
+            A string like "(BlockIdx().coordinates() - W(padding_w)).drop<H>()"
+        """
+        source_class_name = self.source.get_class_name()
+        if source_class_name is None:
+            raise ValueError("CoordinatesExpr source must have a class_name set")
+
+        expr = f"{source_class_name}().coordinates()"
+
+        for op_type, arg in self.operations:
+            if op_type == "sub":
+                # arg is a StaticDim or StaticFold - build the C++ expression
+                dim_name = arg.dim_name
+                if dim_name is None:
+                    raise ValueError("StaticDim/StaticFold must have a name set for subtraction")
+                dim_class = dim_name_to_dim_or_fold_class_name(dim_name)
+                dim_expr = f"{dim_class}({arg.size})"
+                expr = f"({expr} - {dim_expr})"
+            elif op_type == "drop":
+                # arg is a Dim or string - get the dimension class name
+                if isinstance(arg, Dim):
+                    dim_name = arg.dim_name
+                    if dim_name is None:
+                        raise ValueError("Dim must have a name set for drop()")
+                else:
+                    dim_name = arg
+                dim_class = dim_name_to_dim_or_fold_class_name(dim_name)
+                expr = f"{expr}.drop<{dim_class}>()"
+
+        return expr
 
 
 class CompoundIndex(GenSpecsWithContext, DerivedDimension):
@@ -181,6 +263,52 @@ class CompoundIndex(GenSpecsWithContext, DerivedDimension):
         """Return the names of the dimensions in the index."""
         for name, _ in self.dims.items():
             yield name
+
+    def coordinates(self) -> CoordinatesExpr:
+        """Return a CoordinatesExpr for building coordinate transformations.
+
+        Returns:
+            A CoordinatesExpr that can be used with __sub__ and drop() methods
+            to build coordinate expressions for tensor subscripting.
+
+        Example:
+            g.BlockIdx.coordinates() - W(padding_w)
+        """
+        return CoordinatesExpr(source=self)
+
+    def __sub__(self, dim: StaticDim) -> CoordinatesExpr:
+        """Subtract a dimension offset, returning a CoordinatesExpr.
+
+        This is a shortcut for self.coordinates() - dim.
+
+        Args:
+            dim: A StaticDim representing the offset to subtract.
+
+        Returns:
+            A CoordinatesExpr with the subtraction recorded.
+
+        Example:
+            g.BlockIdx - W(padding_w)
+            # Equivalent to: g.BlockIdx.coordinates() - W(padding_w)
+        """
+        return self.coordinates() - dim
+
+    def drop(self, dim: Union[Dim, str]) -> CoordinatesExpr:
+        """Drop a base dimension, returning a CoordinatesExpr.
+
+        This is a shortcut for self.coordinates().drop(dim).
+
+        Args:
+            dim: The base dimension to drop (Dim object or string name).
+
+        Returns:
+            A CoordinatesExpr with the drop recorded.
+
+        Example:
+            g.BlockIdx.drop(g.H)
+            # Equivalent to: g.BlockIdx.coordinates().drop(g.H)
+        """
+        return self.coordinates().drop(dim)
 
 
 def header() -> str:

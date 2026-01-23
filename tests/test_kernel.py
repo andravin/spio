@@ -43,8 +43,8 @@ def test_memcpy_kernel():
     my_params_header = generate(
         [
             ParamsSpec(
-                "MyParams",
                 {"ITERS": ITERS, "BLOCK_X4": BLOCK_X4, "X": X, "THREADS": THREADS},
+                "MyParams",
             ),
         ]
     )

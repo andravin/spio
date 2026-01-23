@@ -73,6 +73,29 @@ class StaticFold:
             return StaticFold(fold=self.fold, size=self.size * other)
         return self.__mul__(other)
 
+    def __add__(self, other: "StaticFold") -> "StaticFold":
+        """Add two StaticFolds with the same base Dim and stride.
+
+        Returns a new StaticFold with sizes added together.
+        """
+        if isinstance(other, int):
+            return StaticFold(fold=self.fold, size=self.size + other)
+        if not isinstance(other, StaticFold):
+            return NotImplemented
+        if self._identity_key() != other._identity_key():
+            raise TypeError(
+                f"Cannot add StaticFolds with different base Dim or stride: "
+                f"{self.fold.dim_name}/{self.fold.stride} vs "
+                f"{other.fold.dim_name}/{other.fold.stride}"
+            )
+        return StaticFold(fold=self.fold, size=self.size + other.size)
+
+    def __radd__(self, other: int) -> "StaticFold":
+        """Right add - handles int + StaticFold."""
+        if isinstance(other, int):
+            return StaticFold(fold=self.fold, size=self.size + other)
+        return NotImplemented
+
     def __truediv__(self, divisor: int) -> "StaticFold":
         """Create a coarser StaticFold by increasing the stride by the given divisor.
 
@@ -188,12 +211,22 @@ class Fold(GenSpecs):
             return self.dim
         return self.dim.dim_name
 
-    def _set_class_name(self, name: str) -> None:
+    def _set_class_name(self, name: str) -> "Fold":
         """Set the fold name for this fold.
 
         Called by the Generators container when the fold is assigned to an attribute.
+
+        Returns:
+            self if the name was not set or matches, otherwise a new Fold with the new name.
+            This prevents aliasing issues when the same Fold object (from Dim's cache)
+            is assigned to multiple Generators attributes with different names.
         """
-        object.__setattr__(self, "fold_name", name.upper())
+        name_upper = name.upper()
+        if self.fold_name is not None and self.fold_name != name_upper:
+            # Already has a different name - return a copy with the new name
+            return Fold(dim=self.dim, stride=self.stride, fold_name=name_upper, init=self.init)
+        object.__setattr__(self, "fold_name", name_upper)
+        return self
 
     def get_class_name(self) -> str:
         """Return the fold name, or None if not set."""

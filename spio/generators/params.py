@@ -14,12 +14,12 @@ class ParamsSpec(GenSpecs):
     bool, int, or float.
 
     Attributes:
-        name_space: The name of the C++ namespace.
         params: A dictionary of parameter names and their values.
+        name_space: The name of the C++ namespace.
     """
 
-    name_space: str
     params: Dict[str, Any]
+    name_space: str = None
 
     def generate(self) -> str:
         """Generate the C++ code for the parameter definitions."""
@@ -29,6 +29,13 @@ class ParamsSpec(GenSpecs):
             code += f"    inline constexpr {c_type_name} {name} = {c_value};\n"
         code += "}\n"
         return code
+
+    def _set_class_name(self, class_name: str) -> None:
+        self.name_space = class_name
+
+    def get_class_name(self) -> str:
+        """Return the namespace name (prevents auto-naming)."""
+        return self.name_space
 
 
 def _c_type_name(val: Any) -> Tuple[str, Any]:
