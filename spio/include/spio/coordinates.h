@@ -169,6 +169,29 @@ namespace spio {
             return make_coordinates(a.template get<ADims>()..., b.template get<BDims>()...);
         }
 
+        // Build coordinates from a subset of dimensions specified by KeptDims.
+        template <typename... KeptDims, typename... OrigDims>
+        DEVICE constexpr auto build_dropped_coords(tuple<KeptDims...>,
+                                                   const Coordinates<OrigDims...>& coords) {
+            return make_coordinates(coords.template get<KeptDims>()...);
+        }
+
+        // Build coordinates with casted dimension types.
+        template <typename FromBaseDim, typename ToBaseDim, typename... OrigDims, std::size_t... Is>
+        DEVICE constexpr auto build_casted_coords_impl(const Coordinates<OrigDims...>& coords,
+                                                       index_sequence<Is...>) {
+            using new_dims_tuple =
+                tuple_replace_base_dim_t<FromBaseDim, ToBaseDim, tuple<OrigDims...>>;
+            return make_coordinates(
+                tuple_element_t<Is, new_dims_tuple>(get<Is>(coords.values).get())...);
+        }
+
+        template <typename FromBaseDim, typename ToBaseDim, typename... OrigDims>
+        DEVICE constexpr auto build_casted_coords(const Coordinates<OrigDims...>& coords) {
+            return build_casted_coords_impl<FromBaseDim, ToBaseDim>(
+                coords, make_index_sequence<sizeof...(OrigDims)>{});
+        }
+
         // ========================================================================
         // coords_get_by_base_dim implementations
         // ========================================================================
@@ -212,6 +235,23 @@ namespace spio {
             static_assert(detail::is_dim_like_v<Dim>, "Argument must be a dimension type");
             return make_coordinates(d);
         }
+
+        /// Drops dimensions - always errors for empty Coordinates.
+        template <typename BaseDim> DEVICE constexpr auto drop() const {
+            static_assert(detail::dependent_false<BaseDim>::value,
+                          "drop<BaseDim>(): no dimensions match the given base dimension");
+            return *this;
+        }
+
+        /// Casts dimensions - returns empty Coordinates unchanged.
+        template <typename FromBaseDim, typename ToBaseDim> DEVICE constexpr auto cast() const {
+            return *this;
+        }
+
+        /// Checks if all coordinate values are non-negative.
+        DEVICE constexpr bool all_non_negative() const {
+            return true; // Empty coordinates are trivially non-negative
+        }
     };
 
     /// Represents a set of indices for multiple dimensions.
@@ -249,6 +289,42 @@ namespace spio {
             return detail::build_normalized(unique_bases{}, *this);
         }
 
+        /// Drops all dimensions matching the given base dimension type.
+        ///
+        /// Removes any dimension whose dim_type matches BaseDim, including
+        /// folds of BaseDim. Returns new Coordinates without those dimensions.
+        ///
+        /// Template parameters:
+        ///   BaseDim   The base dimension type to drop.
+        ///
+        /// Returns:
+        ///   New Coordinates with all matching dimensions removed.
+        ///
+        /// Note: Compile error if no dimensions match BaseDim.
+        template <typename BaseDim> DEVICE constexpr auto drop() const {
+            using kept_dims =
+                detail::tuple_exclude_base_dims_t<detail::tuple<Dims...>, detail::tuple<BaseDim>>;
+            static_assert(detail::tuple_size<kept_dims>::value < sizeof...(Dims),
+                          "drop<BaseDim>(): no dimensions match the given base dimension");
+            return detail::build_dropped_coords(kept_dims{}, *this);
+        }
+
+        /// Casts all dimensions matching FromBaseDim to ToBaseDim.
+        ///
+        /// Creates new Coordinates where any dimension with base type FromBaseDim
+        /// is replaced with the equivalent ToBaseDim type, preserving the value.
+        /// Folds are converted to their equivalent fold of ToBaseDim.
+        ///
+        /// Template parameters:
+        ///   FromBaseDim   The base dimension type to cast from.
+        ///   ToBaseDim     The base dimension type to cast to.
+        ///
+        /// Returns:
+        ///   New Coordinates with matching dimensions cast to ToBaseDim.
+        template <typename FromBaseDim, typename ToBaseDim> DEVICE constexpr auto cast() const {
+            return detail::build_casted_coords<FromBaseDim, ToBaseDim>(*this);
+        }
+
         template <typename... OtherDims>
         DEVICE constexpr auto operator+(const Coordinates<OtherDims...>& other) const {
             return detail::add_normalized_coordinates(normalize(), other.normalize());
@@ -268,6 +344,14 @@ namespace spio {
                                       int> = 0>
         DEVICE constexpr auto operator+(Dim d) const {
             return *this + make_coordinates(d);
+        }
+
+        /// Subtracts a single dimension from coordinates.
+        template <typename Dim,
+                  detail::enable_if_t<detail::is_dim_like_v<Dim> && !detail::has_coordinates_v<Dim>,
+                                      int> = 0>
+        DEVICE constexpr auto operator-(Dim d) const {
+            return *this + make_coordinates(Dim(-d.get()));
         }
 
         /// Compares coordinates with a single dimension.
@@ -382,6 +466,11 @@ namespace spio {
         /// Returns the number of dimensions in these coordinates.
         DEVICE static constexpr int num_dims() {
             return sizeof...(Dims);
+        }
+
+        /// Checks if all coordinate values are non-negative.
+        DEVICE constexpr bool all_non_negative() const {
+            return ((get<Dims>().get() >= 0) && ...);
         }
     };
 

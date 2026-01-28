@@ -165,6 +165,40 @@ class TestStaticDim:
         assert i20.size == 20
         assert i20.dim is I
 
+    def test_static_dim_add_same_base(self):
+        """Test that StaticDim + StaticDim adds sizes when same base Dim."""
+        I = Dim("I")
+        i4 = I(4)
+        i8 = I(8)
+        i12 = i4 + i8
+        assert i12.size == 12
+        assert i12.dim is I
+
+    def test_static_dim_add_different_base_raises(self):
+        """Test that adding StaticDims with different base Dims raises TypeError."""
+        I = Dim("I")
+        J = Dim("J")
+        i4 = I(4)
+        j4 = J(4)
+        with pytest.raises(TypeError, match="different base Dims"):
+            _ = i4 + j4
+
+    def test_static_dim_add_int(self):
+        """Test that StaticDim + int adds to the size."""
+        I = Dim("I")
+        i4 = I(4)
+        i7 = i4 + 3
+        assert i7.size == 7
+        assert i7.dim is I
+
+    def test_static_dim_int_add(self):
+        """Test that int + StaticDim adds to the size."""
+        I = Dim("I")
+        i4 = I(4)
+        i9 = 5 + i4
+        assert i9.size == 9
+        assert i9.dim is I
+
     def test_static_dim_divide_creates_fold(self):
         """Test that StaticDim / int creates a StaticFold."""
         I = Dim("I")
@@ -365,6 +399,55 @@ class TestStaticFold:
         a = K8(4)
         b = 2 * a
         assert b.size == 8
+        assert b.fold is K8
+
+    def test_static_fold_add_same_base_and_stride(self):
+        """Test that StaticFold + StaticFold adds sizes when same base Dim and stride."""
+        K = Dim("K")
+        K8 = K.fold(8)
+        a = K8(4)
+        b = K8(2)
+        c = a + b
+        assert c.size == 6
+        assert c.fold is K8
+
+    def test_static_fold_add_different_base_raises(self):
+        """Test that adding StaticFolds with different base Dims raises TypeError."""
+        K = Dim("K")
+        J = Dim("J")
+        K8 = K.fold(8)
+        J8 = J.fold(8)
+        a = K8(4)
+        b = J8(4)
+        with pytest.raises(TypeError, match="different base Dim or stride"):
+            _ = a + b
+
+    def test_static_fold_add_different_stride_raises(self):
+        """Test that adding StaticFolds with different strides raises TypeError."""
+        K = Dim("K")
+        K8 = K.fold(8)
+        K4 = K.fold(4)
+        a = K8(4)
+        b = K4(4)
+        with pytest.raises(TypeError, match="different base Dim or stride"):
+            _ = a + b
+
+    def test_static_fold_add_int(self):
+        """Test that StaticFold + int adds to the size."""
+        K = Dim("K")
+        K8 = K.fold(8)
+        a = K8(4)
+        b = a + 3
+        assert b.size == 7
+        assert b.fold is K8
+
+    def test_static_fold_int_add(self):
+        """Test that int + StaticFold adds to the size."""
+        K = Dim("K")
+        K8 = K.fold(8)
+        a = K8(4)
+        b = 5 + a
+        assert b.size == 9
         assert b.fold is K8
 
     def test_fold_refold_to_new_stride(self):
@@ -791,3 +874,143 @@ class TestTensorWithAnonymousFoldsAndStrides:
         code = generate(g)
         assert "spio::Tensor<float" in code
         assert "Checkerboard" in code
+
+
+class TestFoldAliases:
+    """Tests for multiple fold aliases with the same base Dim and stride."""
+
+    def test_same_stride_different_names_in_generators(self):
+        """Test that the same fold stride can have multiple names in Generators."""
+        g = Generators()
+        C = g.C = Dim()
+
+        # Both have stride 8, but different names
+        g.BLOCK_C = C / 8
+        g.C8 = C / 8
+
+        # Verify both are registered with their own names
+        assert "BLOCK_C" in g
+        assert "C8" in g
+
+        # Verify they have different fold_name attributes
+        assert g._registry["BLOCK_C"].fold_name == "BLOCK_C"
+        assert g._registry["C8"].fold_name == "C8"
+
+    def test_same_stride_generates_both_aliases(self):
+        """Test that both fold aliases appear in generated code."""
+        g = Generators()
+        C = g.C = Dim()
+
+        g.BLOCK_C = C / 8
+        g.C8 = C / 8
+
+        code = generate(g)
+
+        # Both should appear as separate using statements
+        assert "using BLOCK_C = spio::Fold<C, 8>;" in code
+        assert "using C8 = spio::Fold<C, 8>;" in code
+
+    def test_first_assignment_sets_name(self):
+        """Test that the first assignment sets the fold name."""
+        g = Generators()
+        K = g.K = Dim()
+
+        # First assignment
+        g.K8 = K / 8
+
+        # The fold should have the name from the first assignment
+        assert g._registry["K8"].fold_name == "K8"
+
+    def test_second_assignment_creates_copy(self):
+        """Test that second assignment with different name creates a new Fold."""
+        g = Generators()
+        K = g.K = Dim()
+
+        g.K8 = K / 8
+        g.BLOCK_K = K / 8
+
+        # Should be different objects
+        assert g._registry["K8"] is not g._registry["BLOCK_K"]
+
+        # But should still be equal for matching purposes
+        assert g._registry["K8"].dim is g._registry["BLOCK_K"].dim
+        assert g._registry["K8"].stride == g._registry["BLOCK_K"].stride
+
+    def test_same_name_reuses_object(self):
+        """Test that assigning same fold twice with same name reuses object."""
+        g = Generators()
+        K = g.K = Dim()
+
+        fold1 = K / 8
+        g.K8 = fold1
+        g.K8 = fold1  # Re-assign with same name
+
+        # Should still work
+        assert g._registry["K8"].fold_name == "K8"
+
+    def test_multiple_different_strides_same_dim(self):
+        """Test multiple folds with different strides on the same Dim."""
+        g = Generators()
+        K = g.K = Dim()
+
+        g.K2 = K / 2
+        g.K4 = K / 4
+        g.K8 = K / 8
+        g.K16 = K / 16
+
+        code = generate(g)
+
+        assert "using K2 = spio::Fold<K, 2>;" in code
+        assert "using K4 = spio::Fold<K, 4>;" in code
+        assert "using K8 = spio::Fold<K, 8>;" in code
+        assert "using K16 = spio::Fold<K, 16>;" in code
+
+    def test_alias_with_parametric_stride(self):
+        """Test fold aliases when stride comes from a variable (like block_c)."""
+        g = Generators()
+        C = g.C = Dim()
+
+        # Simulate the conv2d_gw8 scenario where block_c == 8
+        block_c = 8
+
+        g.BLOCK_C = C / block_c
+        g.C8 = C / 8
+
+        # Both should have correct names
+        assert g._registry["BLOCK_C"].fold_name == "BLOCK_C"
+        assert g._registry["C8"].fold_name == "C8"
+
+        code = generate(g)
+        assert "using BLOCK_C = spio::Fold<C, 8>;" in code
+        assert "using C8 = spio::Fold<C, 8>;" in code
+
+    def test_fold_identity_preserved_for_matching(self):
+        """Test that fold aliases are still equal for dimension matching purposes."""
+        g = Generators()
+        K = g.K = Dim()
+
+        g.K8_A = K / 8
+        g.K8_B = K / 8
+
+        # Get StaticFold objects
+        static_a = g._registry["K8_A"](4)
+        static_b = g._registry["K8_B"](4)
+
+        # They should be equal for matching (same base Dim and stride)
+        assert static_a == static_b
+        assert hash(static_a) == hash(static_b)
+
+    def test_three_aliases_same_stride(self):
+        """Test three different aliases for the same fold stride."""
+        g = Generators()
+        N = g.N = Dim()
+
+        g.N16 = N / 16
+        g.BLOCK_N = N / 16
+        g.TILE_N = N / 16
+
+        code = generate(g)
+
+        assert "using N16 = spio::Fold<N, 16>;" in code
+        assert "using BLOCK_N = spio::Fold<N, 16>;" in code
+        assert "using TILE_N = spio::Fold<N, 16>;" in code

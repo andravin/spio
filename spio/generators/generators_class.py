@@ -52,7 +52,11 @@ class Generators:
         elif _is_generator_type(value):
             # Generator objects are registered with the name
             if hasattr(value, "_set_class_name"):
-                value._set_class_name(name)
+                # _set_class_name may return a new object if the original already
+                # has a different name (e.g., cached Fold objects from Dim.fold())
+                result = value._set_class_name(name)
+                if result is not None:
+                    value = result
             elif hasattr(value, "class_name"):
                 # For objects that use class_name directly (legacy support)
                 object.__setattr__(value, "class_name", name)

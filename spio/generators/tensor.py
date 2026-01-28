@@ -620,8 +620,14 @@ class CursorInitializer(GenSpecsWithContext):
 
     def used_generators(self) -> list[GenSpecsWithContext]:
         """Return the tensor and implicit dimension generators."""
-        used = [self.tensor] + list(self.implicit_dims)
+        used = [self.tensor]
         for dim in self.implicit_dims:
+            # Check if this is a CoordinatesExpr (has source attribute)
+            if hasattr(dim, "source"):
+                # CoordinatesExpr - add the source CompoundIndex
+                used.append(dim.source)
+            else:
+                used.append(dim)
             if hasattr(dim, "used_generators"):
                 used.extend(dim.used_generators())
         return used
@@ -644,10 +650,14 @@ class CursorInitializer(GenSpecsWithContext):
         # Build the subscript chain
         subscript_chain = ""
         for implicit_dim in self.implicit_dims:
-            dim_class_name = implicit_dim.get_class_name()
-            if dim_class_name is None:
-                raise ValueError("Implicit dimension must have a class_name set")
-            subscript_chain += f"[{dim_class_name}()]"
+            # Check if this is a CoordinatesExpr (has generate_subscript_expr method)
+            if hasattr(implicit_dim, "generate_subscript_expr"):
+                subscript_chain += f"[{implicit_dim.generate_subscript_expr()}]"
+            else:
+                dim_class_name = implicit_dim.get_class_name()
+                if dim_class_name is None:
+                    raise ValueError("Implicit dimension must have a class_name set")
+                subscript_chain += f"[{dim_class_name}()]"
 
         # Generate constructor overloads for ancestor tensor types
         ancestor_constructors = ""

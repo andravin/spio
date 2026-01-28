@@ -183,16 +183,15 @@ def _get_kernel_spec(
         Fold("c", block_c, fold_name="block_c"),
         Fold("s", config.warp_s, fold_name="warp_s"),
         ParamsSpec(
-            "Block",
             {
                 "threads": threads,
             },
+            "Block",
         ),
         #
         # Constant parameters.
         #
         ParamsSpec(
-            "Params",
             {
                 "R_Size": r,
                 "S_Size": s,
@@ -205,6 +204,7 @@ def _get_kernel_spec(
                 "BLOCK_N_ITERS": config.block_n_iters,
                 "WARP_N_Size": config.warp_n,
             },
+            "Params",
         ),
         #
         # Block indices.

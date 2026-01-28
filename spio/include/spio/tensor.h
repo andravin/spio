@@ -573,11 +573,39 @@ namespace spio {
             return make_sizes_from_infos(coarsest_infos{});
         }
 
-        /// Checks if all coordinates are within bounds.
+        /// Checks if all coordinates are within bounds (upper bound only).
         ///
         /// Returns true if each coordinate is less than the corresponding extent.
+        /// Use in_range() when coordinates may be negative.
         DEVICE constexpr bool inbounds() const {
             return _coords < extents();
+        }
+
+        /// Stores the inbounds() result and returns *this for method chaining.
+        ///
+        /// Enables fluent API patterns like:
+        ///   input = Input(ptr).inbounds(z_inbounds).rebase();
+        DEVICE constexpr Cursor& inbounds(bool& result) {
+            result = inbounds();
+            return *this;
+        }
+
+        /// Checks if all coordinates are within the valid range [0, extent).
+        ///
+        /// Returns true if each coordinate is non-negative and less than the
+        /// corresponding extent. Use this when coordinates may be negative,
+        /// such as when subtracting padding offsets.
+        DEVICE constexpr bool in_range() const {
+            return _coords.all_non_negative() && inbounds();
+        }
+
+        /// Stores the in_range() result and returns *this for method chaining.
+        ///
+        /// Enables fluent API patterns like:
+        ///   input = Input(ptr).in_range(z_inbounds).rebase();
+        DEVICE constexpr Cursor& in_range(bool& result) {
+            result = in_range();
+            return *this;
         }
 
         DEVICE constexpr data_type& operator*() const {

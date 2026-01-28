@@ -12,6 +12,7 @@ from spio.generators import (
     FragmentType,
     Macro,
     Matmul,
+    ParamsSpec,
     dtype,
     Dims,
     Checkerboard,
@@ -86,6 +87,27 @@ class TestGeneratorsBasic:
         g.mma = Matmul(g.AReg, g.BReg, g.CReg, g.CReg)
 
         assert g.mma.function_name == "mma"
+
+    def test_assign_params_spec(self):
+        """Assigning a ParamsSpec should set its name_space."""
+        g = Generators()
+        g.Block = ParamsSpec({"threads": 256, "warps": 8})
+
+        assert g.Block.name_space == "Block"
+        assert len(g) == 1
+        assert "Block" in g
+
+    def test_params_spec_generates_namespace(self):
+        """ParamsSpec should generate a C++ namespace with constants."""
+        g = Generators()
+        g.Mode = ParamsSpec({"igrad": False, "has_bias": True, "scale": 1.5})
+
+        code = generate(g)
+
+        assert "namespace Mode {" in code
+        assert "inline constexpr bool igrad = false;" in code
+        assert "inline constexpr bool has_bias = true;" in code
+        assert "inline constexpr float scale = 1.5;" in code
 
 
 class TestGeneratorsIteration:
@@ -638,3 +660,171 @@ class TestDimArgSupport:
 
         # Without both having sizes, defaults to 32
         assert cb.size == 32
+
+
+class TestCoordinatesExpr:
+    """Tests for CoordinatesExpr generator."""
+
+    def test_compound_index_coordinates(self):
+        """CompoundIndex.coordinates() returns a CoordinatesExpr."""
+        from spio.generators.compound_index import CoordinatesExpr
+
+        g = Generators()
+        g.BlockIdx = CompoundIndex(Dims(n=4, h=8, w=16))
+
+        coords = g.BlockIdx.coordinates()
+        assert isinstance(coords, CoordinatesExpr)
+        assert coords.source is g.BlockIdx
+
+    def test_compound_index_sub_returns_coords_expr(self):
+        """CompoundIndex.__sub__ returns a CoordinatesExpr."""
+        from spio.generators.compound_index import CoordinatesExpr
+
+        g = Generators()
+        g.BlockIdx = CompoundIndex(Dims(n=4, h=8, w=16))
+        g.W = Dim()
+
+        coords = g.BlockIdx - g.W(3)
+        assert isinstance(coords, CoordinatesExpr)
+        assert coords.source is g.BlockIdx
+        assert len(coords.operations) == 1
+        assert coords.operations[0][0] == "sub"
+
+    def test_coordinates_expr_sub(self):
+        """CoordinatesExpr.__sub__ chains subtractions."""
+        g = Generators()
+        g.BlockIdx = CompoundIndex(Dims(n=4, h=8, w=16))
+        g.W = Dim()
+        g.H = Dim()
+
+        coords = g.BlockIdx.coordinates() - g.W(3) - g.H(2)
+        assert len(coords.operations) == 2
+        assert coords.operations[0][0] == "sub"
+        assert coords.operations[1][0] == "sub"
+
+    def test_coordinates_expr_drop(self):
+        """CoordinatesExpr.drop() records drop operation."""
+        g = Generators()
+        g.BlockIdx = CompoundIndex(Dims(n=4, h=8, w=16))
+        g.H = Dim()
+
+        coords = g.BlockIdx.coordinates().drop(g.H)
+        assert len(coords.operations) == 1
+        assert coords.operations[0][0] == "drop"
+
+    def test_compound_index_drop_returns_coords_expr(self):
+        """CompoundIndex.drop() returns a CoordinatesExpr."""
+        from spio.generators.compound_index import CoordinatesExpr
+
+        g = Generators()
+        g.BlockIdx = CompoundIndex(Dims(n=4, h=8, w=16))
+        g.H = Dim()
+
+        coords = g.BlockIdx.drop(g.H)
+        assert isinstance(coords, CoordinatesExpr)
+        assert coords.source is g.BlockIdx
+        assert len(coords.operations) == 1
+        assert coords.operations[0][0] == "drop"
+
+    def test_coordinates_expr_drop_with_string(self):
+        """CoordinatesExpr.drop() accepts string dimension names."""
+        g = Generators()
+        g.BlockIdx = CompoundIndex(Dims(n=4, h=8, w=16))
+
+        coords = g.BlockIdx.coordinates().drop("H")
+        assert len(coords.operations) == 1
+        assert coords.operations[0] == ("drop", "H")
+
+    def test_coordinates_expr_chain_sub_and_drop(self):
+        """CoordinatesExpr can chain sub and drop operations."""
+        g = Generators()
+        g.BlockIdx = CompoundIndex(Dims(n=4, h=8, w=16))
+        g.W = Dim()
+        g.H = Dim()
+
+        coords = (g.BlockIdx - g.W(3)).drop(g.H)
+        assert len(coords.operations) == 2
+        assert coords.operations[0][0] == "sub"
+        assert coords.operations[1][0] == "drop"
+
+    def test_coordinates_expr_generate_simple(self):
+        """CoordinatesExpr.generate_subscript_expr() with no operations."""
+        g = Generators()
+        g.BlockIdx = CompoundIndex(Dims(n=4, h=8))
+
+        coords = g.BlockIdx.coordinates()
+        expr = coords.generate_subscript_expr()
+        assert expr == "BlockIdx().coordinates()"
+
+    def test_coordinates_expr_generate_with_sub(self):
+        """CoordinatesExpr.generate_subscript_expr() with subtraction."""
+        g = Generators()
+        g.BlockIdx = CompoundIndex(Dims(n=4, h=8, w=16))
+        g.W = Dim()
+
+        coords = g.BlockIdx - g.W(3)
+        expr = coords.generate_subscript_expr()
+        assert expr == "(BlockIdx().coordinates() - W(3))"
+
+    def test_coordinates_expr_generate_with_drop(self):
+        """CoordinatesExpr.generate_subscript_expr() with drop."""
+        g = Generators()
+        g.BlockIdx = CompoundIndex(Dims(n=4, h=8))
+        g.H = Dim()
+
+        coords = g.BlockIdx.coordinates().drop(g.H)
+        expr = coords.generate_subscript_expr()
+        assert expr == "BlockIdx().coordinates().drop<H>()"
+
+    def test_coordinates_expr_generate_sub_then_drop(self):
+        """CoordinatesExpr.generate_subscript_expr() with sub then drop."""
+        g = Generators()
+        g.BlockIdx = CompoundIndex(Dims(n=4, h=8, w=16))
+        g.W = Dim()
+        g.H = Dim()
+
+        coords = (g.BlockIdx - g.W(3)).drop(g.H)
+        expr = coords.generate_subscript_expr()
+        assert expr == "(BlockIdx().coordinates() - W(3)).drop<H>()"
+
+    def test_cursor_initializer_with_coordinates_expr(self):
+        """CursorInitializer handles CoordinatesExpr in implicit_dims."""
+        g = Generators()
+        g.H = Dim()
+        g.W = Dim()
+        g.BlockIdx = CompoundIndex(Dims(g.H(8), g.W(16)))
+        g.Input = Tensor(dtype.half, Dims(g.H(64), g.W(128)))
+        g.InputLoader = g.Input[(g.BlockIdx - g.W(3)).drop(g.H)]
+
+        code = generate(g)
+        assert "struct InputLoader : Input::cursor_type" in code
+        assert "(BlockIdx().coordinates() - W(3)).drop<H>()" in code
+
+    def test_cursor_initializer_mixed_coords_and_index(self):
+        """CursorInitializer handles mix of CoordinatesExpr and CompoundIndex."""
+        g = Generators()
+        g.H = Dim()
+        g.W = Dim()
+        g.BlockIdx = CompoundIndex(Dims(g.H(8), g.W(16)))
+        g.ThreadIdx = CompoundIndex(Dims(g.W(4)))
+        g.Input = Tensor(dtype.half, Dims(g.H(64), g.W(128)))
+        g.InputLoader = g.Input[(g.BlockIdx - g.W(3)).drop(g.H), g.ThreadIdx]
+
+        code = generate(g)
+        assert "struct InputLoader : Input::cursor_type" in code
+        # Should have both subscripts in chain
+        assert "(BlockIdx().coordinates() - W(3)).drop<H>()" in code
+        assert "[ThreadIdx()]" in code
+
+    def test_coordinates_expr_used_generators(self):
+        """CursorInitializer.used_generators includes CoordinatesExpr source."""
+        g = Generators()
+        g.H = Dim()
+        g.W = Dim()
+        g.BlockIdx = CompoundIndex(Dims(g.H(8), g.W(16)))
+        g.Input = Tensor(dtype.half, Dims(g.H(64), g.W(128)))
+        g.InputLoader = g.Input[(g.BlockIdx - g.W(3)).drop(g.H)]
+
+        used = g.InputLoader.used_generators()
+        assert g.Input in used
+        assert g.BlockIdx in used

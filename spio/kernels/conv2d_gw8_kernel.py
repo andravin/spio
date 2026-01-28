@@ -6,15 +6,16 @@ from typing import Generator
 
 from ..generators import (
     CompoundIndex,
-    Dims,
+    Dim,
     dtype,
-    Fold,
-    FragmentBase,
-    FragmentType,
+    Fragment,
+    Generators,
+    LANE,
     Macro,
-    ParamsSpec,
-    Strides,
     Tensor,
+    Operand,
+    ParamsSpec,
+    BuiltIn,
 )
 from ..cuda.driver import DeviceAttributes
 
@@ -85,7 +86,6 @@ def _get_kernel_spec(
     group_width = params.group_width
 
     # Derived parameters
-    c8 = c // 8
     groups = params.groups
 
     # Tiles
@@ -96,7 +96,6 @@ def _get_kernel_spec(
 
     # Derived Tiles
     block_c = block_groups * group_width
-    block_c8 = block_c // 8
     block_w = block_q + s - 1
     blocks_n = divup(n, block_n)
     blocks_p = divup(p, block_p)
@@ -116,92 +115,127 @@ def _get_kernel_spec(
     # With 16 bytes-per-element, smem effectively has 8 banks.
     num_smem_banks = 8
 
-    smem_x_stride = next_relative_prime(block_n * block_c8, num_smem_banks)
+    smem_x_stride = next_relative_prime(block_n * (block_c // 8), num_smem_banks)
 
-    gen_specs = [
-        Macro({"SPIO_CONV_KERNEL": full_kernel_name}),
-        Fold("n", block_n, fold_name="block_n"),
-        Fold("p", block_p, fold_name="block_p"),
-        Fold("q", block_q, fold_name="block_q"),
-        Fold("c", block_c, fold_name="block_c"),
-        ParamsSpec(
-            "Block",
-            {
-                "threads": threads,
-            },
-        ),
-        ParamsSpec(
-            "Padding",
-            {
-                "h": padding_h,
-                "w": padding_w,
-            },
-        ),
-        ParamsSpec("Mode", {"igrad": igrad, "has_bias": kernel_has_bias}),
-        CompoundIndex(
-            Dims(
-                block_n=blocks_n,
-                block_p=blocks_p,
-                block_q=blocks_q,
-                block_c=blocks_c,
-            ),
-            class_name="BlockIdx",
-        ),
-        CompoundIndex(Dims(n=block_n, x=block_w, c8=block_c8), class_name="InputIdx"),
-        Tensor(dtype.uint4, Dims(n=n, y=h, x=w, c8=c8), class_name="Input", constant=True),
-        Tensor(dtype.float2, Dims(k8=c8, k2=4), class_name="Bias", constant=True),
-        CompoundIndex(Dims(k8=block_c8, lane=32), class_name="BiasIdx"),
-        Tensor(dtype.uint4, Dims(n=n, p=p, q=q, k8=c8), class_name="Output"),
-        Tensor(dtype.uint4, Dims(k=c, r=r, s=s), class_name="Weights", constant=True),
-        Tensor(dtype.uint4, Dims(k=block_c, r=r, s=s), class_name="SmemWeights"),
-        Tensor(
-            dtype.uint4,
-            Dims(k8=block_c8, k=8, r=r, s=s),
-            class_name="ConstSmemWeights",
-            constant=True,
-        ),
-        CompoundIndex(
-            Dims(k8=block_c8, repeat=4, k=8),
-            class_name="SmemWeightsLoadIdx",
-            dummies=["repeat"],
-        ),
-        Tensor(
-            dtype.uint4,
-            Dims(ping_pong=2, x=block_w, n=block_n, c8=block_c8),
-            class_name="SmemInput",
-            strides=Strides(x=smem_x_stride),
-        ),
-        CompoundIndex(
-            Dims(
-                c8=block_c8,
-                repeat=32 // (block_q * block_n),
-                x=block_q,
-                n=block_n,
-            ),
-            class_name="SmemInputLoadIdx",
-            dummies=["repeat"],
-        ),
-        CompoundIndex(Dims(k8=block_c8, lane=32), class_name="SmemOutputStoreIdx"),
-        Tensor(
-            dtype.half2,
-            Dims(q=block_q, n=block_n, k8=block_c8 + 1, k2=4),
-            class_name="SmemOutput",
-        ),
-        Tensor(
-            dtype.uint4,
-            Dims(q=block_q, n=block_n, k8=block_c8 + 1),
-            class_name="ConstSmemOutput",
-            constant=True,
-        ),
-        CompoundIndex(Dims(n=block_n, q=block_q, k8=block_c8), class_name="OutputStoreIdx"),
-        CompoundIndex(Dims(q=block_q, n=block_n), class_name="BlockQNIdx"),
-        FragmentBase(FragmentType.M16_N8_F32_C, "qn", "k", class_name="Acc"),
-        FragmentBase(FragmentType.M16_K8_F16_A, "qn", "c", class_name="In"),
-        FragmentBase(FragmentType.N8_K8_F16_B, "c", "k", class_name="Wgts"),
-        Tensor("Wgts", Dims(r=r, s=s), class_name="WeightsReg"),
-        Tensor("Acc", Dims(p=r), class_name="AccReg"),
+    g = Generators()
+
+    g.macros = Macro({"SPIO_CONV_KERNEL": full_kernel_name})
+
+    # Dimension types
+    N = g.N = Dim()  # batch
+    H = g.H = Dim()  # height (vertical spatial) - unified across input/output/filter
+    W = g.W = Dim()  # width (horizontal spatial) - unified across input/output/filter
+    C = g.C = Dim()  # input channels
+    K = g.K = Dim()  # output channels
+
+    # Sized dimension instances
+    # Note: k and c have the same size for grouped conv, but k must be created
+    # before c is reassigned from integer to StaticDim
+    n = N(n)
+    k = K(c)
+    c = C(c)
+
+    # Spatial extents - all use unified H and W
+    # Note: p, q, r, s are reassigned from integers to StaticDims here
+    y = H(h)  # input height
+    x = W(w)  # input width
+    p = H(p)  # output height
+    q = W(q)  # output width
+    r = H(r)  # filter height
+    s = W(s)  # filter width
+
+    lane = LANE(32)
+
+    # Blocking folds (output-space blocking)
+    BLOCK_N = g.BLOCK_N = g.N / block_n
+    BLOCK_H = g.BLOCK_H = g.H / block_p
+    BLOCK_W = g.BLOCK_W = g.W / block_q
+    BLOCK_C = g.BLOCK_C = g.C / block_c
+    BLOCK_K = g.BLOCK_K = g.K / block_c
+
+    # Channel folds
+    g.C8 = g.C / 8
+    g.K8 = g.K / 8
+    g.K2 = g.K / 2
+
+    # Additional dimensions for shared memory and indices
+    PING_PONG = g.PING_PONG = Dim()
+    REPEAT = g.REPEAT = Dim()
+    QN = g.QN = Dim()
+
+    # Block-sized extents
+    n_block = N(block_n)
+    w_block = W(block_q)  # output width tile
+    w_block_in = W(block_w)  # input width tile (includes filter halo)
+    c_block = C(block_c)
+    k_block = K(block_c)
+
+    g.Block = ParamsSpec(dict(threads=threads))
+    g.Padding = ParamsSpec(dict(h=padding_h, w=padding_w))
+    g.Mode = ParamsSpec(dict(igrad=igrad, has_bias=kernel_has_bias))
+
+    # Indices
+    g.BlockIdx = CompoundIndex(
+        (BLOCK_N(blocks_n), BLOCK_H(blocks_p), BLOCK_W(blocks_q), BLOCK_C(blocks_c)),
+        init=BuiltIn.BLOCK_IDX_X,
+    )
+    OutputBlockIdx = CompoundIndex(
+        (BLOCK_N(blocks_n), BLOCK_H(blocks_p), BLOCK_W(blocks_q), BLOCK_K(blocks_c)),
+        init=BuiltIn.BLOCK_IDX_X,
+    )
+    g.InputIdx = CompoundIndex((n_block, w_block_in, c_block / 8), init=BuiltIn.THREAD_IDX_X)
+    BiasIdx = CompoundIndex((k_block / 8, lane), init=BuiltIn.THREAD_IDX_X)
+    g.OutputStoreIdx = CompoundIndex(n_block, w_block, k_block / 8, init=BuiltIn.THREAD_IDX_X)
+
+    # MMA fragments
+    g.Acc = Fragment(Operand.C, dtype.float, QN(16), K(8))
+    g.In = Fragment(Operand.A, dtype.half, QN(16), C(8))
+    g.Wgts = Fragment(Operand.B, dtype.half, C(8), K(8))
+
+    # Tensors
+    g.Input = Tensor((n, y, x, c / 8), dtype.uint4, constant=True)[
+        (g.BlockIdx - W(padding_w)).drop(H), g.InputIdx
     ]
-    return KernelSpec(gen_specs=gen_specs, launch_params=launch_params)
+    g.Bias = Tensor((k / 8, (k / 2) % 4), dtype.float2, constant=True).with_dim(
+        g.Acc.compound_index
+    )[BiasIdx, OutputBlockIdx]
+    g.Output = Tensor((n, p, q, k / 8), dtype.uint4)[OutputBlockIdx, g.OutputStoreIdx]
+    g.Weights = Tensor((k, r, s), dtype.uint4, constant=True)
+    g.SmemWeights = Tensor((k_block, r, s), dtype.uint4)
+
+    # Smem double-buffering and thread repeat counts
+    ping_pong = PING_PONG(2)
+    repeat_weights = REPEAT(4)
+    repeat_input = REPEAT(32 // (block_q * block_n))
+
+    g.ConstSmemWeights = Tensor((k_block / 8, k_block % 8, r, s), dtype.uint4, constant=True)
+    g.SmemWeightsLoadIdx = CompoundIndex(
+        (k_block / 8, repeat_weights, k_block % 8), dummies=["repeat"], init=BuiltIn.THREAD_IDX_X
+    )
+    g.SmemWeightsLoad = g.ConstSmemWeights[g.SmemWeightsLoadIdx]
+    g.SmemInput = Tensor(
+        (ping_pong, w_block_in, n_block, c_block / 8),
+        dtype.uint4,
+        strides=W(smem_x_stride),
+    )
+    g.SmemInputStore = g.SmemInput[g.InputIdx]
+    g.SmemInputLoadIdx = CompoundIndex(
+        (c_block / 8, repeat_input, w_block, n_block),
+        dummies=["repeat"],
+        init=BuiltIn.THREAD_IDX_X,
+    )
+    g.SmemInputLoad = g.SmemInput[g.SmemInputLoadIdx]
+    g.SmemOutputStoreIdx = CompoundIndex(k_block / 8, lane)
+    g.SmemOutput = Tensor((w_block, n_block, (k_block / 8) + 1, (k_block / 2) % 4), dtype.half2)
+    g.ConstSmemOutput = Tensor((w_block, n_block, (k_block / 8) + 1), dtype.uint4, constant=True)
+    g.SmemOutputLoad = g.ConstSmemOutput[g.OutputStoreIdx]
+    g.BlockQNIdx = CompoundIndex(w_block, n_block)
+
+    # Register tensors of fragments
+    g.WeightsReg = Tensor((r, s), g.Wgts)
+    g.AccReg = Tensor((H(r.size),), g.Acc)
+
+    return KernelSpec(gen_specs=list(g), launch_params=launch_params)
 
 
 conv2d_gw8_kernel_factory = KernelFactory(
