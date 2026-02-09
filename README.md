@@ -541,3 +541,17 @@ weight = torch.randn(64, 8, 3, 3, device='cuda', dtype=torch.float16)
 # Automatically selects optimal kernel configuration for your GPU. 
 output = spio.functional.conv2d_gw8(x, weight, groups=8)
 ```
+
+## Citation
+
+If you use typed dimensions in your research, please cite:
+
+```bibtex
+@software{lavin2025spio,
+  author = {Lavin, Andrew},
+  title = {Spio: GPU Kernel Optimization Framework with Typed Dimensions},
+  year = {2025},
+  url = {https://github.com/andrewlavin/spio}
+}
+```
+
