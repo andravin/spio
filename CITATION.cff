@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use typed dimensions in your research, please cite this software."
+type: software
+title: "Spio: GPU Kernel Optimization Framework with Typed Dimensions"
+authors:
+  - family-names: Lavin
+    given-names: Andrew
+version: 0.8
+date-released: 2026-01-08
+url: "https://github.com/andrewlavin/spio"
+license: Apache-2.0
+keywords:
+  - typed-dimensions
+  - gpu-kernels
+  - kernel-optimization
+  - cuda
